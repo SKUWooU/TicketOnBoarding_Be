@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Getter
 @Component
 public class CoolSmsApi {
-    @Setter
+
     @Value("${spring.coolsms.apiKey}")
     private String coolsms_ApiKey;
 

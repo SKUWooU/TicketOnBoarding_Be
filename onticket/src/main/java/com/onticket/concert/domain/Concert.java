@@ -2,37 +2,48 @@ package com.onticket.concert.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import lombok.Data;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
+import lombok.*;
+import java.time.LocalDate;
 
 
-import java.sql.Date;
 
+//****공연테이블****
 @Getter
-@NoArgsConstructor
-@ToString
+@Setter
+@Entity
 public class Concert {
 
 
     //공연 아이디
     @Id
     private String concertId;
-    //시설명
-    private String place;
-    //지역명
-    private String region;
+
     //공연이름
     private String concertName;
-    //장르
-    private String genre;
+
+    //시작일
+    @Temporal(TemporalType.DATE)
+    private LocalDate startDate;
+
+    //종료일
+    @Temporal(TemporalType.DATE)
+    private LocalDate endDate;
+
+    //시설명
+    private String place;
+
     //메인포스터 url
     private String posterurl;
-    //시작일
-    private Date startDate;
-    //종료일
-    private Date endDate;
+//    //지역명
+//    private String region;
+    //장르
+    private String genre;
+
+    //공연상태
+    private String status;
+
     //좌석수
     private int seatAmount;
 
