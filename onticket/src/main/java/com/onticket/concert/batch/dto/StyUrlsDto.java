@@ -6,14 +6,14 @@ import java.util.List;
 
 //소개 포스터에 대한 객체
 @JsonDeserialize(using = StyUrlsDeserializer.class)
-public class StyUrls {
+public class StyUrlsDto {
     private List<String> styUrl;
 
-    public List<String> getStyUrl() {
+    public List<String> getStyUrlDto() {
         return styUrl;
     }
 
-    public void setStyUrl(List<String> styUrl) {
+    public void setStyUrlDto(List<String> styUrl) {
         this.styUrl = styUrl;
     }
 }

@@ -1,9 +1,10 @@
 package com.onticket.concert.batch.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.onticket.concert.batch.deserializer.StyUrlsDeserializer;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-import java.util.List;
 
 @Getter
 @NoArgsConstructor
@@ -83,7 +84,8 @@ public class KopisDetailDto {
 
     //api 응답이 배열또는 문자열
     @JsonProperty("styurls")
-    private StyUrls styUrls;
+    @JsonDeserialize(using = StyUrlsDeserializer.class)
+    private StyUrlsDto styUrlsDto;
 
 
 }

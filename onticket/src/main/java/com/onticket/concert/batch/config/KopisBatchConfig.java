@@ -59,6 +59,10 @@ public class KopisBatchConfig {
                 JsonNode jsonNode=kopisService.sendDetailRequests(kopisDto.getConcertId());
                 JsonNode dtoNode=jsonNode.path("db");
                 KopisDetailDto kopisDetailDto = kopisService.convertXmlToKopisDetailDto(dtoNode);
+
+
+                String placeId=kopisService.getPlaceId(kopisDetailDto.getPlace());
+
                 kopisService.createConcertDetailTable(kopisDetailDto);
 
 
@@ -67,6 +71,8 @@ public class KopisBatchConfig {
                 Map<String, List<String>> data= kopisService.parse(kopisDetailDto.getDateGuidance());
                 //ConcertTime Table 데이터 생성
                 kopisService.createConcertTimeTable(concert,data);
+
+
 
             }
             return RepeatStatus.FINISHED;
