@@ -118,7 +118,7 @@ public class UserController {
 
             return ResponseEntity.ok("로그인에 성공했습니다.");
         } catch (BadCredentialsException e){
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 올바르지 않습니다.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("아이디 또는 비밀번호가 올바르지 않습니다.");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("로그인에 실패했습니다.");
         }

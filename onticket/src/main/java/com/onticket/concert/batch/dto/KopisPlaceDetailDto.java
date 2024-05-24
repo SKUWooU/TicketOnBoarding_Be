@@ -1,6 +1,5 @@
 package com.onticket.concert.batch.dto;
 
-
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,7 +8,7 @@ import lombok.ToString;
 @Getter
 @NoArgsConstructor
 @ToString
-public class KopisPlaceDto {
+public class KopisPlaceDetailDto {
     @JsonProperty("fcltynm")
     private String placeName;
     @JsonProperty("mt10id")
@@ -17,11 +16,19 @@ public class KopisPlaceDto {
     @JsonProperty("mt13cnt")
     private String count;
     @JsonProperty("fcltychartr")
-    private String placeHall;
-    @JsonProperty("sidonm")
-    private String sido;
-    @JsonProperty("gugunnm")
-    private String gugun;
+    private String fcltychartr;
     @JsonProperty("opende")
-    private String builtYear;
+    private String opende;
+    @JsonProperty("seatscale")
+    private String seatscale;
+    @JsonProperty("telno")
+    private String telno;
+    @JsonProperty("relateurl")
+    private String relateurl;
+    @JsonProperty("adres")
+    private String addr;
+    @JsonProperty("la")
+    private String latitude;
+    @JsonProperty("lo")
+    private String longitude;
 }

@@ -1,17 +1,17 @@
 package com.onticket.concert.batch.service;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onticket.concert.batch.config.KopisApi;
 import com.onticket.concert.batch.dto.KopisDetailDto;
 import com.onticket.concert.batch.dto.KopisDto;
+import com.onticket.concert.batch.dto.KopisPlaceDetailDto;
 import com.onticket.concert.batch.dto.KopisPlaceDto;
-import com.onticket.concert.domain.Concert;
-import com.onticket.concert.domain.ConcertDetail;
-import com.onticket.concert.domain.ConcertTime;
-import com.onticket.concert.domain.StyUrls;
+import com.onticket.concert.domain.*;
 import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
+import com.onticket.concert.repository.PlaceRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
+import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.net.URLEncoder;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
@@ -35,6 +38,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 public class KopisService {
     private final ConcertDetailRepository concertDetailRepository;
     private final ConcertTimeRepository concertTimeRepository;
+    private final PlaceRepository placeRepository;
     private final KopisApi kopisApi;
     private final ConcertRepository concertRepository;
     WebClient webClient;
@@ -126,6 +130,7 @@ public class KopisService {
         String status = kopisDto.getStatus();
         LocalDate startDate;
         LocalDate endDate;
+
         try {
             startDate = LocalDate.parse(kopisDto.getStartDate(), formatter);
             endDate = LocalDate.parse(kopisDto.getEndDate(), formatter);
@@ -142,7 +147,7 @@ public class KopisService {
         concert.setPlace(place);
         concert.setGenre(genre);
         concert.setStatus(status);
-        concert.setSeatAmount(16);
+
 
 
         try {
@@ -162,7 +167,7 @@ public class KopisService {
 
 
     //ConcertDetail 테이블 생성
-    public void createConcertDetailTable(KopisDetailDto kopisDetailDto){
+    public void createConcertDetailTable(KopisDetailDto kopisDetailDto,String placeId){
 
         Concert concert = concertRepository.findById(kopisDetailDto.getConcertId()).orElse(new Concert());
         ConcertDetail concertDetail = new ConcertDetail();
@@ -178,7 +183,7 @@ public class KopisService {
         concertDetail.setCompany(kopisDetailDto.getCompany());
         concertDetail.setGenre(kopisDetailDto.getGenre());
         concertDetail.setStatus(kopisDetailDto.getStatus());
-
+        concertDetail.setPlaceId(placeId);
         // StyUrls 변환 로직
         StyUrls styUrls = new StyUrls();
         styUrls.setStyUrl(kopisDetailDto.getStyUrlsDto().getStyUrlDto());
@@ -345,15 +350,82 @@ public class KopisService {
 //////////////////////////////-----------ConcertPlace   테이블-------------////////////////////////////////
 
 
+    //place+placeDetail DTO로 테이블 생ㄱ성
+    public void createPlaceTable(String placeName,List<String> placeIdAndSidoAndGugun){
+        String placeId = placeIdAndSidoAndGugun.get(0);
+        String sido = placeIdAndSidoAndGugun.get(1);
+        String gugun = placeIdAndSidoAndGugun.get(2);
 
-    //시설아이디 얻기
-    public String getPlaceId(String placeName){
+        JsonNode jsonNode=sendPlaceDetailRequest(placeId);
+        JsonNode dtoNode=jsonNode.path("db");
+
+        KopisPlaceDetailDto kopisPlaceDetailDto;
+        if(dtoNode.isArray()){
+            kopisPlaceDetailDto=convertJsonToKopisPlaceDetailDto(dtoNode.get(0));
+        } else{
+            kopisPlaceDetailDto=convertJsonToKopisPlaceDetailDto(dtoNode);
+        }
+        String addr=kopisPlaceDetailDto.getAddr();
+        BigDecimal latitude=new BigDecimal(kopisPlaceDetailDto.getLatitude());
+        BigDecimal longitude=new BigDecimal(kopisPlaceDetailDto.getLongitude());
+
+        Place place = new Place();
+        place.setPlaceId(placeId);
+        place.setPlaceName(placeName);
+        place.setSido(sido);
+        place.setGugun(gugun);
+        place.setAddr(addr);
+        place.setLatitude(latitude);
+        place.setLongitude(longitude);
+
+        placeRepository.save(place);
+    }
+
+
+    //시설상세API 호출
+    public JsonNode sendPlaceDetailRequest(String placeId){
+        //uri를 생성하기 위해 사용
+        DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory();
+        //특수문자 그대로 사용
+        factory.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.NONE);
+
+        // WebClient-resttemplate 대체로 사용
+        webClient = WebClient.builder().uriBuilderFactory(factory).build();
+
+        //api 요청 uri
+        String responseBody = webClient.get()
+                .uri(builder -> builder
+                        .scheme("http")
+                        .host("www.kopis.or.kr")
+                        .path("/openApi/restful/prfplc/"+placeId)
+                        .queryParam("service", kopisApi.getKopisapikey())
+                        .build())
+                .retrieve() //요청을 보내고 응답을 Retrieve
+                .bodyToMono(String.class)
+                .block(); // 동기적으로 결과를 얻음
+        return parseXml(responseBody);
+    }
+
+    //상세API 응답처리
+    public KopisPlaceDetailDto convertJsonToKopisPlaceDetailDto(JsonNode jsonNode){
+        ObjectMapper objectMapper = new ObjectMapper();
+        try{
+            return objectMapper.treeToValue(jsonNode,KopisPlaceDetailDto.class);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    //시설아이디,시설시도, 시설구군 get
+    public List<String> getPlaceIdAndSidoAndGugun(String placeName) throws UnsupportedEncodingException {
+
 
         //정규표현식 글자1 (글자2) 형식에서 -> 글자1 만 뽑음
         String parsedPlaceName=parsePlaceName(placeName);
-
+        String encodedPlaceName = URLEncoder.encode(parsedPlaceName, "UTF-8");
         //API 요청 응답 저장
-        JsonNode jsonNode = sendPlaceRequest(parsedPlaceName);
+        JsonNode jsonNode = sendPlaceRequest(encodedPlaceName);
         JsonNode dtoNode=jsonNode.path("db");
 
 
@@ -366,24 +438,28 @@ public class KopisService {
             kopisPlaceDto=convertJsonToKopisPlaceDto(dtoNode);
         }
 
-        return kopisPlaceDto.getPlaceId();
+        List<String> placeIdAndSidoAndGugun = new ArrayList<>();
+        placeIdAndSidoAndGugun.add(kopisPlaceDto.getPlaceId());
+        placeIdAndSidoAndGugun.add(kopisPlaceDto.getSido());
+        placeIdAndSidoAndGugun.add(kopisPlaceDto.getGugun());
+        return placeIdAndSidoAndGugun;
     }
 
     //시설이름 파싱
     public String parsePlaceName(String placeName){
-        Pattern pattern = Pattern.compile("^([^\\s(]+)\\s*\\(");
+        Pattern pattern = Pattern.compile("^(.*?)\\s*\\(");
         Matcher matcher = pattern.matcher(placeName);
 
         if (matcher.find()) {
             // 첫 번째 그룹(글자1)을 반환
-            return matcher.group(1);
+            return matcher.group(1).trim();
         } else {
             // 매칭되지 않을 경우 원래 문자열 반환
             return placeName;
         }
     }
 
-    //API요청
+    //시설API 호출
     public JsonNode sendPlaceRequest(String parsedPlaceName){
         //uri를 생성하기 위해 사용
         DefaultUriBuilderFactory factory = new DefaultUriBuilderFactory();
@@ -410,7 +486,7 @@ public class KopisService {
         return parseXml(responseBody);
     }
 
-    //API응답처리
+    //API 응답처리
     public KopisPlaceDto convertJsonToKopisPlaceDto(JsonNode jsonNode){
         ObjectMapper objectMapper = new ObjectMapper();
         try {
@@ -422,4 +498,4 @@ public class KopisService {
     }
 
 }
-//https://www.kopis.or.kr/openApi/restful/prfplc
+//https://www.kopis.or.kr/openApi/restful/prfplc/FC001217?service=4bd4d194132047438e8772f63ebec51a

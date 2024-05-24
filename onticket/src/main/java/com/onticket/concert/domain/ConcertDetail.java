@@ -35,6 +35,7 @@ public class ConcertDetail {
 
     private String status;
 
+    private String placeId;
 
     @OneToOne
     @MapsId // concertId를 Concert의 concertId와 매핑
