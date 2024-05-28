@@ -8,10 +8,7 @@ import com.onticket.concert.batch.dto.KopisDto;
 import com.onticket.concert.batch.dto.KopisPlaceDetailDto;
 import com.onticket.concert.batch.dto.KopisPlaceDto;
 import com.onticket.concert.domain.*;
-import com.onticket.concert.repository.ConcertDetailRepository;
-import com.onticket.concert.repository.ConcertRepository;
-import com.onticket.concert.repository.ConcertTimeRepository;
-import com.onticket.concert.repository.PlaceRepository;
+import com.onticket.concert.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -38,6 +35,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 public class KopisService {
     private final ConcertDetailRepository concertDetailRepository;
     private final ConcertTimeRepository concertTimeRepository;
+    private final SeatRepository seatRepository;
     private final PlaceRepository placeRepository;
     private final KopisApi kopisApi;
     private final ConcertRepository concertRepository;
@@ -84,10 +82,10 @@ public class KopisService {
                         .host("www.kopis.or.kr")
                         .path("/openApi/restful/pblprfr")
                         .queryParam("service", kopisApi.getKopisapikey())
-                        .queryParam("stdate","20240510" )
-                        .queryParam("eddate", "20240530")
+                        .queryParam("stdate",getNowDate())
+                        .queryParam("eddate", getAfter30Date())
                         .queryParam("cpage", 1)
-                        .queryParam("rows", 30)
+                        .queryParam("rows", 200)
                         .build())
                 .retrieve() //요청을 보내고 응답을 Retrieve
                 .bodyToMono(String.class)
@@ -124,7 +122,6 @@ public class KopisService {
 
         String concertId = kopisDto.getConcertId();
         String concertName = kopisDto.getConcertName();
-        String place = kopisDto.getPlace();
         String posterUrl = kopisDto.getPosterUrl();
         String genre = kopisDto.getGenre();
         String status = kopisDto.getStatus();
@@ -143,8 +140,7 @@ public class KopisService {
         concert.setConcertName(concertName);
         concert.setStartDate(startDate);
         concert.setEndDate(endDate);
-        concert.setPosterurl(posterUrl);
-        concert.setPlace(place);
+        concert.setPosterUrl(posterUrl);
         concert.setGenre(genre);
         concert.setStatus(status);
 
@@ -163,6 +159,7 @@ public class KopisService {
 
 
 
+
 /////////////////////////////-----------ConcertDetail   테이블-------------////////////////////////////////
 
 
@@ -172,7 +169,6 @@ public class KopisService {
         Concert concert = concertRepository.findById(kopisDetailDto.getConcertId()).orElse(new Concert());
         ConcertDetail concertDetail = new ConcertDetail();
         concertDetail.setConcert(concert);
-        concertDetail.setConcertName(kopisDetailDto.getConcertName());
         concertDetail.setPlace(kopisDetailDto.getPlace());
         concertDetail.setAge(kopisDetailDto.getAge());
         concertDetail.setPerformers(kopisDetailDto.getCast());
@@ -181,13 +177,11 @@ public class KopisService {
         concertDetail.setCrew(kopisDetailDto.getCrew());
         concertDetail.setRuntime(kopisDetailDto.getRuntime());
         concertDetail.setCompany(kopisDetailDto.getCompany());
-        concertDetail.setGenre(kopisDetailDto.getGenre());
-        concertDetail.setStatus(kopisDetailDto.getStatus());
         concertDetail.setPlaceId(placeId);
         // StyUrls 변환 로직
-        StyUrls styUrls = new StyUrls();
-        styUrls.setStyUrl(kopisDetailDto.getStyUrlsDto().getStyUrlDto());
-        concertDetail.setStyUrls(styUrls);
+//        StyUrls styUrls = new StyUrls();
+//        styUrls.setStyUrl(kopisDetailDto.getStyUrlsDto().getStyUrlDto());
+        //concertDetail.setStyUrls(styUrls);
 
         concertDetailRepository.save(concertDetail);
     }
@@ -257,11 +251,26 @@ public class KopisService {
                     concertTime.setStartTime(LocalTime.parse(time, DateTimeFormatter.ofPattern("H:mm")));
                     concertTime.setSeatAmount(16);
                     concertTime.setConcert(concert);
+                    int n=16;
 
+
+                    //좌석초기화
+                    List<Seat> seatList=new ArrayList<>();
+                    while(n-->0){
+                        Seat seat = new Seat();
+                        seat.setSeatNumber("Seat " + n);
+                        seat.setReserved(false);
+                        seat.setConcertTime(concertTime);
+                        seatList.add(seat);
+                    }
+                    seatRepository.saveAll(seatList);
+                    concertTime.setSeats(seatList);
                     concertTimeList.add(concertTime);
                 }
             }
         }
+
+
         concertTimeRepository.saveAll(concertTimeList);
     }
 
@@ -378,7 +387,14 @@ public class KopisService {
         place.setLatitude(latitude);
         place.setLongitude(longitude);
 
-        placeRepository.save(place);
+
+        //데이터 중복 예외처리
+        try {
+            placeRepository.save(place);
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalArgumentException("장소가 이미 있습니다.");
+        }
+
     }
 
 

@@ -1,9 +1,13 @@
 package com.onticket.concert.domain;
 
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.util.List;
 
 @Getter
 @Setter
@@ -12,8 +16,6 @@ public class ConcertDetail {
 
     @Id
     private String concertId;
-
-    private String concertName;
 
     private String place;
 
@@ -31,20 +33,20 @@ public class ConcertDetail {
 
     private String company;
 
-    private String genre;
-
-    private String status;
-
     private String placeId;
 
+    private float averageRating;
     @OneToOne
     @MapsId // concertId를 Concert의 concertId와 매핑
     @JoinColumn(name = "concertId")
+    @JsonBackReference
     private Concert concert;
 
-
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "styUrlsId", referencedColumnName = "id")
-    private StyUrls styUrls;
+    @OneToMany(mappedBy = "concertDetail", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
+    private List<Review> reviews;
 
 }
+//    @OneToOne(cascade = CascadeType.ALL)
+//    @JoinColumn(name = "styUrlsId", referencedColumnName = "id")
+//    private StyUrls styUrls;

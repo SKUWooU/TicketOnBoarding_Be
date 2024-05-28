@@ -53,6 +53,8 @@ public class KopisBatchConfig {
                 //####################################################################################//
                 //-------------------------------Concert Table 생성  ----------------------------------//
                 //####################################################################################//
+
+
                 Concert concert=kopisService.createConcert(kopisDto);
 
 
@@ -76,6 +78,7 @@ public class KopisBatchConfig {
 
                 //시설ID
                 String placeId=placeIdAndSidoAndGugun.get(0);
+
 
                 //Place Table 생성
                 kopisService.createPlaceTable(placeName ,placeIdAndSidoAndGugun);

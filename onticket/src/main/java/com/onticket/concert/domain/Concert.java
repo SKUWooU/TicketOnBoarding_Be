@@ -1,9 +1,7 @@
 package com.onticket.concert.domain;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Temporal;
-import jakarta.persistence.TemporalType;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
 
@@ -31,11 +29,8 @@ public class Concert {
     @Temporal(TemporalType.DATE)
     private LocalDate endDate;
 
-    //시설명
-    private String place;
-
     //메인포스터 url
-    private String posterurl;
+    private String posterUrl;
 //    //지역명
 //    private String region;
     //장르
@@ -44,9 +39,11 @@ public class Concert {
     //공연상태
     private String status;
 
-    //좌석수
-    private int seatAmount;
+    //MDsPick
+    private int onTicketPick;
 
 
-
+    @OneToOne(mappedBy = "concert", cascade = CascadeType.ALL)
+    @JsonManagedReference
+    private ConcertDetail concertDetail;
 }

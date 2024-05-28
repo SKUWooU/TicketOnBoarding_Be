@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 //****공연타임테이블****
 @Getter
@@ -31,6 +32,8 @@ public class ConcertTime {
     @JoinColumn(name = "concertId")
     private Concert concert;
 
+    @OneToMany(mappedBy = "concertTime", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Seat> seats;
 }
 
 
