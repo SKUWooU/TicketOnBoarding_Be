@@ -2,8 +2,11 @@ package com.onticket.concert.controller;
 
 
 import com.onticket.concert.domain.Concert;
+import com.onticket.concert.domain.ConcertDetail;
+import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.service.ConcertService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,17 +23,23 @@ public class ConcertController {
     private final ConcertService concertService;
     private final ConcertRepository concertRepository;
 
-    @GetMapping("/")
-    public ResponseEntity<Map<String, List<Concert>>> getMainPage() {
-        List<Concert> onTicketPickList= concertService.getMdPickConcert();
-        List<Concert> MostPopularConcertList=concertService.getMostPopularConcert();
-        Map<String, List<Concert>> map= new HashMap<>();
+    @GetMapping("/main")
+    public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
+
+        List<MainDto> onTicketPickList= concertService.getMdPickConcert();
+        List<MainDto> MostPopularConcertList=concertService.getMostPopularConcert();
+        Map<String, List<MainDto>> map= new HashMap<>();
         map.put("onTicketPickList", onTicketPickList);
         map.put("MostPopularConcertList", MostPopularConcertList);
         return ResponseEntity.ok(map);
 
     }
 
+//    @GetMapping("/detail/{concert_id}")
+//    public ResponseEntity<ConcertDetail> getConcertDetail(@PathVariable("concert_id") String concertId) {
+//        ConcertDetail concertDetail= concertService.getConcertDetail(concertId);
+//        return ResponseEntity.ok(concertDetail);
+//    }
 
     //장르별 공연
     @GetMapping("/genre/{category}")

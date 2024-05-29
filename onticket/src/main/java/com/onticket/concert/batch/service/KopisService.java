@@ -170,15 +170,20 @@ public class KopisService {
 
     //ConcertDetail 테이블 생성
     public void createConcertDetailTable(KopisDetailDto kopisDetailDto,String placeId){
+        // Concert 객체를 찾거나 새로 생성
+        Concert concert = concertRepository.findById(kopisDetailDto.getConcertId())
+                .orElseThrow(() -> new IllegalArgumentException("Concert not found"));
 
-        Concert concert = concertRepository.findById(kopisDetailDto.getConcertId()).orElse(new Concert());
-        ConcertDetail concertDetail = new ConcertDetail();
+        // ConcertDetail 객체를 찾거나 새로 생성
+        ConcertDetail concertDetail = concertDetailRepository.findById(kopisDetailDto.getConcertId())
+                .orElse(new ConcertDetail());
+
         concertDetail.setConcert(concert);
         concertDetail.setPlace(kopisDetailDto.getPlace());
         concertDetail.setAge(kopisDetailDto.getAge());
         concertDetail.setPerformers(kopisDetailDto.getCast());
         concertDetail.setPrice(kopisDetailDto.getPriceGuidance());
-        concertDetail.setStartTime(kopisDetailDto.getStartDate());
+        concertDetail.setStartTime(kopisDetailDto.getDateGuidance());
         concertDetail.setCrew(kopisDetailDto.getCrew());
         concertDetail.setRuntime(kopisDetailDto.getRuntime());
         concertDetail.setCompany(kopisDetailDto.getCompany());

@@ -2,14 +2,18 @@ package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
+import com.onticket.concert.domain.Place;
+import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
 
+import com.onticket.concert.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,21 +23,60 @@ public class ConcertService {
 
     private final ConcertRepository concertRepository;
     private final ConcertDetailRepository concertDetailRepository;
+    private final PlaceRepository placeRepository;
 
-    public List<Concert> getMdPickConcert(){
-        return concertRepository.findByOnTicketPickNot(0);
+
+    //운연자 픽 데이터
+    public List<MainDto> getMdPickConcert(){
+        List<Concert> concertList = concertRepository.findByOnTicketPickNot(0);
+        List<MainDto> mainDtoList = new ArrayList<>();
+        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        for(Concert concert : concertList){
+            MainDto mainDto = new MainDto();
+            mainDto.setConcertID(concert.getConcertId());
+            mainDto.setConcertName(concert.getConcertName());
+            mainDto.setStartDate(concert.getStartDate().format(formatter));
+            mainDto.setEndDate(concert.getEndDate().format(formatter));
+            mainDto.setPrice(concert.getConcertDetail().getPrice());
+            Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
+            mainDto.setSido(place.getSido());
+            mainDto.setGugun(place.getGugun());
+            mainDto.setPlacename(place.getPlaceName());
+            mainDto.setPosterUrl(concert.getPosterUrl());
+            mainDto.setAverageRating(concert.getConcertDetail().getAverageRating());
+            mainDtoList.add(mainDto);
+        }
+        return mainDtoList;
     }
 
-    @Transactional(readOnly = true)
-    public List<Concert> getMostPopularConcert(){
+    //평점순
+    public List<MainDto> getMostPopularConcert(){
         List<Concert> concerts= concertRepository.findTop4ByOrderByAverageRatingDesc();
-
+        List<MainDto> mainDtoList = new ArrayList<>();
         List<Concert> top4= new ArrayList<>();
+        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
         for (int i = 0; i < 4; i++) {
             top4.add(concerts.get(i));
         }
-        return top4;
+        for(Concert tops:top4){
+            MainDto mainDto = new MainDto();
+            mainDto.setConcertID(tops.getConcertId());
+            mainDto.setConcertName(tops.getConcertName());
+            mainDto.setStartDate(tops.getStartDate().format(formatter));
+            mainDto.setEndDate(tops.getEndDate().format(formatter));
+            mainDto.setPrice(tops.getConcertDetail().getPrice());
+            Place place = placeRepository.findByPlaceId(tops.getConcertDetail().getPlaceId());
+            mainDto.setSido(place.getSido());
+            mainDto.setGugun(place.getGugun());
+            mainDto.setPlacename(place.getPlaceName());
+            mainDto.setPosterUrl(tops.getPosterUrl());
+            mainDto.setAverageRating(tops.getConcertDetail().getAverageRating());
+            mainDtoList.add(mainDto);
+        }
+        return mainDtoList;
     }
+
+
     //url 한글로 바꾸기
     public String convertStringToGenre(String string){
         switch (string.toLowerCase()) {
@@ -106,4 +149,11 @@ public class ConcertService {
     public List<Concert> getRegionConcert(String region){
         return concertRepository.findBySido(region);
     }
+
+    //공연상세정보 반환
+//    public ConcertDetail getConcertDetail(String concertId) {
+//        ConcertDetail concertDetail = concertDetailRepository.findByConcertId(concertId);
+//        String placeId = concertDetail.getPlaceId();
+//        return
+//    }
 }

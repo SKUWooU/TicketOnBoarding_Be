@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 
 public interface ConcertDetailRepository extends JpaRepository<ConcertDetail, String> {
-
+    ConcertDetail findByConcertId(String concertId);
 }
