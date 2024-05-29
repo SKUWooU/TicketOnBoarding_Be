@@ -23,6 +23,8 @@ public class DetailDto {
     private String performers;
     private String genre;
     private String posterUrl;
+    private String addr;
     private BigDecimal la;
     private BigDecimal lo;
+
 }

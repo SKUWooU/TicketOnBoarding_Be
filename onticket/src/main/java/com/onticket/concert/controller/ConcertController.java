@@ -17,13 +17,12 @@ import java.util.*;
 
 
 @RequiredArgsConstructor
-@RequestMapping("/main")
 @RestController
 public class ConcertController {
     private final ConcertService concertService;
     private final ConcertRepository concertRepository;
 
-    @GetMapping("/")
+    @GetMapping("/main")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
 
         List<MainDto> onTicketPickList= concertService.getMdPickConcert();
@@ -35,14 +34,14 @@ public class ConcertController {
 
     }
 
-    @GetMapping("/detail/{concert_id}")
+    @GetMapping("/main/detail/{concert_id}")
     public ResponseEntity<DetailDto> getConcertDetail(@PathVariable("concert_id") String concertId) {
         DetailDto detailDto= concertService.getConcertDetail(concertId);
         return ResponseEntity.ok(detailDto);
     }
 
     //장르별 공연
-    @GetMapping("/genre/{category}")
+    @GetMapping("/main/genre/{category}")
     public ResponseEntity<List<Concert>> getTheater(@PathVariable String category){
         String genre= concertService.convertStringToGenre(category);
         List<Concert> theatherList = concertService.getGenreConcert(genre);
@@ -51,7 +50,7 @@ public class ConcertController {
     }
 
     //지역별 공연
-    @GetMapping("/region/{category}")
+    @GetMapping("/main/region/{category}")
     public ResponseEntity<List<Concert>> getTheaterRegion(@PathVariable String category){
         String region = "서울";
         List<Concert> regionList = concertService.getRegionConcert(region);
@@ -59,7 +58,7 @@ public class ConcertController {
     }
 
     //검색
-    @GetMapping("/search")
+    @GetMapping("/main/search")
     public ResponseEntity<List<MainDto>> searchConcerts(@RequestParam(value = "concertname", required = false) String concertName) {
         if (concertName == null || concertName.trim().isEmpty()) {
             // 파라미터가 없는 경우 빈 리스트를 반환

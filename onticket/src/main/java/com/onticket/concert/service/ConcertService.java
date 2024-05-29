@@ -168,6 +168,7 @@ public class ConcertService {
         detailDto.setPosterUrl(concert.getPosterUrl());
         Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
         detailDto.setPlaceName(place.getPlaceName());
+        detailDto.setAddr(place.getAddr());
         detailDto.setLa(place.getLatitude());
         detailDto.setLo(place.getLongitude());
         return detailDto;
