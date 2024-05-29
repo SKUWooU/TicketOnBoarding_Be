@@ -165,10 +165,34 @@ public class ConcertService {
         detailDto.setCrew(concert.getConcertDetail().getCrew());
         detailDto.setCompany(concert.getConcertDetail().getCompany());
         detailDto.setGenre(concert.getGenre());
+        detailDto.setPosterUrl(concert.getPosterUrl());
         Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
         detailDto.setPlaceName(place.getPlaceName());
         detailDto.setLa(place.getLatitude());
         detailDto.setLo(place.getLongitude());
         return detailDto;
+    }
+
+    //콘서트이름으로 검색
+    public List<MainDto> searchConcertsByName(String concertName) {
+        List<Concert> concertList=concertRepository.findByConcertNameContaining(concertName);
+        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        List<MainDto> mainDtoList=new ArrayList<>();
+        for(Concert concert:concertList){
+            MainDto mainDto = new MainDto();
+            mainDto.setConcertID(concert.getConcertId());
+            mainDto.setConcertName(concert.getConcertName());
+            mainDto.setStartDate(concert.getStartDate().format(formatter));
+            mainDto.setEndDate(concert.getEndDate().format(formatter));
+            mainDto.setPrice(concert.getConcertDetail().getPrice());
+            Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
+            mainDto.setSido(place.getSido());
+            mainDto.setGugun(place.getGugun());
+            mainDto.setPlaceName(place.getPlaceName());
+            mainDto.setPosterUrl(concert.getPosterUrl());
+            mainDto.setAverageRating(concert.getConcertDetail().getAverageRating());
+            mainDtoList.add(mainDto);
+        }
+        return mainDtoList;
     }
 }

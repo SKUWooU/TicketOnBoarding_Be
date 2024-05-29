@@ -22,6 +22,7 @@ public class DetailDto {
     private String company;
     private String performers;
     private String genre;
+    private String posterUrl;
     private BigDecimal la;
     private BigDecimal lo;
 }

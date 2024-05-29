@@ -1,6 +1,5 @@
 package com.onticket.concert.controller;
 
-
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.dto.DetailDto;
@@ -10,21 +9,21 @@ import com.onticket.concert.service.ConcertService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.util.*;
 
 
-
 @RequiredArgsConstructor
+@RequestMapping("/main")
 @RestController
 public class ConcertController {
     private final ConcertService concertService;
     private final ConcertRepository concertRepository;
 
-    @GetMapping("/main")
+    @GetMapping("/")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
 
         List<MainDto> onTicketPickList= concertService.getMdPickConcert();
@@ -36,7 +35,7 @@ public class ConcertController {
 
     }
 
-    @GetMapping("/main/detail/{concert_id}")
+    @GetMapping("/detail/{concert_id}")
     public ResponseEntity<DetailDto> getConcertDetail(@PathVariable("concert_id") String concertId) {
         DetailDto detailDto= concertService.getConcertDetail(concertId);
         return ResponseEntity.ok(detailDto);
@@ -59,4 +58,21 @@ public class ConcertController {
         return ResponseEntity.ok(regionList);
     }
 
+    //검색
+    @GetMapping("/search")
+    public ResponseEntity<List<MainDto>> searchConcerts(@RequestParam(value = "concertname", required = false) String concertName) {
+        if (concertName == null || concertName.trim().isEmpty()) {
+            // 파라미터가 없는 경우 빈 리스트를 반환
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+        try {
+            // 인코딩된 문자열을 디코딩
+            concertName = URLDecoder.decode(concertName, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            return ResponseEntity.badRequest().build();
+        }
+        List<MainDto> dtoList = concertService.searchConcertsByName(concertName);
+        return ResponseEntity.ok(dtoList);
+    }
 }
