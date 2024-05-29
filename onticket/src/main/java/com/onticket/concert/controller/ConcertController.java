@@ -25,7 +25,7 @@ public class ConcertController {
         List<Concert> onTicketPickList= concertService.getMdPickConcert();
         List<Concert> MostPopularConcertList=concertService.getMostPopularConcert();
         Map<String, List<Concert>> map= new HashMap<>();
-        //map.put("onTicketPickList", onTicketPickList);
+        map.put("onTicketPickList", onTicketPickList);
         map.put("MostPopularConcertList", MostPopularConcertList);
         return ResponseEntity.ok(map);
 

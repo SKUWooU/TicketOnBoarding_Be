@@ -135,6 +135,11 @@ public class KopisService {
             throw new RuntimeException(e);
         }
 
+        Optional<Concert> existingConcert = concertRepository.findById(concertId);
+        if (existingConcert.isPresent()) {
+            return existingConcert.get(); // 이미 존재하는 경우 해당 Concert 반환
+        }
+
         Concert concert = new Concert();
         concert.setConcertId(concertId);
         concert.setConcertName(concertName);
@@ -364,6 +369,11 @@ public class KopisService {
         String placeId = placeIdAndSidoAndGugun.get(0);
         String sido = placeIdAndSidoAndGugun.get(1);
         String gugun = placeIdAndSidoAndGugun.get(2);
+
+        Optional<Place> existingPlace = placeRepository.findById(placeId);
+        if (existingPlace.isPresent()) {
+            return; // 이미 존재하는 경우 아무 작업도 하지 않음
+        }
 
         JsonNode jsonNode=sendPlaceDetailRequest(placeId);
         JsonNode dtoNode=jsonNode.path("db");
