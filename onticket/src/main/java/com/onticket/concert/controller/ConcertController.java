@@ -3,6 +3,7 @@ package com.onticket.concert.controller;
 
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
+import com.onticket.concert.dto.DetailDto;
 import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.service.ConcertService;
@@ -35,11 +36,11 @@ public class ConcertController {
 
     }
 
-//    @GetMapping("/detail/{concert_id}")
-//    public ResponseEntity<ConcertDetail> getConcertDetail(@PathVariable("concert_id") String concertId) {
-//        ConcertDetail concertDetail= concertService.getConcertDetail(concertId);
-//        return ResponseEntity.ok(concertDetail);
-//    }
+    @GetMapping("/main/detail/{concert_id}")
+    public ResponseEntity<DetailDto> getConcertDetail(@PathVariable("concert_id") String concertId) {
+        DetailDto detailDto= concertService.getConcertDetail(concertId);
+        return ResponseEntity.ok(detailDto);
+    }
 
     //장르별 공연
     @GetMapping("/genre/{category}")

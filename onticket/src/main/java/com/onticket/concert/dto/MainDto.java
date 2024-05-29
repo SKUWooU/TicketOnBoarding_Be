@@ -19,6 +19,6 @@ public class MainDto {
     private String gugun;
     private String price;
     private String posterUrl;
-    private String placename;
+    private String placeName;
     private float averageRating;
 }

@@ -9,7 +9,9 @@ import java.util.List;
 
 public interface ConcertRepository extends JpaRepository<Concert,String> {
 
-    Concert findByConcertId(String concertId);
+    //공연상세
+    @Query("SELECT c FROM Concert c JOIN c.concertDetail cd ON c.concertId = cd.concertId WHERE c.concertId = :concertId")
+    Concert findByConcertId(@Param("concertId") String concertId);
 
     //관리자픽 공연
     List<Concert> findByOnTicketPickNot(int onticketpick);

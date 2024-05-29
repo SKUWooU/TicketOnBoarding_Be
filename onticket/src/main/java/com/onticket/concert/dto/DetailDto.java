@@ -18,7 +18,6 @@ public class DetailDto {
     private String startTime;
     private String age;
     private String price;
-    private String cast;
     private String crew;
     private String company;
     private String performers;

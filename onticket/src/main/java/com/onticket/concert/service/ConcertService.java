@@ -3,6 +3,7 @@ package com.onticket.concert.service;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.Place;
+import com.onticket.concert.dto.DetailDto;
 import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
@@ -41,7 +42,7 @@ public class ConcertService {
             Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
             mainDto.setSido(place.getSido());
             mainDto.setGugun(place.getGugun());
-            mainDto.setPlacename(place.getPlaceName());
+            mainDto.setPlaceName(place.getPlaceName());
             mainDto.setPosterUrl(concert.getPosterUrl());
             mainDto.setAverageRating(concert.getConcertDetail().getAverageRating());
             mainDtoList.add(mainDto);
@@ -68,7 +69,7 @@ public class ConcertService {
             Place place = placeRepository.findByPlaceId(tops.getConcertDetail().getPlaceId());
             mainDto.setSido(place.getSido());
             mainDto.setGugun(place.getGugun());
-            mainDto.setPlacename(place.getPlaceName());
+            mainDto.setPlaceName(place.getPlaceName());
             mainDto.setPosterUrl(tops.getPosterUrl());
             mainDto.setAverageRating(tops.getConcertDetail().getAverageRating());
             mainDtoList.add(mainDto);
@@ -151,9 +152,23 @@ public class ConcertService {
     }
 
     //공연상세정보 반환
-//    public ConcertDetail getConcertDetail(String concertId) {
-//        ConcertDetail concertDetail = concertDetailRepository.findByConcertId(concertId);
-//        String placeId = concertDetail.getPlaceId();
-//        return
-//    }
+    public DetailDto getConcertDetail(String concertId) {
+        Concert concert = concertRepository.findByConcertId(concertId);
+        DetailDto detailDto = new DetailDto();
+        detailDto.setConcertId(concertId);
+        detailDto.setConcertName(concert.getConcertName());
+        detailDto.setPerformers(concert.getConcertDetail().getPerformers());
+        detailDto.setStartTime(concert.getConcertDetail().getStartTime());
+        detailDto.setAge(concert.getConcertDetail().getAge());
+        detailDto.setPrice(concert.getConcertDetail().getPrice());
+        detailDto.setPerformers(concert.getConcertDetail().getPerformers());
+        detailDto.setCrew(concert.getConcertDetail().getCrew());
+        detailDto.setCompany(concert.getConcertDetail().getCompany());
+        detailDto.setGenre(concert.getGenre());
+        Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
+        detailDto.setPlaceName(place.getPlaceName());
+        detailDto.setLa(place.getLatitude());
+        detailDto.setLo(place.getLongitude());
+        return detailDto;
+    }
 }
