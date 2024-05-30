@@ -30,50 +30,52 @@ public class ConcertService {
     //운연자 픽 데이터
     public List<MainDto> getMdPickConcert(){
         List<Concert> concertList = concertRepository.findByOnTicketPickNot(0);
-        List<MainDto> mainDtoList = new ArrayList<>();
-        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        for(Concert concert : concertList){
-            MainDto mainDto = new MainDto();
-            mainDto.setConcertID(concert.getConcertId());
-            mainDto.setConcertName(concert.getConcertName());
-            mainDto.setStartDate(concert.getStartDate().format(formatter));
-            mainDto.setEndDate(concert.getEndDate().format(formatter));
-            mainDto.setPrice(concert.getConcertDetail().getPrice());
-            Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
-            mainDto.setSido(place.getSido());
-            mainDto.setGugun(place.getGugun());
-            mainDto.setPlaceName(place.getPlaceName());
-            mainDto.setPosterUrl(concert.getPosterUrl());
-            mainDto.setAverageRating(concert.getConcertDetail().getAverageRating());
-            mainDtoList.add(mainDto);
-        }
+
+        List<MainDto> mainDtoList = getMainDtoList(concertList);
+//        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
+//        for(Concert concert : concertList){
+//            MainDto mainDto = new MainDto();
+//            mainDto.setConcertID(concert.getConcertId());
+//            mainDto.setConcertName(concert.getConcertName());
+//            mainDto.setStartDate(concert.getStartDate().format(formatter));
+//            mainDto.setEndDate(concert.getEndDate().format(formatter));
+//            mainDto.setPrice(concert.getConcertDetail().getPrice());
+//            Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
+//            mainDto.setSido(place.getSido());
+//            mainDto.setGugun(place.getGugun());
+//            mainDto.setPlaceName(place.getPlaceName());
+//            mainDto.setPosterUrl(concert.getPosterUrl());
+//            mainDto.setAverageRating(concert.getConcertDetail().getAverageRating());
+//            mainDtoList.add(mainDto);
+//        }
         return mainDtoList;
     }
 
     //평점순
     public List<MainDto> getMostPopularConcert(){
         List<Concert> concerts= concertRepository.findTop4ByOrderByAverageRatingDesc();
-        List<MainDto> mainDtoList = new ArrayList<>();
+
         List<Concert> top4= new ArrayList<>();
-        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
+//        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
         for (int i = 0; i < 4; i++) {
             top4.add(concerts.get(i));
         }
-        for(Concert tops:top4){
-            MainDto mainDto = new MainDto();
-            mainDto.setConcertID(tops.getConcertId());
-            mainDto.setConcertName(tops.getConcertName());
-            mainDto.setStartDate(tops.getStartDate().format(formatter));
-            mainDto.setEndDate(tops.getEndDate().format(formatter));
-            mainDto.setPrice(tops.getConcertDetail().getPrice());
-            Place place = placeRepository.findByPlaceId(tops.getConcertDetail().getPlaceId());
-            mainDto.setSido(place.getSido());
-            mainDto.setGugun(place.getGugun());
-            mainDto.setPlaceName(place.getPlaceName());
-            mainDto.setPosterUrl(tops.getPosterUrl());
-            mainDto.setAverageRating(tops.getConcertDetail().getAverageRating());
-            mainDtoList.add(mainDto);
-        }
+        List<MainDto> mainDtoList=getMainDtoList(top4);
+//        for(Concert tops:top4){
+//            MainDto mainDto = new MainDto();
+//            mainDto.setConcertID(tops.getConcertId());
+//            mainDto.setConcertName(tops.getConcertName());
+//            mainDto.setStartDate(tops.getStartDate().format(formatter));
+//            mainDto.setEndDate(tops.getEndDate().format(formatter));
+//            mainDto.setPrice(tops.getConcertDetail().getPrice());
+//            Place place = placeRepository.findByPlaceId(tops.getConcertDetail().getPlaceId());
+//            mainDto.setSido(place.getSido());
+//            mainDto.setGugun(place.getGugun());
+//            mainDto.setPlaceName(place.getPlaceName());
+//            mainDto.setPosterUrl(tops.getPosterUrl());
+//            mainDto.setAverageRating(tops.getConcertDetail().getAverageRating());
+//            mainDtoList.add(mainDto);
+//        }
         return mainDtoList;
     }
 
@@ -181,6 +183,27 @@ public class ConcertService {
     //콘서트이름으로 검색
     public List<MainDto> searchConcertsByName(String concertName) {
         List<Concert> concertList=concertRepository.findByConcertNameContaining(concertName);
+        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        List<MainDto> mainDtoList=new ArrayList<>();
+        for(Concert concert:concertList){
+            MainDto mainDto = new MainDto();
+            mainDto.setConcertID(concert.getConcertId());
+            mainDto.setConcertName(concert.getConcertName());
+            mainDto.setStartDate(concert.getStartDate().format(formatter));
+            mainDto.setEndDate(concert.getEndDate().format(formatter));
+            mainDto.setPrice(concert.getConcertDetail().getPrice());
+            Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
+            mainDto.setSido(place.getSido());
+            mainDto.setGugun(place.getGugun());
+            mainDto.setPlaceName(place.getPlaceName());
+            mainDto.setPosterUrl(concert.getPosterUrl());
+            mainDto.setAverageRating(concert.getConcertDetail().getAverageRating());
+            mainDtoList.add(mainDto);
+        }
+        return mainDtoList;
+    }
+
+    public List<MainDto> getMainDtoList(List<Concert> concertList) {
         DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
         List<MainDto> mainDtoList=new ArrayList<>();
         for(Concert concert:concertList){

@@ -1,5 +1,8 @@
 package com.onticket.user.configure;
 import com.onticket.user.jwt.JwtAuthenticationFilter;
+import com.onticket.user.jwt.JwtUtil;
+import com.onticket.user.service.UserSecurityService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,14 +20,18 @@ import org.springframework.security.config.annotation.authentication.configurati
 
 import static org.springframework.boot.autoconfigure.security.servlet.PathRequest.toH2Console;
 
+@RequiredArgsConstructor
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private final JwtUtil jwtUtil;
+    private final UserSecurityService userSecurityService;
     //시큐리티 비활성화할 부분
     @Bean
     public WebSecurityCustomizer configre(){
         return (web) -> web.ignoring()
-                .requestMatchers("/users/**")
+                .requestMatchers("/**")
                 .requestMatchers(toH2Console())
                 .requestMatchers("/static/**");
     }
@@ -38,13 +45,12 @@ public class SecurityConfig {
                 .headers((headers) -> headers
                         .addHeaderWriter(new XFrameOptionsHeaderWriter(
                                 XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)))
-                .formLogin((formLogin) -> formLogin
-                        .loginPage("/users/login")
-                        .defaultSuccessUrl("/"))
-                .logout((logout) -> logout
-                        .logoutRequestMatcher(new AntPathRequestMatcher("/user/logout"))
-                        .logoutSuccessUrl("/table/list")
-                        .invalidateHttpSession(true));
+                .sessionManagement((session) -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests((authz) -> authz
+                        .anyRequest().authenticated())
+                .addFilterBefore(new JwtAuthenticationFilter(jwtUtil, userSecurityService), UsernamePasswordAuthenticationFilter.class);
+
 
         return http.build();
     }
@@ -61,3 +67,10 @@ public class SecurityConfig {
         return authenticationConfiguration.getAuthenticationManager();
     }
 }
+//.formLogin((formLogin) -> formLogin
+//        .loginPage("/users/login")
+//                        .defaultSuccessUrl("/"))
+//        .logout((logout) -> logout
+//        .logoutRequestMatcher(new AntPathRequestMatcher("/user/logout"))
+//        .logoutSuccessUrl("/table/list")
+//                        .invalidateHttpSession(true));

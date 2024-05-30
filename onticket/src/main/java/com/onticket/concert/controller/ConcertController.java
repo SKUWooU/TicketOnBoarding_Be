@@ -46,19 +46,20 @@ public class ConcertController {
 
     //장르별 공연
     @GetMapping("/main/genre/{category}")
-    public ResponseEntity<List<Concert>> getTheater(@PathVariable String category){
+    public ResponseEntity<List<MainDto>> getGenre(@PathVariable("category") String category){
         String genre= concertService.convertStringToGenre(category);
-        List<Concert> theatherList = concertService.getGenreConcert(genre);
-
-        return ResponseEntity.ok(theatherList);
+        List<Concert> genreConcertList = concertService.getGenreConcert(genre);
+        List<MainDto> mainDtoList =concertService.getMainDtoList(genreConcertList);
+        return ResponseEntity.ok(mainDtoList);
     }
 
     //지역별 공연
     @GetMapping("/main/region/{category}")
-    public ResponseEntity<List<Concert>> getTheaterRegion(@PathVariable String category){
+    public ResponseEntity<List<MainDto>> getRegion(@PathVariable("category") String category){
         String region = concertService.convertStringToRegion(category);
         List<Concert> regionList = concertService.getRegionConcert(region);
-        return ResponseEntity.ok(regionList);
+        List<MainDto> mainDtoList =concertService.getMainDtoList(regionList);
+        return ResponseEntity.ok(mainDtoList);
     }
 
     //검색
