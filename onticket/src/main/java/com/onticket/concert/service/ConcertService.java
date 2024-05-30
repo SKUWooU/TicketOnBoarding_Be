@@ -115,7 +115,7 @@ public class ConcertService {
                 return "서울";
             case "busan":
                 return "부산";
-            case "daejun":
+            case "daejeon":
                 return "대전";
             case "gwangju":
                 return "광주";
@@ -137,10 +137,13 @@ public class ConcertService {
                 return "전남";
             case "jeonbuk":
                 return "전북";
-            case "gyeonnam":
+            case "gyeongnam":
                 return "경남";
-            case "gyeonbuk":
+            case "gyeongbuk":
                 return "경북";
+            case "jeju":
+                return "제주";
+
             default:
                 throw new IllegalArgumentException("잘못된url 정보");
         }
@@ -151,7 +154,7 @@ public class ConcertService {
         return concertRepository.findBySido(region);
     }
 
-    //공연상세정보 반환
+    //공연상세정보+리뷰 반환
     public DetailDto getConcertDetail(String concertId) {
         Concert concert = concertRepository.findByConcertId(concertId);
         DetailDto detailDto = new DetailDto();
@@ -171,6 +174,7 @@ public class ConcertService {
         detailDto.setAddr(place.getAddr());
         detailDto.setLa(place.getLatitude());
         detailDto.setLo(place.getLongitude());
+        detailDto.setReviewList(concert.getConcertDetail().getReviews());
         return detailDto;
     }
 

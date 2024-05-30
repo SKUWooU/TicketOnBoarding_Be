@@ -36,6 +36,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-batch' //배치파일
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0' //jackson-파서
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.14.0'
+    implementation 'io.jsonwebtoken:jjwt:0.9.1'
     implementation 'net.nurigo:sdk:4.3.0'
     implementation 'io.netty:netty-all:4.1.94.Final'
     implementation 'io.netty:netty-resolver-dns-native-macos:4.1.94.Final:osx-aarch_64'

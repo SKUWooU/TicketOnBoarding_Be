@@ -1,11 +1,13 @@
 package com.onticket.concert.dto;
 
+import com.onticket.concert.domain.Review;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Getter
 @Setter
@@ -26,5 +28,6 @@ public class DetailDto {
     private String addr;
     private BigDecimal la;
     private BigDecimal lo;
+    private List<Review> reviewList;
 
 }

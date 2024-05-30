@@ -32,6 +32,6 @@ public class SiteUser {
     private String phonenumber;
 
     @CreationTimestamp
-    private LocalDateTime createdat;
+    private LocalDateTime createdate;
 }
 

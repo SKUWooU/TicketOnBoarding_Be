@@ -2,11 +2,13 @@ package com.onticket.concert.controller;
 
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
+import com.onticket.concert.domain.Review;
 import com.onticket.concert.dto.DetailDto;
 import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.service.ConcertService;
 
+import com.onticket.concert.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +23,7 @@ import java.util.*;
 public class ConcertController {
     private final ConcertService concertService;
     private final ConcertRepository concertRepository;
+    private final ReviewService reviewService;
 
     @GetMapping("/main")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
@@ -37,6 +40,7 @@ public class ConcertController {
     @GetMapping("/main/detail/{concert_id}")
     public ResponseEntity<DetailDto> getConcertDetail(@PathVariable("concert_id") String concertId) {
         DetailDto detailDto= concertService.getConcertDetail(concertId);
+
         return ResponseEntity.ok(detailDto);
     }
 
@@ -52,7 +56,7 @@ public class ConcertController {
     //지역별 공연
     @GetMapping("/main/region/{category}")
     public ResponseEntity<List<Concert>> getTheaterRegion(@PathVariable String category){
-        String region = "서울";
+        String region = concertService.convertStringToRegion(category);
         List<Concert> regionList = concertService.getRegionConcert(region);
         return ResponseEntity.ok(regionList);
     }
