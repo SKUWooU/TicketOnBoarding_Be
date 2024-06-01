@@ -80,7 +80,7 @@ public class ConcertService {
     }
 
 
-    //url 한글로 바꾸기
+    //장르url 한글로 바꾸기
     public String convertStringToGenre(String string){
         switch (string.toLowerCase()) {
             case "westmusic":
