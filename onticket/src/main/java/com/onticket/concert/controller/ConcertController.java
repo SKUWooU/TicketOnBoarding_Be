@@ -1,14 +1,16 @@
 package com.onticket.concert.controller;
 
-import com.onticket.concert.domain.Concert;
-import com.onticket.concert.domain.ConcertDetail;
-import com.onticket.concert.domain.Review;
+import com.onticket.concert.domain.*;
+import com.onticket.concert.dto.CalDto;
 import com.onticket.concert.dto.DetailDto;
 import com.onticket.concert.dto.MainDto;
+import com.onticket.concert.dto.SeatDto;
 import com.onticket.concert.repository.ConcertRepository;
+import com.onticket.concert.repository.SeatRepository;
 import com.onticket.concert.service.ConcertService;
 
 import com.onticket.concert.service.ReviewService;
+import com.onticket.concert.service.SeatReservationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +24,11 @@ import java.util.*;
 @RestController
 public class ConcertController {
     private final ConcertService concertService;
+    private final SeatReservationService seatReservationService;
     private final ConcertRepository concertRepository;
     private final ReviewService reviewService;
 
+    //메인페이지
     @GetMapping("/main")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
 
@@ -37,11 +41,25 @@ public class ConcertController {
 
     }
 
-    @GetMapping("/main/detail/{concert_id}")
-    public ResponseEntity<DetailDto> getConcertDetail(@PathVariable("concert_id") String concertId) {
+    //상세페이지
+    @GetMapping("/main/detail/{concertId}")
+    public ResponseEntity<DetailDto> getConcertDetail(@PathVariable("concertId") String concertId) {
         DetailDto detailDto= concertService.getConcertDetail(concertId);
 
         return ResponseEntity.ok(detailDto);
+    }
+
+    //달력데이터-해당 날짜만 띄울 수 있도록
+    @GetMapping("/main/detail/{concertId}/calendar")
+    public ResponseEntity<List<CalDto>> getCalendar(@PathVariable("concertId") String concertId) {
+        List<CalDto> calDtoList=seatReservationService.getAllOfConcertTime(concertId);
+        return ResponseEntity.ok(calDtoList);
+    }
+
+    //해당 공연 시간에 대한 데이터
+    @GetMapping("/main/detail/{concertId}/calendar/{timeId}")
+    public ResponseEntity<List<SeatDto>> getSeat(@PathVariable("concertId") String concertId, @PathVariable("timeId")Long timeId){
+        return ResponseEntity.ok(seatReservationService.getSeatsByConcertTimeId(timeId));
     }
 
     //장르별 공연
@@ -64,7 +82,7 @@ public class ConcertController {
 
     //검색
     @GetMapping("/main/search")
-    public ResponseEntity<List<MainDto>> searchConcerts(@RequestParam(value = "concertname", required = false) String concertName) {
+    public ResponseEntity<List<MainDto>> search(@RequestParam(value = "concertname", required = false) String concertName) {
         if (concertName == null || concertName.trim().isEmpty()) {
             // 파라미터가 없는 경우 빈 리스트를 반환
             return ResponseEntity.ok(Collections.emptyList());
