@@ -255,15 +255,20 @@ public class KopisService {
             //Setter
             if(data.containsKey(day)){
                 for(String time:data.get(day)){
+                    LocalTime startTime = LocalTime.parse(time, DateTimeFormatter.ofPattern("H:mm"));
+                    // 중복 체크
+                    Optional<ConcertTime> existingConcertTime = concertTimeRepository.findByDateAndStartTimeAndConcert(date, startTime, concert);
+                    if (existingConcertTime.isPresent()) {
+                        continue; // 이미 존재하면 생략
+                    }
                     ConcertTime concertTime=new ConcertTime();
                     concertTime.setDate(date);
                     concertTime.setDayOfWeek(day+"요일");
-                    concertTime.setStartTime(LocalTime.parse(time, DateTimeFormatter.ofPattern("H:mm")));
+                    concertTime.setStartTime(startTime);
                     concertTime.setSeatAmount(16);
                     concertTime.setConcert(concert);
                     int n=16;
-
-
+                    concertTimeRepository.save(concertTime);
                     //좌석초기화
                     List<Seat> seatList=new ArrayList<>();
                     while(n-->0){
