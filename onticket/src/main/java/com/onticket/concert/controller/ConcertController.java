@@ -58,11 +58,11 @@ public class ConcertController {
 
     //해당 공연 시간에 대한 데이터
     @GetMapping("/main/detail/{concertId}/calendar/{timeId}")
-    public ResponseEntity<List<SeatDto>> getSeat(@PathVariable("concertId") String concertId, @PathVariable("timeId")Long timeId){
+    public ResponseEntity<List<SeatDto>> getSeat(@PathVariable("concertId") String concertId, @PathVariable("timeId")Long timeId) {
         return ResponseEntity.ok(seatReservationService.getSeatsByConcertTimeId(timeId));
     }
 
-    //장르별 공연
+    //장르별 공연페이지
     @GetMapping("/main/genre/{category}")
     public ResponseEntity<List<MainDto>> getGenre(@PathVariable("category") String category){
         String genre= concertService.convertStringToGenre(category);
@@ -71,7 +71,7 @@ public class ConcertController {
         return ResponseEntity.ok(mainDtoList);
     }
 
-    //지역별 공연
+    //지역별 공연페이지
     @GetMapping("/main/region/{category}")
     public ResponseEntity<List<MainDto>> getRegion(@PathVariable("category") String category){
         String region = concertService.convertStringToRegion(category);
@@ -80,7 +80,7 @@ public class ConcertController {
         return ResponseEntity.ok(mainDtoList);
     }
 
-    //검색
+    //검색페이지
     @GetMapping("/main/search")
     public ResponseEntity<List<MainDto>> search(@RequestParam(value = "concertname", required = false) String concertName) {
         if (concertName == null || concertName.trim().isEmpty()) {
