@@ -3,7 +3,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.*;
 
 @Getter
 @Setter
@@ -18,12 +18,17 @@ public class Reservation {
     private String userId;
 
     // 예약 시간
-    private LocalDateTime reservationTime;
+    private LocalDateTime createdAt;
+
+    //공연일자
+    private LocalDate concertDate;
 
     // 공연 시간
-    @ManyToOne
-    @JoinColumn(name = "concertTimeId")
-    private ConcertTime concertTime;
+    private LocalTime concertTime;
+
+//    @ManyToOne
+//    @JoinColumn(name = "concertTimeId")
+//    private ConcertTime concertTime;
 
     // 좌석
     @ManyToOne
