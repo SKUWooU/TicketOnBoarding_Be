@@ -63,33 +63,54 @@ public class SeatReservationService {
     @Transactional
     public void reserveSeat(Long concertTimeId, String seatNumber,String userId) throws Exception {
         ConcertTime concertTime = concertTimeRepository.findById(concertTimeId)
-                .orElseThrow(() -> new Exception("Concert time not found"));
+                .orElseThrow(() -> new Exception("해당 콘서트가 없습니다."));
 
         Optional<Seat> seatOptional = seatRepository.findByConcertTimeId(concertTimeId).stream()
                 .filter(seat -> seat.getSeatNumber().equals(seatNumber))
                 .findFirst();
 
         if (!seatOptional.isPresent()) {
-            throw new Exception("Seat not found");
+            throw new Exception("존재하지 않는 좌석입니다.");
         }
 
         Seat seat = seatOptional.get();
         if (seat.isReserved()) {
-            throw new Exception("Seat is already reserved");
+            throw new Exception("이미 예약된 좌석입니다.");
         }
 
+        //해당좌석 예약처리
         seat.setReserved(true);
+
+        //전체 좌석수 감소
         concertTime.setSeatAmount(concertTime.getSeatAmount() - 1); // 좌석 수 감소
 
         Reservation reservation = new Reservation();
         reservation.setUserId(userId);
-        reservation.setReservationTime(LocalDateTime.now());
-        reservation.setConcertTime(concertTime);
+        reservation.setCreatedAt(LocalDateTime.now());
+        reservation.setConcertTime(concertTime.getStartTime());
+        reservation.setConcertDate(concertTime.getDate());
         reservation.setSeat(seat);
-        reservation.setStatus("CONFIRMED");
+        reservation.setStatus("예약완료");
 
         seatRepository.save(seat);
         concertTimeRepository.save(concertTime);
         reservationRepository.save(reservation);
+    }
+
+    //예약내역 조회(지난 날짜는 제외)
+    public List<Reservation> getPersonalReservation(String userId) throws Exception {
+        Optional<List<Reservation>> reservationList=reservationRepository.findByUserId(userId);
+        if(!reservationList.isPresent()){
+            throw new Exception("에약내역이 존재하지 않습니다.");
+        }
+        List<Reservation> printList=new ArrayList<>();
+        for(Reservation reserv: reservationList.get()){
+            LocalDate localDate = LocalDate.now();
+            if(localDate.isBefore(reserv.getConcertDate())){
+                continue;
+            }
+            printList.add(reserv);
+        }
+        return printList;
     }
 }
