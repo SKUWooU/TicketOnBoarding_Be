@@ -19,6 +19,11 @@ configurations {
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo1.maven.org/maven2' }
+    maven { url 'https://oss.sonatype.org/content/repositories/releases/' }
+    maven { url 'https://repo.spring.io/milestone' }
+    maven { url 'https://repo.spring.io/snapshot' }
+    google()
 }
 
 dependencies {
@@ -31,17 +36,22 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
-    implementation 'org.springframework.boot:spring-boot-starter-batch' //배치파일
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0' //jackson-파서
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.14.0'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.14.0'
-    implementation 'io.jsonwebtoken:jjwt:0.9.1'
+    implementation 'org.glassfish.jaxb:jaxb-runtime:3.0.2'
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
+    implementation 'javax.activation:activation:1.1.1'
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
     implementation 'net.nurigo:sdk:4.3.0'
     implementation 'io.netty:netty-all:4.1.94.Final'
     implementation 'io.netty:netty-resolver-dns-native-macos:4.1.94.Final:osx-aarch_64'
     implementation 'io.projectreactor.netty:reactor-netty:1.1.5'
-    implementation'org.mariadb.jdbc:mariadb-java-client:3.1.2'
+    implementation 'org.mariadb.jdbc:mariadb-java-client:3.1.2'
+
+
 
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
@@ -50,7 +60,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'io.projectreactor:reactor-test'
     testImplementation 'org.springframework.security:spring-security-test'
-
 }
 
 tasks.named('test') {

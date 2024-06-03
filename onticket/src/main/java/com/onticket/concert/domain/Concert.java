@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
-
+import java.util.List;
 
 
 //****공연테이블****
@@ -46,4 +46,5 @@ public class Concert {
     @OneToOne(mappedBy = "concert", cascade = CascadeType.ALL)
     @JsonManagedReference
     private ConcertDetail concertDetail;
+
 }
