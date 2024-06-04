@@ -54,7 +54,7 @@ public class SeatReservationService {
         List<SeatDto> seatDtoList=new ArrayList<>();
         for(Seat seat:seatList){
             SeatDto seatDto=new SeatDto();
-            seatDto.setId(seat.getId());
+            seatDto.setSeatId(seat.getId());
             seatDto.setSeatNumber(seat.getSeatNumber());
             seatDto.setReserved(seat.isReserved());
             seatDtoList.add(seatDto);
