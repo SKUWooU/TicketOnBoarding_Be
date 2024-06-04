@@ -10,7 +10,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeatDto {
-    private Long id;
+    private Long seatId;
 
     // 좌석 번호
     private String seatNumber;
