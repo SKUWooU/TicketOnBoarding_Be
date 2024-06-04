@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.security.Key;
 import java.util.Base64;
 import java.util.Date;
+import java.util.function.Function;
 
 @Component
 public class JwtUtil {
@@ -48,7 +49,17 @@ public class JwtUtil {
                 .compact();
     }
 
-    public Claims getClaimsFromToken(String token) {
+    public String getUsernameFromToken(String token) {
+        return getClaimFromToken(token, Claims::getSubject);
+    }
+
+    // 토큰에서 특정 클레임 추출
+    public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = getAllClaimsFromToken(token);
+        return claimsResolver.apply(claims);
+    }
+
+    public Claims getAllClaimsFromToken(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
@@ -57,7 +68,7 @@ public class JwtUtil {
     }
 
     public boolean validateToken(String token, String username) {
-        Claims claims = getClaimsFromToken(token);
+        Claims claims = getAllClaimsFromToken(token);
         return claims.getSubject().equals(username) && !claims.getExpiration().before(new Date());
     }
 

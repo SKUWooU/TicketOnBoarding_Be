@@ -5,7 +5,11 @@ import com.onticket.user.domain.RefreshToken;
 import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.service.RefreshTokenService;
 import com.onticket.user.service.UserSecurityService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,38 +31,92 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(@RequestBody Map<String, String> credentials) {
+    public ResponseEntity<?> authenticateUser(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
         String username = credentials.get("username");
         String password = credentials.get("password");
 
-        System.out.println(username+password);
+        //사용자 검증
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(username, password));
 
+
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        String jwt = jwtUtil.generateAccessToken(username);
+        //토큰생성
+        String accessToken = jwtUtil.generateAccessToken(username);
         String refreshToken = jwtUtil.generateRefreshToken(username);
 
         refreshTokenService.saveRefreshToken(refreshToken, username);
 
-        return ResponseEntity.ok().body(Map.of("token", jwt, "refreshToken", refreshToken));
+        // HttpOnly 쿠키로 토큰 설정
+        Cookie accessTokenCookie = new Cookie("accessToken", accessToken);
+        accessTokenCookie.setHttpOnly(true);
+        //모든경로
+        accessTokenCookie.setPath("/");
+        accessTokenCookie.setMaxAge(15 * 60); // 15분
+
+        Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+        refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setPath("/");
+        refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+
+        response.addCookie(accessTokenCookie);
+        response.addCookie(refreshTokenCookie);
+        return ResponseEntity.ok().body(Map.of("message", "로그인 성공"));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletResponse response) {
+        Cookie accessTokenCookie = new Cookie("accessToken", null);
+        accessTokenCookie.setHttpOnly(true);
+        accessTokenCookie.setPath("/");
+        accessTokenCookie.setMaxAge(0);  // 쿠키를 즉시 삭제
+
+        Cookie refreshTokenCookie = new Cookie("refreshToken", null);
+        refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setPath("/");
+        refreshTokenCookie.setMaxAge(0);  // 쿠키를 즉시 삭제
+
+        response.addCookie(accessTokenCookie);
+        response.addCookie(refreshTokenCookie);
+
+        return ResponseEntity.ok("로그아웃 성공");
+    }
+
+    @GetMapping("/valid")
+    public ResponseEntity<?> validateToken(@CookieValue(value = "accessToken", required = false) String token) {
+        if (token != null && jwtUtil.validateToken(token)) {
+            return ResponseEntity.ok(Map.of("valid", true));
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("valid", false));
+        }
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<?> refreshAccessToken(@RequestBody Map<String, String> request) {
-        String refreshToken = request.get("refreshToken");
-
-        if (jwtUtil.validateToken(refreshToken)) {
-            String username = jwtUtil.getClaimsFromToken(refreshToken).getSubject();
-            Optional<RefreshToken> storedRefreshToken = refreshTokenService.findByToken(refreshToken);
-
-            if (storedRefreshToken.isPresent() && storedRefreshToken.get().getUsername().equals(username)) {
-                String newAccessToken = jwtUtil.generateAccessToken(username);
-                return ResponseEntity.ok().body(Map.of("token", newAccessToken));
+    public ResponseEntity<?> refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = null;
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("refreshToken".equals(cookie.getName())) {
+                    refreshToken = cookie.getValue();
+                }
             }
         }
 
-        return ResponseEntity.status(403).body("Invalid refresh token");
+        if (refreshToken != null && jwtUtil.validateToken(refreshToken)) {
+            String username = jwtUtil.getUsernameFromToken(refreshToken);
+            String newAccessToken = jwtUtil.generateAccessToken(username);
+
+            Cookie accessTokenCookie = new Cookie("accessToken", newAccessToken);
+            accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge(15 * 60); // 15분
+            response.addCookie(accessTokenCookie);
+
+            return ResponseEntity.ok().body(Map.of("message", "토큰발급성공"));
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰이 만료되었습니다.");
+        }
     }
 }
