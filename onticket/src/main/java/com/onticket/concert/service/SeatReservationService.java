@@ -9,6 +9,7 @@ import com.onticket.concert.dto.SeatDto;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
+import com.onticket.user.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class SeatReservationService {
     private final ConcertTimeRepository concertTimeRepository;
     private final ReservationRepository ReservationRepository;
     private final ReservationRepository reservationRepository;
+    private final JwtUtil jwtUtil;
 
     //달력에서 사용할 데이터
     public List<CalDto> getAllOfConcertTime(String concertId){
@@ -63,10 +65,9 @@ public class SeatReservationService {
 
     //좌석에약
     @Transactional
-    public void reserveSeat(String concertId, ReservRequest reservRequest) throws Exception {
+    public void reserveSeat(String username,String concertId, ReservRequest reservRequest) throws Exception {
 
         Long concertTimeId= reservRequest.getConcertTimeId();
-        String username= reservRequest.getUsername();
         String seatNumber= reservRequest.getSeatNumber();
 
         ConcertTime concertTime = concertTimeRepository.findById(concertTimeId)

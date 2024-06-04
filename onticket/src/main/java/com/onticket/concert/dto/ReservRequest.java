@@ -11,8 +11,6 @@ import lombok.ToString;
 @NoArgsConstructor
 @ToString
 public class ReservRequest {
-    @JsonProperty("username")
-    private String username;
 
     @JsonProperty("concertDate")
     private String concertDate;
