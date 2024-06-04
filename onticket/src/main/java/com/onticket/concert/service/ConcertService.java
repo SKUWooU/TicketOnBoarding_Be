@@ -158,6 +158,7 @@ public class ConcertService {
 
     //공연상세정보+리뷰 반환
     public DetailDto getConcertDetail(String concertId) {
+        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
         Concert concert = concertRepository.findByConcertId(concertId);
         DetailDto detailDto = new DetailDto();
         detailDto.setConcertId(concertId);
@@ -171,6 +172,8 @@ public class ConcertService {
         detailDto.setCompany(concert.getConcertDetail().getCompany());
         detailDto.setGenre(concert.getGenre());
         detailDto.setPosterUrl(concert.getPosterUrl());
+        detailDto.setStartDate(concert.getStartDate().format(formatter));
+        detailDto.setEndDate(concert.getEndDate().format(formatter));
         Place place = placeRepository.findByPlaceId(concert.getConcertDetail().getPlaceId());
         detailDto.setPlaceName(place.getPlaceName());
         detailDto.setAddr(place.getAddr());

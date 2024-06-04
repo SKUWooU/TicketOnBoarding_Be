@@ -26,6 +26,8 @@ public class DetailDto {
     private String genre;
     private String posterUrl;
     private String addr;
+    private String startDate;
+    private String endDate;
     private BigDecimal la;
     private BigDecimal lo;
     private List<Review> reviewList;
