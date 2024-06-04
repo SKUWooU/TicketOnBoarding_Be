@@ -85,7 +85,7 @@ public class KopisService {
                         .queryParam("stdate",getNowDate())
                         .queryParam("eddate", getAfter30Date())
                         .queryParam("cpage", 1)
-                        .queryParam("rows", 200)
+                        .queryParam("rows", 10)
                         .build())
                 .retrieve() //요청을 보내고 응답을 Retrieve
                 .bodyToMono(String.class)
@@ -239,7 +239,7 @@ public class KopisService {
 
     //ConcertTime 테이블에 날짜별 테이블 만듬  -> dto 객체로 리팩토링 필요
     @Transactional
-    public void createConcertTimeTable(Concert concert,Map<String, List<String>> data){
+    public List<ConcertTime> createConcertTimeTable(Concert concert,Map<String, List<String>> data){
         concertRepository.save(concert);
         LocalDate startDate=concert.getStartDate();
         LocalDate endDate=concert.getEndDate();
@@ -267,25 +267,42 @@ public class KopisService {
                     concertTime.setStartTime(startTime);
                     concertTime.setSeatAmount(16);
                     concertTime.setConcert(concert);
-                    int n=16;
-                    concertTimeRepository.save(concertTime);
-                    //좌석초기화
-                    List<Seat> seatList=new ArrayList<>();
-                    while(n-->0){
-                        Seat seat = new Seat();
-                        seat.setSeatNumber("Seat " + n);
-                        seat.setReserved(false);
-                        seat.setConcertTime(concertTime);
-                        seatList.add(seat);
-                    }
-                    seatRepository.saveAll(seatList);
-                    concertTime.setSeats(seatList);
+
+                    concertTime=concertTimeRepository.save(concertTime);
                     concertTimeList.add(concertTime);
                 }
             }
         }
 
 
+        concertTimeRepository.saveAll(concertTimeList);
+
+        return concertTimeList;
+
+    }
+
+    //좌석테이블 생성
+    @Transactional
+    public void createSeat(List<ConcertTime> concertTimeList){
+
+        for(ConcertTime concertTime:concertTimeList){
+            List<Seat> seatList=new ArrayList<>();
+
+            //좌석초기화
+            for(int i=0;i<3;i++) {
+                String[] a={"A","B","C"};
+                for(int j=1;j<=8;j++) {
+                    Seat seat = new Seat();
+                    seat.setSeatNumber(a[i]+j);
+                    seat.setReserved(false);
+                    seat.setConcertTime(concertTime);
+                    seatRepository.save(seat);
+                    seatList.add(seat);
+                }
+            }
+            concertTime.setSeats(seatList);
+            concertTimeRepository.save(concertTime);
+        }
         concertTimeRepository.saveAll(concertTimeList);
     }
 

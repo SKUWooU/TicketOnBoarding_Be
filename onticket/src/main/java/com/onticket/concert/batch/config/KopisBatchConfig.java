@@ -21,6 +21,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 
 //Batch 작업
@@ -55,43 +56,51 @@ public class KopisBatchConfig {
                 //####################################################################################//
 
 
-                Concert concert=kopisService.createConcert(kopisDto);
+                Optional<Concert> isConcert= concertRepository.findById(kopisDto.getConcertId());
+                if(isConcert.isEmpty()){
+                    //####################################################################################//
+                    //-------------------------------Concert Table 생성  ----------------------------------//
+                    //####################################################################################//
+
+                    Concert concert=kopisService.createConcert(kopisDto);
 
 
-                //------------------------------------ 공통
-                //해당DTO의 ID 값으로 API요청- 코드 중첩을 줄이기 위해 tasklet 에서 실행
-                JsonNode jsonNode=kopisService.sendDetailRequests(kopisDto.getConcertId());
-                JsonNode dtoNode=jsonNode.path("db");
-                KopisDetailDto kopisDetailDto = kopisService.convertXmlToKopisDetailDto(dtoNode);
+                    //------------------------------------ 공통
+                    //해당DTO의 ID 값으로 API요청- 코드 중첩을 줄이기 위해 tasklet 에서 실행
+                    JsonNode jsonNode=kopisService.sendDetailRequests(kopisDto.getConcertId());
+                    JsonNode dtoNode=jsonNode.path("db");
+                    KopisDetailDto kopisDetailDto = kopisService.convertXmlToKopisDetailDto(dtoNode);
 
 
 
-                //####################################################################################//
-                //----------------------------------Place Table 생성-----------------------------------//
-                //####################################################################################//
+                    //####################################################################################//
+                    //----------------------------------Place Table 생성-----------------------------------//
+                    //####################################################################################//
 
-                //시설이름
-                String placeName=kopisDetailDto.getPlace();
+                    //시설이름
+                    String placeName=kopisDetailDto.getPlace();
 
-                //ConcertDetail 테이블에 placeID 추가 + Place 테이블에 추가 하기위해
-                List<String> placeIdAndSidoAndGugun=kopisService.getPlaceIdAndSidoAndGugun(placeName);
+                    //ConcertDetail 테이블에 placeID 추가 + Place 테이블에 추가 하기위해
+                    List<String> placeIdAndSidoAndGugun=kopisService.getPlaceIdAndSidoAndGugun(placeName);
 
-                //시설ID
-                String placeId=placeIdAndSidoAndGugun.get(0);
-
-
-                //Place Table 생성
-                kopisService.createPlaceTable(placeName ,placeIdAndSidoAndGugun);
-
-                //Concert Detail 생성
-                kopisService.createConcertDetailTable(kopisDetailDto,placeId);
+                    //시설ID
+                    String placeId=placeIdAndSidoAndGugun.get(0);
 
 
-                //------------------------------------ ------------------------------ConcertTime Table
-                //ConcertTime Table에 넣을 공연시간 Data
-                Map<String, List<String>> data= kopisService.parse(kopisDetailDto.getDateGuidance());
-                //ConcertTime Table 데이터 생성
-                kopisService.createConcertTimeTable(concert,data);
+                    //Place Table 생성
+                    kopisService.createPlaceTable(placeName ,placeIdAndSidoAndGugun);
+
+                    //Concert Detail 생성
+                    kopisService.createConcertDetailTable(kopisDetailDto,placeId);
+
+
+                    //------------------------------------ ------------------------------ConcertTime Table
+                    //ConcertTime Table에 넣을 공연시간 Data
+                    Map<String, List<String>> data= kopisService.parse(kopisDetailDto.getDateGuidance());
+                    //ConcertTime Table 데이터 생성
+                    List<ConcertTime> concertTimeList=kopisService.createConcertTimeTable(concert,data);
+                    kopisService.createSeat(concertTimeList);
+                }
 
 
 
