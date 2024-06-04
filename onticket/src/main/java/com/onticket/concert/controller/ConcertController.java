@@ -112,7 +112,8 @@ public class ConcertController {
     @PostMapping("/main/detail/{concertId}/reservation")
     public ResponseEntity<?> setReservation(@CookieValue(value = "accessToken", required = false) String token,@PathVariable("concertId") String concertId, @RequestBody ReservRequest reservRequest) throws Exception {
         if (token != null && jwtUtil.validateToken(token)) {
-            seatReservationService.reserveSeat(concertId,reservRequest);
+            String username=jwtUtil.getUsernameFromToken(token);
+            seatReservationService.reserveSeat(username,concertId,reservRequest);
             return ResponseEntity.ok().body("예약에 성공했습니다");
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("예약에 실패했습니다. 로그인 후 다시 이용해주새요.");
