@@ -14,8 +14,10 @@ public class Reservation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private String concertId;
+
     // 예약자 ID
-    private String userId;
+    private String username;
 
     // 예약 시간
     private LocalDateTime createdAt;

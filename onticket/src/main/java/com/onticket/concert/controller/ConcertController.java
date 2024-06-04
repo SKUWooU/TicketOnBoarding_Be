@@ -1,17 +1,16 @@
 package com.onticket.concert.controller;
 
 import com.onticket.concert.domain.*;
-import com.onticket.concert.dto.CalDto;
-import com.onticket.concert.dto.DetailDto;
-import com.onticket.concert.dto.MainDto;
-import com.onticket.concert.dto.SeatDto;
+import com.onticket.concert.dto.*;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.SeatRepository;
 import com.onticket.concert.service.ConcertService;
 
 import com.onticket.concert.service.ReviewService;
 import com.onticket.concert.service.SeatReservationService;
+import com.onticket.user.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,7 +26,7 @@ public class ConcertController {
     private final SeatReservationService seatReservationService;
     private final ConcertRepository concertRepository;
     private final ReviewService reviewService;
-
+    private final JwtUtil jwtUtil;
     //메인페이지
     @GetMapping("/main")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
@@ -56,7 +55,7 @@ public class ConcertController {
         return ResponseEntity.ok(calDtoList);
     }
 
-    //해당 공연 시간에 대한 데이터
+    //해당 공연 시간에 대한 좌석 데이터 출력
     @GetMapping("/main/detail/{concertId}/calendar/{timeId}")
     public ResponseEntity<List<SeatDto>> getSeat(@PathVariable("concertId") String concertId, @PathVariable("timeId")Long timeId) {
         return ResponseEntity.ok(seatReservationService.getSeatsByConcertTimeId(timeId));
@@ -96,5 +95,28 @@ public class ConcertController {
         }
         List<MainDto> dtoList = concertService.searchConcertsByName(concertName);
         return ResponseEntity.ok(dtoList);
+    }
+
+//    //리뷰페이지
+//    @GetMapping("/main/detail/{concertId}/reviews")
+//    public ResponseEntity<List<Review>> getReviews(@RequestParam(value = "concertId", required = false) String concertId) {
+//        List<Review> reviewList = reviewService.getReviews(concertId);
+//        return ResponseEntity.ok(reviewList);
+//    }
+//
+//    //리뷰포스트
+//    @PostMapping("/register/review/")
+//    public ResponseEntity<Review> registerReview(@RequestBody Review review) {
+//
+//    }
+    @PostMapping("/main/detail/{concertId}/reservation")
+    public ResponseEntity<?> setReservation(@CookieValue(value = "accessToken", required = false) String token,@PathVariable("concertId") String concertId, @RequestBody ReservRequest reservRequest) throws Exception {
+        if (token != null && jwtUtil.validateToken(token)) {
+            seatReservationService.reserveSeat(concertId,reservRequest);
+            return ResponseEntity.ok().body("예약에 성공했습니다");
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("예약에 실패했습니다. 로그인 후 다시 이용해주새요.");
+        }
+
     }
 }
