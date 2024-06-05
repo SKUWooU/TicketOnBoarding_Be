@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -97,26 +98,37 @@ public class ConcertController {
         return ResponseEntity.ok(dtoList);
     }
 
-//    //리뷰페이지
-//    @GetMapping("/main/detail/{concertId}/reviews")
-//    public ResponseEntity<List<Review>> getReviews(@RequestParam(value = "concertId", required = false) String concertId) {
-//        List<Review> reviewList = reviewService.getReviews(concertId);
-//        return ResponseEntity.ok(reviewList);
-//    }
-//
-//    //리뷰포스트
-//    @PostMapping("/register/review/")
-//    public ResponseEntity<Review> registerReview(@RequestBody Review review) {
-//
-//    }
+    //리뷰페이지
+    @GetMapping("/main/detail/{concertId}/reviews")
+    public ResponseEntity<List<Review>> getReviews(@RequestParam(value = "concertId", required = false) String concertId) {
+        List<Review> reviewList = reviewService.getReviews(concertId);
+        return ResponseEntity.ok(reviewList);
+    }
+
+    //리뷰포스트
+    @PostMapping("/main/detail/{concertId}/register/review")
+    public ResponseEntity<?> registerReview(@CookieValue(value = "accessToken", required = false) String token,@RequestParam(value = "concertId", required = false) String concertId,@RequestBody Map<String,?> requestBody) {
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username=jwtUtil.getUsernameFromToken(token);
+            String content= (String) requestBody.get("content");
+            float startCount= (float) requestBody.get("starCount");
+            reviewService.addReview(concertId,username,content, startCount);
+            return ResponseEntity.ok().body("리뷰가 등록되었습니다.");
+        } else {
+            return ResponseEntity.badRequest().body("로그인이 필요한 서비스입니다.");
+        }
+    }
+
+    //공연예약
     @PostMapping("/main/detail/{concertId}/reservation")
     public ResponseEntity<?> setReservation(@CookieValue(value = "accessToken", required = false) String token,@PathVariable("concertId") String concertId, @RequestBody ReservRequest reservRequest) throws Exception {
         if (token != null && jwtUtil.validateToken(token)) {
             String username=jwtUtil.getUsernameFromToken(token);
             seatReservationService.reserveSeat(username,concertId,reservRequest);
-            return ResponseEntity.ok().body("예약에 성공했습니다");
+            LocalDateTime now = LocalDateTime.now();
+            return ResponseEntity.ok().body(now);
         } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("예약에 실패했습니다. 로그인 후 다시 이용해주새요.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
         }
 
     }
