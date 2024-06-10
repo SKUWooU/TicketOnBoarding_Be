@@ -265,7 +265,7 @@ public class KopisService {
                     concertTime.setDate(date);
                     concertTime.setDayOfWeek(day+"요일");
                     concertTime.setStartTime(startTime);
-                    concertTime.setSeatAmount(16);
+                    concertTime.setSeatAmount(24);
                     concertTime.setConcert(concert);
 
                     concertTime=concertTimeRepository.save(concertTime);
