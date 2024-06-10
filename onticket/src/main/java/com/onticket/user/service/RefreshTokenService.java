@@ -13,10 +13,17 @@ public class RefreshTokenService {
     private final RefreshTokenRepository refreshTokenRepository;
 
     public void saveRefreshToken(String token, String username) {
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setToken(token);
-        refreshToken.setUsername(username);
-        refreshTokenRepository.save(refreshToken);
+        Optional<RefreshToken> _refreshToken = refreshTokenRepository.findByToken(token);
+        if (_refreshToken.isEmpty()) {
+            RefreshToken refreshToken = new RefreshToken();
+            refreshToken.setToken(token);
+            refreshToken.setUsername(username);
+            refreshTokenRepository.save(refreshToken);
+        } else {
+            RefreshToken existingToken = _refreshToken.get();
+            existingToken.setUsername(username);
+            refreshTokenRepository.save(existingToken);
+        }
     }
 
     public Optional<RefreshToken> findByToken(String token) {
