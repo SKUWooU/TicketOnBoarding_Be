@@ -18,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -126,7 +127,7 @@ public class UserController {
 
     //아이디 찾기
     @PostMapping("/findid")
-    public ResponseEntity<String> FindId(@Valid @RequestBody UserFindIdForm userFindIdForm, BindingResult bindingResult){
+    public ResponseEntity<?> FindId(@Valid @RequestBody UserFindIdForm userFindIdForm, BindingResult bindingResult){
         try {
             if(bindingResult.hasErrors()) {
                 String errorMessage = bindingResult.getFieldError().getDefaultMessage();
@@ -136,7 +137,10 @@ public class UserController {
             String email = userFindIdForm.getEmail();
             Optional<SiteUser> siteUser = userRepository.findSiteUserByPhonenumberAndEmail(phonenumber, email);
             if (siteUser.isPresent()) {
-                return ResponseEntity.ok(siteUser.get().getUsername());
+                Map<String,String> map=new HashMap<>();
+                map.put("username",siteUser.get().getUsername());
+                map.put("createdate", String.valueOf(siteUser.get().getCreatedate()));
+                return ResponseEntity.ok(map);
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("등록된 아이디가 없습니다.");
             }
