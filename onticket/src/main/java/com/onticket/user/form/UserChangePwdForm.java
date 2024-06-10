@@ -8,12 +8,12 @@ import lombok.RequiredArgsConstructor;
 @Data
 public class UserChangePwdForm {
 
-    @NotEmpty
+    @NotEmpty(message = "전화번호를 보내주세요.")
     private String phonenumber;
 
-    @NotEmpty
+    @NotEmpty(message = "비밀번호1을 입력하세요")
     private String password1;
 
-    @NotEmpty
+    @NotEmpty(message = "비밀번호2를 입력하세요")
     private String password2;
 }
