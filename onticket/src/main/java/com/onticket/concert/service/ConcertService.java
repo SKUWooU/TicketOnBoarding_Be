@@ -14,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,8 +58,13 @@ public class ConcertService {
 
         List<Concert> top4= new ArrayList<>();
 //        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        for (int i = 0; i < 4; i++) {
+        int count = 0;
+        for (int i = 0; i < concerts.size() && count < 4; i++) {
+            if (concerts.get(i).getStartDate().isBefore(LocalDate.now())) {
+                continue; // 과거 날짜 콘서트는 건너뜀
+            }
             top4.add(concerts.get(i));
+            count++;
         }
         List<MainDto> mainDtoList=getMainDtoList(top4);
 //        for(Concert tops:top4){
