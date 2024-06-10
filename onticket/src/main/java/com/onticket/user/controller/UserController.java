@@ -151,7 +151,7 @@ public class UserController {
 
     //패스워드 변경시 사용하는 sms 인증
     @PostMapping("/issmscode")
-    public ResponseEntity<String> CodeCheck(@RequestBody Map<String, String> requestBody){
+    public ResponseEntity<?> CodeCheck(@RequestBody Map<String, String> requestBody){
         Optional<SiteUser> siteUser=userRepository.findOptionalSiteUserByPhonenumber(compare_phone);
         //코드 대조하고 해당 번호를 가진 유저가 있으면 성공
         if(userService.GetSMSCode().equals(requestBody.get("smscode"))||siteUser.isPresent()){
