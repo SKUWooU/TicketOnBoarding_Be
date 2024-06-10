@@ -2,20 +2,24 @@ package com.onticket.user.controller;
 
 
 import com.onticket.user.domain.RefreshToken;
+import com.onticket.user.form.UserLoginForm;
 import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.service.RefreshTokenService;
 import com.onticket.user.service.UserSecurityService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -31,38 +35,50 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/login")
-    public ResponseEntity<?> authenticateUser(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
-        String username = credentials.get("username");
-        String password = credentials.get("password");
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody UserLoginForm userLoginForm, BindingResult bindingResult, HttpServletResponse response) {
+        try {
 
-        //사용자 검증
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(username, password));
+            if (bindingResult.hasErrors()) {
+                //로그인폼에 있는 에러메세지 받아옴-> 빈값이면 메세지 출력
+                String errorMessage = bindingResult.getFieldError().getDefaultMessage();
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
+            }
+            String username = userLoginForm.getUsername();
+            String password = userLoginForm.getPassword();
+
+            //사용자 검증
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, password));
 
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        //토큰생성
-        String accessToken = jwtUtil.generateAccessToken(username);
-        String refreshToken = jwtUtil.generateRefreshToken(username);
+            //토큰생성
+            String accessToken = jwtUtil.generateAccessToken(username);
+            String refreshToken = jwtUtil.generateRefreshToken(username);
 
-        refreshTokenService.saveRefreshToken(refreshToken, username);
+            refreshTokenService.saveRefreshToken(refreshToken, username);
 
-        // HttpOnly 쿠키로 토큰 설정
-        Cookie accessTokenCookie = new Cookie("accessToken", accessToken);
-        accessTokenCookie.setHttpOnly(true);
-        //모든경로
-        accessTokenCookie.setPath("/");
-        accessTokenCookie.setMaxAge(15 * 60); // 15분
+            // HttpOnly 쿠키로 토큰 설정
+            Cookie accessTokenCookie = new Cookie("accessToken", accessToken);
+            accessTokenCookie.setHttpOnly(true);
+            //모든경로
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge(15 * 60); // 15분
 
-        Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+            Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
 
-        response.addCookie(accessTokenCookie);
-        response.addCookie(refreshTokenCookie);
-        return ResponseEntity.ok().body(Map.of("message", "로그인 성공"));
+            response.addCookie(accessTokenCookie);
+            response.addCookie(refreshTokenCookie);
+            return ResponseEntity.ok().body(Map.of("message", "로그인 성공"));
+        }catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("아이디 또는 비밀번호가 올바르지 않습니다.");
+        }catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("로그인에 실패했습니다.");
+        }
     }
 
     @PostMapping("/logout")
