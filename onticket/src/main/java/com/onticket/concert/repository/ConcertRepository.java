@@ -34,7 +34,7 @@ public interface ConcertRepository extends JpaRepository<Concert,String> {
     List<Concert> findBySido(@Param("sido") String sido);
 
 
-    @Query("SELECT c FROM Concert c JOIN c.concertDetail cd ORDER BY cd.averageRating DESC")
+    @Query("SELECT c FROM Concert c JOIN c.concertDetail cd WHERE c.status = '공연중' or c.status = '공연예정' ORDER BY cd.averageRating DESC")
     List<Concert> findTop4ByOrderByAverageRatingDesc();
 }
 
