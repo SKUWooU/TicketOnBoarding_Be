@@ -66,44 +66,54 @@ public class SeatReservationService {
     //좌석에약
     @Transactional
     public void reserveSeat(String username,String concertId, ReservRequest reservRequest) throws Exception {
-
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
         Long concertTimeId= reservRequest.getConcertTimeId();
-        String seatNumber= reservRequest.getSeatNumber();
+        List<String> seatNumberList= reservRequest.getSeatNumberList();
 
         ConcertTime concertTime = concertTimeRepository.findById(concertTimeId)
                 .orElseThrow(() -> new Exception("해당 콘서트가 없습니다."));
+        List<Seat> seatList = new ArrayList<>();
+        List<Reservation> reservationList = new ArrayList<>();
+        for(String seatNumber:seatNumberList){
+            Optional<Seat> seatOptional = seatRepository.findByConcertTimeIdAndSeatNumberWithLock(concertTimeId, seatNumber);
+            if (!seatOptional.isPresent()) {
+                throw new Exception("존재하지 않는 좌석입니다.");
+            }
 
-        Optional<Seat> seatOptional = seatRepository.findByConcertTimeId(concertTimeId).stream()
-                .filter(seat -> seat.getSeatNumber().equals(seatNumber))
-                .findFirst();
 
-        if (!seatOptional.isPresent()) {
-            throw new Exception("존재하지 않는 좌석입니다.");
+            Seat seat = seatOptional.get();
+            System.out.println(seat);
+
+            if (seat.isReserved()) {
+                throw new Exception("이미 예약된 좌석입니다.");
+            }
+
+            //해당좌석 예약처리
+            seat.setReserved(true);
+            seatList.add(seat);
+            seatRepository.save(seat);
+
+            //예약DB 추가
+            Reservation reservation = new Reservation();
+            reservation.setConcertId(concertId);
+            reservation.setUsername(username);
+            reservation.setCreatedAt(LocalDateTime.now());
+            reservation.setConcertTime(LocalTime.parse(concertTime.getStartTime().format(formatter)));
+            reservation.setConcertDate(concertTime.getDate());
+            reservation.setSeat(seat);
+            reservation.setStatus("예약완료");
+
+            reservationList.add(reservation);
+            reservationRepository.save(reservation);
         }
 
-        Seat seat = seatOptional.get();
-        if (seat.isReserved()) {
-            throw new Exception("이미 예약된 좌석입니다.");
-        }
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
-        //해당좌석 예약처리
-        seat.setReserved(true);
+
 
         //전체 좌석수 감소
-        concertTime.setSeatAmount(concertTime.getSeatAmount() - 1); // 좌석 수 감소
-
-        Reservation reservation = new Reservation();
-        reservation.setConcertId(concertId);
-        reservation.setUsername(username);
-        reservation.setCreatedAt(LocalDateTime.now());
-        reservation.setConcertTime(LocalTime.parse(concertTime.getStartTime().format(formatter)));
-        reservation.setConcertDate(concertTime.getDate());
-        reservation.setSeat(seat);
-        reservation.setStatus("예약완료");
-
-        seatRepository.save(seat);
+        concertTime.setSeatAmount(concertTime.getSeatAmount() - seatNumberList.size()); // 좌석 수 감소
         concertTimeRepository.save(concertTime);
-        reservationRepository.save(reservation);
+        seatRepository.saveAll(seatList);
+        reservationRepository.saveAll(reservationList);
     }
 
     //예약내역 조회(지난 날짜는 제외)

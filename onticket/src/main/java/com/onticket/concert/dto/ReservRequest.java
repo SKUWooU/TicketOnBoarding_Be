@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.List;
+
 @Setter
 @Getter
 @NoArgsConstructor
@@ -21,9 +23,6 @@ public class ReservRequest {
     @JsonProperty("concertTime")
     private String concertTime;
 
-    @JsonProperty("seatId")
-    private Long seatId;
-
-    @JsonProperty("seatNumber")
-    private String seatNumber;
+    @JsonProperty("seatNumberList")
+    private List<String> seatNumberList;
 }
