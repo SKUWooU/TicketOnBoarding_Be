@@ -23,13 +23,14 @@ public class SiteUser {
 
     private String password;
 
-    @Column(unique = true)
     private String email;
 
     private String nickname;
 
     @Column(unique = true)
     private String phonenumber;
+
+    private String naverid;
 
     @CreationTimestamp
     private LocalDateTime createdate;

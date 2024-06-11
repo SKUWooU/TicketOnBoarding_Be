@@ -2,8 +2,11 @@ package com.onticket.user.controller;
 
 
 import com.onticket.user.domain.RefreshToken;
+import com.onticket.user.domain.SiteUser;
 import com.onticket.user.form.UserLoginForm;
+import com.onticket.user.jwt.CookieUtil;
 import com.onticket.user.jwt.JwtUtil;
+import com.onticket.user.repository.UserRepository;
 import com.onticket.user.service.RefreshTokenService;
 import com.onticket.user.service.UserSecurityService;
 import jakarta.servlet.http.Cookie;
@@ -11,8 +14,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -21,9 +24,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,7 +38,16 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
+    private final CookieUtil cookieUtil;
     private final RefreshTokenService refreshTokenService;
+    private final UserRepository userRepository;
+
+
+    @Value("${naver.client.id}")
+    private String clientId;
+
+    @Value("${naver.client.secret}")
+    private String clientSecret;
 
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody UserLoginForm userLoginForm, BindingResult bindingResult, HttpServletResponse response) {
@@ -64,7 +79,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(15 * 60); // 15분
+            accessTokenCookie.setMaxAge(60 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
@@ -133,6 +148,75 @@ public class AuthController {
             return ResponseEntity.ok().body(Map.of("message", "토큰발급성공"));
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰이 만료되었습니다.");
+        }
+    }
+
+    @PostMapping("/naver")
+    public ResponseEntity<?> naverLogin(@RequestBody Map<String, String> requestBody,HttpServletResponse response) {
+        try {
+            String code = requestBody.get("code");
+            System.out.println(code);
+            String state = requestBody.get("state");
+            System.out.println(state);
+            String tokenUrl = "https://nid.naver.com/oauth2.0/token?grant_type=authorization_code" +
+                    "&client_id=" + clientId +
+                    "&client_secret=" + clientSecret +
+                    "&code=" + code +
+                    "&state=" + state;
+
+            RestTemplate restTemplate = new RestTemplate();
+            ResponseEntity<Map> tokenResponse = restTemplate.exchange(tokenUrl, HttpMethod.GET, null, Map.class);
+
+            String accessToken = (String) tokenResponse.getBody().get("access_token");
+
+            String profileUrl = "https://openapi.naver.com/v1/nid/me";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + accessToken);
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> profileResponse = restTemplate.exchange(profileUrl, HttpMethod.GET, entity, Map.class);
+
+            Map<String, Object> profile = (Map<String, Object>) profileResponse.getBody().get("response");
+            String naverId = (String) profile.get("id");
+            System.out.println(naverId);
+            String email = (String) profile.get("email");
+            String name = (String) profile.get("name");
+
+            SiteUser user = userRepository.findByNaverid(naverId);
+            if (user == null) {
+                // 신규 사용자일 경우 사용자 정보를 DB에 저장
+                user = new SiteUser();
+                user.setUsername(UUID.randomUUID().toString()); // 애플리케이션의 사용자 ID 생성
+                user.setEmail(email);
+                user.setNickname(name);
+                user.setNaverid(naverId);
+                userRepository.save(user);
+            }
+
+
+            System.out.println(user.getUsername());
+            String token = jwtUtil.generateAccessToken(user.getUsername());
+            String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
+
+            refreshTokenService.saveRefreshToken(refreshToken, user.getUsername());
+
+            // HttpOnly 쿠키로 토큰 설정
+            Cookie accessTokenCookie = new Cookie("accessToken", token);
+            accessTokenCookie.setHttpOnly(true);
+            //모든경로
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge(60 * 60); // 15분
+
+            Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+
+            response.addCookie(accessTokenCookie);
+            response.addCookie(refreshTokenCookie);
+            return ResponseEntity.ok().body(Map.of("message", "로그인 성공"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("다시 시도하세요");
         }
     }
 }
