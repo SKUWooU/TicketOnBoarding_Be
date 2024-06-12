@@ -100,19 +100,21 @@ public class ConcertController {
 
     //리뷰페이지
     @GetMapping("/main/detail/{concertId}/reviews")
-    public ResponseEntity<List<Review>> getReviews(@RequestParam(value = "concertId", required = false) String concertId) {
+    public ResponseEntity<List<Review>> getReviews(@PathVariable String concertId) {
         List<Review> reviewList = reviewService.getReviews(concertId);
         return ResponseEntity.ok(reviewList);
     }
 
     //리뷰포스트
     @PostMapping("/main/detail/{concertId}/register/review")
-    public ResponseEntity<?> registerReview(@CookieValue(value = "accessToken", required = false) String token,@RequestParam(value = "concertId", required = false) String concertId,@RequestBody Map<String,?> requestBody) {
+    public ResponseEntity<?> registerReview(@CookieValue(value = "accessToken", required = false) String token,@PathVariable("concertId") String concertId,@RequestBody Map<String,?> requestBody) {
         if (token != null && jwtUtil.validateToken(token)) {
+            System.out.println(concertId);
             String username=jwtUtil.getUsernameFromToken(token);
             String content= (String) requestBody.get("content");
-            float startCount= (float) requestBody.get("starCount");
-            reviewService.addReview(concertId,username,content, startCount);
+            Integer starCount= (Integer) requestBody.get("starCount");
+            float parseStarCount=  starCount.floatValue();
+            reviewService.addReview(concertId,username,content,parseStarCount);
             return ResponseEntity.ok().body("리뷰가 등록되었습니다.");
         } else {
             return ResponseEntity.badRequest().body("로그인이 필요한 서비스입니다.");

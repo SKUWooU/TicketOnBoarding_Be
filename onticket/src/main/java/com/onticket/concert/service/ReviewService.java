@@ -20,10 +20,11 @@ public class ReviewService {
     private final ConcertDetailRepository concertDetailRepository;
 
     @Transactional
-    public Review addReview(String concertDetailId, String author, String content, float starCount) {
+    public void addReview(String concertDetailId, String author, String content, float starCount) {
         ConcertDetail concertDetail = concertDetailRepository.findById(concertDetailId)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid concertDetail ID"));
+                .orElseThrow(() -> new IllegalArgumentException("concertId가 잘못되었습니다."));
 
+        System.out.println(starCount);
         Review review = new Review();
         review.setAuthor(author);
         review.setDate(LocalDateTime.now());
@@ -31,19 +32,31 @@ public class ReviewService {
         review.setConcertDetail(concertDetail);
         review.setStarCount(starCount);
         updateAverageRating(concertDetail);
-        return reviewRepository.save(review);
+        reviewRepository.save(review);
+        concertDetailRepository.save(concertDetail);
+
     }
 
     //리뷰평균 내기
+    // 리뷰 평균을 계산하는 메서드
     private void updateAverageRating(ConcertDetail concertDetail) {
-        List<Review> reviews = concertDetail.getReviews();
-        float totalRating = 0;
-        for (Review review : reviews) {
-            totalRating += review.getStarCount();
-        }
-        float averageRating = totalRating / reviews.size();
-        concertDetail.setAverageRating(averageRating);
+        List<Review> reviews = reviewRepository.findByConcertDetail(concertDetail);
+        if (reviews.isEmpty()) {
+            concertDetail.setAverageRating(0.0f);
+        } else {
+            float totalRating = 0;
+            for (Review review : reviews) {
+                totalRating += review.getStarCount();
+            }
+            float averageRating = totalRating / reviews.size();
 
+            // NaN 값이 아닌 유효한 값으로 설정
+            if (Float.isNaN(averageRating)) {
+                averageRating = 0.0f;
+            }
+
+            concertDetail.setAverageRating(averageRating);
+        }
         concertDetailRepository.save(concertDetail);
     }
 

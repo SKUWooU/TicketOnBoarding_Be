@@ -27,7 +27,7 @@ public class Review {
     private float starCount;
 
     @ManyToOne
-    @JoinColumn(name = "concertDetailId")
+    @JoinColumn(name = "concertId")
     private ConcertDetail concertDetail;
 
 
