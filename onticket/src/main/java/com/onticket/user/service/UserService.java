@@ -104,6 +104,7 @@ public class UserService {
         user.setPassword(encodedPassword);
         user.setNickname(nickname);
         user.setPhonenumber(number);;
+        user.setCode(1);
 
         // UserRepository를 사용하여 사용자 정보를 저장
         try {

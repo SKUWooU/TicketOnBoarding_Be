@@ -4,7 +4,6 @@ package com.onticket.user.controller;
 import com.onticket.user.domain.RefreshToken;
 import com.onticket.user.domain.SiteUser;
 import com.onticket.user.form.UserLoginForm;
-import com.onticket.user.jwt.CookieUtil;
 import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.repository.UserRepository;
 import com.onticket.user.service.RefreshTokenService;
@@ -38,7 +37,6 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
-    private final CookieUtil cookieUtil;
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
 
@@ -48,6 +46,12 @@ public class AuthController {
 
     @Value("${naver.client.secret}")
     private String clientSecret;
+
+    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    private String googleClientId;
+
+    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
+    private String googleClientSecret;
 
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody UserLoginForm userLoginForm, BindingResult bindingResult, HttpServletResponse response) {
@@ -190,6 +194,7 @@ public class AuthController {
                 user.setEmail(email);
                 user.setNickname(name);
                 user.setNaverid(naverId);
+                user.setCode(2);
                 userRepository.save(user);
             }
 
@@ -217,6 +222,70 @@ public class AuthController {
             return ResponseEntity.ok().body(Map.of("message", "로그인 성공"));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("다시 시도하세요");
+        }
+    }
+
+    @GetMapping("/user")
+    public ResponseEntity<?> getUser(@CookieValue(value = "accessToken", required = false) String token) {
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            SiteUser user = userRepository.findByUsername(username);
+            if (user == null) {
+                return ResponseEntity.badRequest().body("일치하는 사용자가 없습니다.");
+            }
+            Map<String,Object> map = new HashMap<>();
+            String nickname = user.getNickname();
+
+            map.put("code",user.getCode());
+            map.put("nickName",nickname);
+            return ResponseEntity.ok(map);
+        }
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰이 잘못되었습니다.");
+    }
+
+    @PostMapping("/google")
+    public ResponseEntity<?> googleLogin(@RequestBody Map<String, ?> requestBody,HttpServletResponse response) {
+        try {
+            Map<String, Object> user = (Map<String, Object>) requestBody.get("user");
+            System.out.println(user);
+            String email = (String) user.get("email");
+            String name = (String) user.get("name");
+            SiteUser siteUser = userRepository.findByGoogleemail(email);
+            if (siteUser == null) {
+                // 신규 사용자일 경우 사용자 정보를 DB에 저장
+                siteUser = new SiteUser();
+                siteUser.setUsername(UUID.randomUUID().toString()); // 애플리케이션의 사용자 ID 생성
+                siteUser.setGoogleemail(email);
+                siteUser.setNickname(name);
+                siteUser.setCode(2);
+                userRepository.save(siteUser);
+            }
+
+
+            String token = jwtUtil.generateAccessToken(siteUser.getUsername());
+            String refreshToken = jwtUtil.generateRefreshToken(siteUser.getUsername());
+
+            refreshTokenService.saveRefreshToken(refreshToken, siteUser.getUsername());
+
+            // HttpOnly 쿠키로 토큰 설정
+            Cookie accessTokenCookie = new Cookie("accessToken", token);
+            accessTokenCookie.setHttpOnly(true);
+            //모든경로
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge(60 * 60); // 15분
+
+            Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+
+            response.addCookie(accessTokenCookie);
+            response.addCookie(refreshTokenCookie);
+
+            return ResponseEntity.ok("로그인 성공");
+        } catch (Exception e){
+            return ResponseEntity.badRequest().body("로그인 실패");
         }
     }
 }

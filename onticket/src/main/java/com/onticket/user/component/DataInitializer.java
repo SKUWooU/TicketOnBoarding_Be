@@ -25,6 +25,7 @@ public class DataInitializer implements CommandLineRunner {
             admin.setNickname("Administrator");
             admin.setPhonenumber("01068549901");
             admin.setPassword(passwordEncoder.encode("adminpassword"));
+            admin.setCode(3);
             userRepository.save(admin);
         }
     }

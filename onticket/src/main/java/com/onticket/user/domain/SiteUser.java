@@ -32,6 +32,10 @@ public class SiteUser {
 
     private String naverid;
 
+    private String googleemail;
+
+    private int code;
+
     @CreationTimestamp
     private LocalDateTime createdate;
 }
