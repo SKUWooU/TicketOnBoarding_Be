@@ -7,6 +7,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserInfoDto {
+    private String userName;
     private String nickName;
     private int code;
     private boolean valid;

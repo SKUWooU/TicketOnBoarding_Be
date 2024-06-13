@@ -128,6 +128,7 @@ public class AuthController {
             SiteUser siteUser = userRepository.findByUsername(username);
             UserInfoDto userInfoDto = new UserInfoDto();
             userInfoDto.setNickName(siteUser.getNickname());
+            userInfoDto.setUserName(username);
             userInfoDto.setCode(siteUser.getCode());
             userInfoDto.setValid(true);
 
