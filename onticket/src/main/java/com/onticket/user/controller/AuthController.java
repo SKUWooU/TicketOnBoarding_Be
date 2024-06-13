@@ -95,7 +95,15 @@ public class AuthController {
 
             response.addCookie(accessTokenCookie);
             response.addCookie(refreshTokenCookie);
-            return ResponseEntity.ok().body("로그인성공");
+
+            SiteUser siteUser = userRepository.findByUsername(username);
+            UserInfoDto userInfoDto = new UserInfoDto();
+            userInfoDto.setNickName(siteUser.getNickname());
+            userInfoDto.setUserName(username);
+            userInfoDto.setCode(siteUser.getCode());
+            userInfoDto.setValid(true);
+
+            return ResponseEntity.ok().body(userInfoDto);
         }catch (BadCredentialsException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("아이디 또는 비밀번호가 올바르지 않습니다.");
         }catch (Exception e) {
