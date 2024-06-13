@@ -129,9 +129,11 @@ public class AuthController {
             UserInfoDto userInfoDto = new UserInfoDto();
             userInfoDto.setNickName(siteUser.getNickname());
             userInfoDto.setCode(siteUser.getCode());
+            userInfoDto.setValid(true);
+
             return ResponseEntity.ok(userInfoDto);
         } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰 검증에 실패했습니다.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("valid",false));
         }
     }
 

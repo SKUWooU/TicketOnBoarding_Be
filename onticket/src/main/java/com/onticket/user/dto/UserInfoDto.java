@@ -9,4 +9,5 @@ import lombok.*;
 public class UserInfoDto {
     private String nickName;
     private int code;
+    private boolean valid;
 }
