@@ -36,7 +36,7 @@ public class ReviewService {
         review.setDate(LocalDateTime.now());
         review.setContent(content);
         review.setConcertDetail(concertDetail);
-        review.setNickname(nickname);
+        review.setNickName(nickname);
         review.setStarCount(starCount);
         reviewRepository.save(review);
 

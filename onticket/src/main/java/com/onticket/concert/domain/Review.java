@@ -18,7 +18,7 @@ public class Review {
     // 작성자
     private String author;
 
-    private String nickname;
+    private String nickName;
 
     // 작성일
     private LocalDateTime date;
