@@ -64,7 +64,7 @@ public class ReviewController {
     }
 
     //리뷰 수정
-    @PostMapping("/main/detail/{concertId}/rewrtie/review")
+    @PostMapping("/main/detail/{concertId}/rewrite/review")
     public ResponseEntity<?> rewriteReview(@CookieValue(value = "accessToken", required = false) String token,@PathVariable String concertId, @RequestBody Map<String,?> requestBody){
         try{
             if (token != null && jwtUtil.validateToken(token)) {
