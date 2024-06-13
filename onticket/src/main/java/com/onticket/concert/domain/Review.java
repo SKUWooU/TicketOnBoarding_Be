@@ -1,4 +1,5 @@
 package com.onticket.concert.domain;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,6 +18,8 @@ public class Review {
     // 작성자
     private String author;
 
+    private String nickname;
+
     // 작성일
     private LocalDateTime date;
 
@@ -28,6 +31,7 @@ public class Review {
 
     @ManyToOne
     @JoinColumn(name = "concertId")
+    @JsonBackReference
     private ConcertDetail concertDetail;
 
 
