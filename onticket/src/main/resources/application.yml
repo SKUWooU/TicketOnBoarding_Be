@@ -1,0 +1,58 @@
+spring:
+#  h2:
+#    console:
+#      enabled: true
+#      path: /h2-console
+  datasource:
+    url: jdbc:mariadb://localhost:3306/onticket
+    driverClassName: org.mariadb.jdbc.Driver
+    username: root
+    password: rootpassword
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+    show-sql: true
+
+  batch:
+    jdbc:
+      initialize-schema: always
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: 384888565973-aecmkcuo75p0048b39tejquipps2vq4v.apps.googleusercontent.com
+            client-secret: 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
+            scope:
+              - email
+              - profile
+    user:
+      name: user
+      password: 1234
+  coolsms:
+    apiKey: NCSBG4GGIQCBGWGU
+    apiSecret: 9YYBLB35DIEDAIQJVF9Z8PF3RXBBY1CY
+  kopis:
+    url: http://kopis.or.kr/openApi/restful/pblprfr
+    apiKey: 4bd4d194132047438e8772f63ebec51a
+  application:
+    admin:
+      enabled=true
+jwt:
+  issuer : parkwoo9901@gmail.com
+  secret_key: onticket
+naver:
+  client:
+    id: 1E4kXs8Q1JPflvdpS2at
+    secret: 1PSKeOCJYw
+#ddl  옵션 정리
+#  create	기존 테이블 삭제 후 다시 생성 DROP + CREATE
+#  create-drop	create와 같지만 종료시점에 테이블 DROP, 아예 없앤다.
+#  update	변경분만 반영(운영DB에는 사용하면 안된다), 추가만 된다. 지워지는건 안됨.
+#  validate	엔티티와 테이블이 정상 매핑되었는지만 확인
+
+
+#  none	사용하지 않음

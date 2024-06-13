@@ -120,4 +120,5 @@ public class UserService {
     public void Delete (SiteUser user) {
         userRepository.delete(user);
     }
+
 }

@@ -3,11 +3,13 @@ package com.onticket.user.controller;
 
 import com.onticket.user.domain.RefreshToken;
 import com.onticket.user.domain.SiteUser;
+import com.onticket.user.dto.UserInfoDto;
 import com.onticket.user.form.UserLoginForm;
 import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.repository.UserRepository;
 import com.onticket.user.service.RefreshTokenService;
 import com.onticket.user.service.UserSecurityService;
+import com.onticket.user.service.UserService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,6 +41,7 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
+    private final UserService userService;
 
 
     @Value("${naver.client.id}")
@@ -92,7 +95,7 @@ public class AuthController {
 
             response.addCookie(accessTokenCookie);
             response.addCookie(refreshTokenCookie);
-            return ResponseEntity.ok().body(Map.of("message", "로그인 성공"));
+            return ResponseEntity.ok().body("로그인성공");
         }catch (BadCredentialsException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("아이디 또는 비밀번호가 올바르지 않습니다.");
         }catch (Exception e) {
@@ -121,9 +124,14 @@ public class AuthController {
     @GetMapping("/valid")
     public ResponseEntity<?> validateToken(@CookieValue(value = "accessToken", required = false) String token) {
         if (token != null && jwtUtil.validateToken(token)) {
-            return ResponseEntity.ok(Map.of("valid", true));
+            String username = jwtUtil.getUsernameFromToken(token);
+            SiteUser siteUser = userRepository.findByUsername(username);
+            UserInfoDto userInfoDto = new UserInfoDto();
+            userInfoDto.setNickName(siteUser.getNickname());
+            userInfoDto.setCode(siteUser.getCode());
+            return ResponseEntity.ok(userInfoDto);
         } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("valid", false));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("토큰 검증에 실패했습니다.");
         }
     }
 
