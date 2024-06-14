@@ -16,9 +16,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @RestController
 public class ReservationController {
-    private SeatReservationService seatReservationService;
-    private ReservationRepository reservationRepository;
-    private JwtUtil jwtUtil;
+    private final SeatReservationService seatReservationService;
+    private final ReservationRepository reservationRepository;
+    private final JwtUtil jwtUtil;
 
     //공연예약
     @PostMapping("/main/detail/{concertId}/reservation")
