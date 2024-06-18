@@ -1,14 +1,12 @@
 package com.onticket.user.controller;
 
 
-import com.onticket.user.domain.RefreshToken;
 import com.onticket.user.domain.SiteUser;
 import com.onticket.user.dto.UserInfoDto;
 import com.onticket.user.form.UserLoginForm;
 import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.repository.UserRepository;
 import com.onticket.user.service.RefreshTokenService;
-import com.onticket.user.service.UserSecurityService;
 import com.onticket.user.service.UserService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,7 +27,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -50,11 +47,6 @@ public class AuthController {
     @Value("${naver.client.secret}")
     private String clientSecret;
 
-    @Value("${spring.security.oauth2.client.registration.google.client-id}")
-    private String googleClientId;
-
-    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
-    private String googleClientSecret;
 
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody UserLoginForm userLoginForm, BindingResult bindingResult, HttpServletResponse response) {
@@ -86,7 +78,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(60 * 60); // 15분
+            accessTokenCookie.setMaxAge(15 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
@@ -229,7 +221,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(60 * 60); // 15분
+            accessTokenCookie.setMaxAge(15 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
@@ -292,7 +284,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(60 * 60); // 15분
+            accessTokenCookie.setMaxAge(15 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
