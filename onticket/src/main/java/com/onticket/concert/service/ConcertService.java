@@ -59,7 +59,7 @@ public class ConcertService {
         List<Concert> top4= new ArrayList<>();
 //        DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
         int count = 0;
-        for (int i = 0; i < concerts.size() && count < 4; i++) {
+        for (int i = 0; i < concerts.size() && count < 8; i++) {
             if (concerts.get(i).getStartDate().isBefore(LocalDate.now())) {
                 continue; // 과거 날짜 콘서트는 건너뜀
             }

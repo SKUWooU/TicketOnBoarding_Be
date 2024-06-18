@@ -85,7 +85,7 @@ public class KopisService {
                         .queryParam("stdate",getNowDate())
                         .queryParam("eddate", getAfter30Date())
                         .queryParam("cpage", 1)
-                        .queryParam("rows", 10)
+                        .queryParam("rows", 300)
                         .build())
                 .retrieve() //요청을 보내고 응답을 Retrieve
                 .bodyToMono(String.class)
