@@ -17,6 +17,7 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.Optional;
 //Batch 작업
 @RequiredArgsConstructor
 @Configuration
+@Profile("batch")
 public class KopisBatchConfig {
     private final KopisService KopisService;
     private final ConcertRepository concertRepository;
