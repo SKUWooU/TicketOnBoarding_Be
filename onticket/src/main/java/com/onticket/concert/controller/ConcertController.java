@@ -2,21 +2,13 @@ package com.onticket.concert.controller;
 
 import com.onticket.concert.domain.*;
 import com.onticket.concert.dto.*;
-import com.onticket.concert.repository.ConcertRepository;
-import com.onticket.concert.repository.SeatRepository;
 import com.onticket.concert.service.ConcertService;
-
-import com.onticket.concert.service.ReviewService;
 import com.onticket.concert.service.SeatReservationService;
-import com.onticket.user.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -25,9 +17,6 @@ import java.util.*;
 public class ConcertController {
     private final ConcertService concertService;
     private final SeatReservationService seatReservationService;
-    private final ConcertRepository concertRepository;
-    private final ReviewService reviewService;
-    private final JwtUtil jwtUtil;
     //메인페이지
     @GetMapping("/main")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {

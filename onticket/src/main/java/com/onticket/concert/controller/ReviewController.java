@@ -5,7 +5,6 @@ import com.onticket.concert.service.ReviewService;
 import com.onticket.user.domain.SiteUser;
 import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.repository.UserRepository;
-import io.jsonwebtoken.Jwt;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
