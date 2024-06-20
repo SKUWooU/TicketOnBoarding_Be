@@ -39,7 +39,7 @@ public class MypageController {
             Optional<Reservation> reservation = reservationRepository.findById(reservationId);
             if (reservation.isPresent()) {
                 Reservation reservation1 = reservation.get();
-                if(reservation1.getUsername().equals(username)){
+                if(!reservation1.getUsername().equals(username)){
                     return ResponseEntity.badRequest().body("예약정보와 다른 사용자입니다.");
                 }
                 reservation1.setStatus("취소신청");
