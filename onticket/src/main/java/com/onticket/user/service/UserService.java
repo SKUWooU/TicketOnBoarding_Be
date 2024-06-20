@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Random;
 
 
@@ -121,4 +122,8 @@ public class UserService {
         userRepository.delete(user);
     }
 
+    //관리자페이지-전체유저조회
+    public List<SiteUser> getAllUsers(){
+        return userRepository.findAll();
+    }
 }

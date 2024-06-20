@@ -1,4 +1,5 @@
 package com.onticket.concert.domain;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,6 +29,8 @@ public class Reservation {
     // 공연 시간
     private LocalTime concertTime;
 
+    private Long concertTimeId;
+
 //    @ManyToOne
 //    @JoinColumn(name = "concertTimeId")
 //    private ConcertTime concertTime;
@@ -35,8 +38,10 @@ public class Reservation {
     // 좌석
     @ManyToOne
     @JoinColumn(name = "seatId")
+    @JsonBackReference
     private Seat seat;
 
+    private String seatNumber;
     // 예약 상태
-    private String status;
+    private String status; //결제완료, 취소신정, 취소완료
 }

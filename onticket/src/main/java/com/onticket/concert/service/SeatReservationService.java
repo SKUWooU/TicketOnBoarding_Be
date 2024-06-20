@@ -146,20 +146,19 @@ public class SeatReservationService {
     //에매 취소처리
     public void cancelReservation(Long reservationId) throws Exception {
         Optional<Reservation> reservation = reservationRepository.findById(reservationId);
+        System.out.println(reservationId);
         if(reservation.isPresent()){
             Reservation reservation1 = reservation.get();
-            Optional<Seat> seatOptional = seatRepository.findByConcertTimeIdAndSeatNumberWithLock(reservation1.getConcertTimeId(), reservation1.getSeatNumber());
-            if(seatOptional.isPresent()){
-                Seat seat = seatOptional.get();
-                seat.setReserved(false);
-                seatRepository.save(seat);
-
-                reservation1.setStatus("취소완료");
-                reservationRepository.save(reservation1);
-                ConcertTime concertTime = concertTimeRepository.findById(reservation1.getConcertTimeId()).get();
-                concertTime.setSeatAmount(concertTime.getSeatAmount() + 1);
-                concertTimeRepository.save(concertTime);
-            }
+            Seat seat = seatRepository.findByConcertTimeAndSeatNumber(reservation1.getConcertTimeId(), reservation1.getSeatNumber());
+            System.out.println(seat.isReserved());
+            seat.setReserved(false);
+            seatRepository.save(seat);
+            reservation1.setStatus("취소완료");
+            reservationRepository.save(reservation1);
+            ConcertTime concertTime = concertTimeRepository.findById(reservation1.getConcertTimeId()).get();
+            concertTime.setSeatAmount(concertTime.getSeatAmount() + 1);
+            concertTimeRepository.save(concertTime);
+            reservationRepository.save(reservation1);
         }
     }
 

@@ -2,12 +2,14 @@ package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
+import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Place;
 import com.onticket.concert.dto.DetailDto;
 import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
 
+import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.PlaceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +25,7 @@ import java.util.List;
 @Service
 public class ConcertService {
 
+    private final ConcertTimeRepository concertTimeRepository;
     private final ConcertRepository concertRepository;
     private final ConcertDetailRepository concertDetailRepository;
     private final PlaceRepository placeRepository;
@@ -232,4 +235,33 @@ public class ConcertService {
         }
         return mainDtoList;
     }
+
+    //관리자페이지-모든 공연조회
+    public List<Concert> getAllConcert() {
+        return concertRepository.findAll();
+    }
+
+    //관리자페이지-온티켓픽 조회
+    public List<Concert> getAllOnTicketPick(){
+        return concertRepository.findByOnTicketPickNot(0);
+    }
+
+    //관리자페이지-온티켓픽 지정
+    public void setOnTicketPick(String concertId,int pick) {
+        Concert concert=concertRepository.findByConcertId(concertId);
+        concert.setOnTicketPick(pick);
+        concertRepository.save(concert);
+    }
+
+    //관리자페이지-공연삭제
+    public void delete(String concertId) {
+        List<Long> concertTimeIds = concertTimeRepository.findConcertTimeIdsByConcertId(concertId);
+        for (Long concertTimeId : concertTimeIds) {
+            concertTimeRepository.deleteSeatsByConcertTimeId(concertTimeId);
+        }
+        concertTimeRepository.deleteByConcertId(concertId);
+        concertRepository.deleteById(concertId);
+        concertDetailRepository.deleteById(concertId);
+    }
+
 }
