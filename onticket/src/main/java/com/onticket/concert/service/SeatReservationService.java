@@ -98,10 +98,12 @@ public class SeatReservationService {
             reservation.setConcertId(concertId);
             reservation.setUsername(username);
             reservation.setCreatedAt(LocalDateTime.now());
+            reservation.setConcertTimeId(concertTimeId);
             reservation.setConcertTime(LocalTime.parse(concertTime.getStartTime().format(formatter)));
             reservation.setConcertDate(concertTime.getDate());
             reservation.setSeat(seat);
-            reservation.setStatus("예약완료");
+            reservation.setSeatNumber(seatNumber);
+            reservation.setStatus("결제완료");
 
             reservationList.add(reservation);
             reservationRepository.save(reservation);
@@ -119,17 +121,46 @@ public class SeatReservationService {
     //예약내역 조회(지난 날짜는 제외)
     public List<Reservation> getPersonalReservation(String username) throws Exception {
         Optional<List<Reservation>> reservationList=reservationRepository.findByUsername(username);
-        if(!reservationList.isPresent()){
+        if(reservationList.isEmpty()){
             throw new Exception("에약내역이 존재하지 않습니다.");
         }
         List<Reservation> printList=new ArrayList<>();
-        for(Reservation reserv: reservationList.get()){
-            LocalDate localDate = LocalDate.now();
-            if(localDate.isBefore(reserv.getConcertDate())){
-                continue;
-            }
-            printList.add(reserv);
+       for(Reservation reserv: reservationList.get()){
+           if(reserv.getStatus().equals("결제완료")||reserv.getStatus().equals("취소신청")){
+               printList.add(reserv);
+           }
+//            LocalDate localDate = LocalDate.now();
+//            if(localDate.isBefore(reserv.getConcertDate())){
+//                continue;
+//            }
+//            printList.add(reserv);
         }
         return printList;
     }
+
+    //관리자페이지-취소신청내약 조회
+    public List<Reservation> getCancelList(){
+        return reservationRepository.findByStatus("취소신청");
+    }
+
+    //에매 취소처리
+    public void cancelReservation(Long reservationId) throws Exception {
+        Optional<Reservation> reservation = reservationRepository.findById(reservationId);
+        if(reservation.isPresent()){
+            Reservation reservation1 = reservation.get();
+            Optional<Seat> seatOptional = seatRepository.findByConcertTimeIdAndSeatNumberWithLock(reservation1.getConcertTimeId(), reservation1.getSeatNumber());
+            if(seatOptional.isPresent()){
+                Seat seat = seatOptional.get();
+                seat.setReserved(false);
+                seatRepository.save(seat);
+
+                reservation1.setStatus("취소완료");
+                reservationRepository.save(reservation1);
+                ConcertTime concertTime = concertTimeRepository.findById(reservation1.getConcertTimeId()).get();
+                concertTime.setSeatAmount(concertTime.getSeatAmount() + 1);
+                concertTimeRepository.save(concertTime);
+            }
+        }
+    }
+
 }
