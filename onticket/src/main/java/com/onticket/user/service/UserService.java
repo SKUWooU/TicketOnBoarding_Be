@@ -122,6 +122,10 @@ public class UserService {
         userRepository.delete(user);
     }
 
+    public void delete(String userId){
+        userRepository.deleteById(userId);
+    }
+
     //관리자페이지-전체유저조회
     public List<SiteUser> getAllUsers(){
         return userRepository.findAll();

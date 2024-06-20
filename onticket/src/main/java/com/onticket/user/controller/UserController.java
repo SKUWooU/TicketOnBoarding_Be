@@ -8,6 +8,7 @@ import com.onticket.user.repository.UserRepository;
 import com.onticket.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -39,7 +40,6 @@ public class UserController {
     @CrossOrigin
     @PostMapping("/signup")
     public ResponseEntity<String> CreateUser(@Valid @RequestBody UserCreateForm userCreateForm, BindingResult bindingResult){
-
         try {
             //필드값 비어있거나 값이 옳바르지 않을떄
             if (bindingResult.hasErrors()) {
@@ -65,6 +65,8 @@ public class UserController {
             userService.Create(userCreateForm);
             return ResponseEntity.ok("회원가입에 성공했습니다.");
             //중복시
+        }catch (DataIntegrityViolationException e){
+            return  ResponseEntity.status(HttpStatus.CONFLICT).body("이미 가입처리된 번호입니다.");
         } catch (Exception e) {
             // 예외 발생 시 예외 정보와 함께 400 Bad Request 응답 반환
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("회원가입에 실패했습니다.");
@@ -187,9 +189,3 @@ public class UserController {
         return ResponseEntity.ok("탈퇴성공");
     }
 }
-
-// 응답 데이터를 JSON 형식으로 생성
-//String jsonData = "{\"message\": \"Hello, world!\"}";
-//
-//ResponseEntity를 사용하여 JSON 형식으로 응답
-//        return new ResponseEntity<>(jsonData, HttpStatus.OK);

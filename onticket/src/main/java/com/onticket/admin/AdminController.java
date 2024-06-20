@@ -155,4 +155,16 @@ public class AdminController {
         }else return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
     }
 
+    @PostMapping("/admin/users/delete/{userId}")
+    public ResponseEntity<?> deleteUser(@CookieValue(value="acceeToken", required = false)String token, @PathVariable("userId")String userId){
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            SiteUser user = userRepository.findByUsername(username);
+            if (user.getCode() != 3) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("관리자 권한이 없습니다.");
+            }
+            userService.delete(userId);
+            return ResponseEntity.ok("회원을 삭제했습니다.");
+        }else return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+    }
 }
