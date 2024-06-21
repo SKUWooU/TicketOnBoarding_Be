@@ -130,4 +130,10 @@ public class UserService {
     public List<SiteUser> getAllUsers(){
         return userRepository.findAll();
     }
+
+    public void change(String username,String password){
+        SiteUser user=userRepository.findByUsername(username);
+        user.setPassword(password);
+        userRepository.save(user);
+    }
 }

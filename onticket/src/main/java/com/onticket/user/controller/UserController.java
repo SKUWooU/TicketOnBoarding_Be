@@ -1,9 +1,11 @@
 package com.onticket.user.controller;
 import com.onticket.user.domain.SiteUser;
+import com.onticket.user.dto.UserInfoDto;
 import com.onticket.user.form.UserChangePwdForm;
 import com.onticket.user.form.UserFindIdForm;
 import com.onticket.user.form.UserLoginForm;
 import com.onticket.user.form.UserCreateForm;
+import com.onticket.user.jwt.JwtUtil;
 import com.onticket.user.repository.UserRepository;
 import com.onticket.user.service.UserService;
 import jakarta.validation.Valid;
@@ -30,7 +32,7 @@ public class UserController {
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
-
+    private final JwtUtil jwtUtil;
 
     //인증번호 캐싱
     private String compare_phone;
@@ -179,12 +181,28 @@ public class UserController {
     }
 
     @PostMapping("/deleteid")
-    public ResponseEntity<String> DeleteId(){
+    public ResponseEntity<String> DeleteId(@CookieValue(value = "accessToken", required = false) String token){
         //현재 인증된 사용자의 ID를 받아서 삭제
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String username = authentication.getName();
-        SiteUser siteUser = userRepository.findByUsername(username);
-        userService.Delete(siteUser);
-        return ResponseEntity.ok("탈퇴성공");
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            userService.delete(username);
+            return ResponseEntity.ok("탈퇴하였습니다.");
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+        }
+    }
+
+    @PostMapping("/change")
+    public ResponseEntity<?> change(@CookieValue(value = "accessToken", required = false) String token,@RequestBody Map<String ,String> requestBody){
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            if(requestBody.get("password1").equals(requestBody.get("password2"))){
+                userService.change(username,requestBody.get("password1"));
+                return ResponseEntity.ok("비밀번호가 변경되었습니다.");
+            } else return ResponseEntity.badRequest().body("비밀번호가 다릅니다.");
+
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+        }
     }
 }
