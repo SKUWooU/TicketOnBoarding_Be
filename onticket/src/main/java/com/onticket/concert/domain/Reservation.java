@@ -17,6 +17,9 @@ public class Reservation {
 
     private String concertId;
 
+    private String concertName;
+
+    private String posterUrl;
     // 예약자 ID
     private String username;
 

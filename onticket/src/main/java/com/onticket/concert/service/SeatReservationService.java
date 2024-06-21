@@ -1,11 +1,13 @@
 package com.onticket.concert.service;
 
+import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Reservation;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.CalDto;
 import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.dto.SeatDto;
+import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
@@ -31,6 +33,7 @@ public class SeatReservationService {
     private final ReservationRepository ReservationRepository;
     private final ReservationRepository reservationRepository;
     private final JwtUtil jwtUtil;
+    private final ConcertRepository concertRepository;
 
     //달력에서 사용할 데이터
     public List<CalDto> getAllOfConcertTime(String concertId){
@@ -69,7 +72,7 @@ public class SeatReservationService {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
         Long concertTimeId= reservRequest.getConcertTimeId();
         List<String> seatNumberList= reservRequest.getSeatNumberList();
-
+        Concert concert = concertRepository.findByConcertId(concertId);
         ConcertTime concertTime = concertTimeRepository.findById(concertTimeId)
                 .orElseThrow(() -> new Exception("해당 콘서트가 없습니다."));
         List<Seat> seatList = new ArrayList<>();
@@ -96,6 +99,8 @@ public class SeatReservationService {
             //예약DB 추가
             Reservation reservation = new Reservation();
             reservation.setConcertId(concertId);
+            reservation.setConcertName(concert.getConcertName());
+            reservation.setPosterUrl(concert.getPosterUrl());
             reservation.setUsername(username);
             reservation.setCreatedAt(LocalDateTime.now());
             reservation.setConcertTimeId(concertTimeId);
