@@ -129,18 +129,8 @@ public class SeatReservationService {
         if(reservationList.isEmpty()){
             throw new Exception("에약내역이 존재하지 않습니다.");
         }
-        List<Reservation> printList=new ArrayList<>();
-       for(Reservation reserv: reservationList.get()){
-           if(reserv.getStatus().equals("결제완료")||reserv.getStatus().equals("취소신청")){
-               printList.add(reserv);
-           }
-//            LocalDate localDate = LocalDate.now();
-//            if(localDate.isBefore(reserv.getConcertDate())){
-//                continue;
-//            }
-//            printList.add(reserv);
-        }
-        return printList;
+
+        return reservationList.get();
     }
 
     //관리자페이지-취소신청내약 조회
