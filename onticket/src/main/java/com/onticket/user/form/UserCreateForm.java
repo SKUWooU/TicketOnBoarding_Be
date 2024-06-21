@@ -12,26 +12,26 @@ import java.util.SplittableRandom;
 @Data
 public class UserCreateForm {
     @Size(min = 3, max = 25)
-    @NotEmpty(message = "아이디는 필수")
+    @NotEmpty(message = "아이디를 입력하세요.")
     private String username;
 
-    @NotEmpty(message = "비밀번호는 필수")
+    @NotEmpty(message = "비밀번호를 입력하세요.")
     private String password1;
 
-    @NotEmpty(message = "비밀번호확인은 필수")
+    @NotEmpty(message = "비밀번호를 입력하세요.")
     private String password2;
 
-    @NotEmpty(message = "이메일은 필수")
+    @NotEmpty(message = "이메일을 입력하세요.")
     @Email
     private String email;
 
-    @NotEmpty(message = "이름은 필수")
+    @NotEmpty(message = "이름을 입력하세요.")
     private String nickname;
 
-    @NotEmpty(message = "전화번호는 필수")
+    @NotEmpty(message = "전화번호를 입력하세요.")
     private String phonenumber;
 
-    @NotEmpty(message = "인증번호는 필수")
+    @NotEmpty(message = "인증번호를 입력하세요.")
     private String smscode;
 
 }

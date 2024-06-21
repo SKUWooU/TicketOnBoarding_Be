@@ -4,12 +4,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.*;
 
-@Getter
-@Setter
+
 @AllArgsConstructor
-@RequiredArgsConstructor
 @Data
-public class UserLoginForm {
+public class gUserLoginForm {
     @NotEmpty(message = "아이디를 입력하세요.")
     @JsonProperty("username")
     private String username;
