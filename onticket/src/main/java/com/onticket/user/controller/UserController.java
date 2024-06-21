@@ -37,7 +37,6 @@ public class UserController {
 
 
     //회원가입
-    @CrossOrigin
     @PostMapping("/signup")
     public ResponseEntity<String> CreateUser(@Valid @RequestBody UserCreateForm userCreateForm, BindingResult bindingResult){
         try {
