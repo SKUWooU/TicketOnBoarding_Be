@@ -7,7 +7,7 @@ import lombok.*;
 
 @AllArgsConstructor
 @Data
-public class gUserLoginForm {
+public class UserLoginForm {
     @NotEmpty(message = "아이디를 입력하세요.")
     @JsonProperty("username")
     private String username;
