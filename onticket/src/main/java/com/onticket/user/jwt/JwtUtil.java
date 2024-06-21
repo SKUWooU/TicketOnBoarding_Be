@@ -27,7 +27,7 @@ public class JwtUtil {
         this.key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
     }
 
-    private static final long ACCESS_TOKEN_EXPIRATION_TIME = 900 * 1000; // 1 day
+    private static final long ACCESS_TOKEN_EXPIRATION_TIME = 3600 * 1000; // 1 day
     private static final long REFRESH_TOKEN_EXPIRATION_TIME = 2592000 * 1000; // 30 days
 
     //access 토큰 생성

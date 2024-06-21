@@ -78,7 +78,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(15 * 60); // 15분
+            accessTokenCookie.setMaxAge(60 * 60); // 60분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
@@ -221,7 +221,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(15 * 60); // 15분
+            accessTokenCookie.setMaxAge(60 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
@@ -284,7 +284,7 @@ public class AuthController {
             accessTokenCookie.setHttpOnly(true);
             //모든경로
             accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge(15 * 60); // 15분
+            accessTokenCookie.setMaxAge(60 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
             refreshTokenCookie.setHttpOnly(true);
