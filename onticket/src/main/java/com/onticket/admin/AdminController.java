@@ -107,6 +107,7 @@ public class AdminController {
                 }
                 seatReservationService.cancelReservation(reservationId);
                 return ResponseEntity.ok("취소처리가 완료되었습니다.");
+
             } else return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("취소처리에 실패했습니다.");
@@ -156,7 +157,7 @@ public class AdminController {
     }
 
     @PostMapping("/admin/users/delete/{userId}")
-    public ResponseEntity<?> deleteUser(@CookieValue(value="acceeToken", required = false)String token, @PathVariable("userId")String userId){
+    public ResponseEntity<?> deleteUser(@CookieValue(value="accessToken", required = false)String token, @PathVariable("userId")String userId){
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.getUsernameFromToken(token);
             SiteUser user = userRepository.findByUsername(username);
@@ -169,7 +170,7 @@ public class AdminController {
     }
 
     @GetMapping("/admin/reservationlist")
-    public ResponseEntity<?> getReservationList(@CookieValue(value = "acceeToken", required = false) String token){
+    public ResponseEntity<?> getReservationList(@CookieValue(value = "accessToken", required = false) String token){
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.getUsernameFromToken(token);
             SiteUser user = userRepository.findByUsername(username);
