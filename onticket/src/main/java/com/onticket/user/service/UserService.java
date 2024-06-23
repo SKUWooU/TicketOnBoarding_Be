@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 
@@ -122,6 +123,7 @@ public class UserService {
         userRepository.delete(user);
     }
 
+    @Transactional
     public void delete(String userId){
         userRepository.deleteById(userId);
     }
@@ -131,9 +133,19 @@ public class UserService {
         return userRepository.findAll();
     }
 
+    @Transactional
     public void change(String username,String password){
         SiteUser user=userRepository.findByUsername(username);
-        user.setPassword(password);
+        user.setPassword(passwordEncoder.encode(password));
         userRepository.save(user);
+    }
+
+    public boolean validUser(String username,String password){
+        Optional<SiteUser> _user=userRepository.findById(username);
+        if(_user.isPresent()){
+            SiteUser user=_user.get();
+            return passwordEncoder.matches(password, user.getPassword());
+        }
+        return false;
     }
 }

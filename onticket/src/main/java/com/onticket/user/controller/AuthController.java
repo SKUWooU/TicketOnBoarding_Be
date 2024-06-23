@@ -61,12 +61,10 @@ public class AuthController {
             String password = userLoginForm.getPassword();
 
             //사용자 검증
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, password));
-
-
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-
+            boolean flag=userService.validUser(username,password);
+            if(!flag){
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 올바르지 않습니다.");
+            }
             //토큰생성
             String accessToken = jwtUtil.generateAccessToken(username);
             String refreshToken = jwtUtil.generateRefreshToken(username);
@@ -97,7 +95,7 @@ public class AuthController {
 
             return ResponseEntity.ok().body(userInfoDto);
         }catch (BadCredentialsException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("아이디 또는 비밀번호가 올바르지 않습니다.");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("아이디 또는 비밀번호가 올바르지 않습니다.");
         }catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("로그인에 실패했습니다.");
         }
