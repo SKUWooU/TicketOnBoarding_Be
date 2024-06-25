@@ -69,12 +69,12 @@ public class SecurityConfig {
     AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
-//
-//    @Bean
-//    public CookieSameSiteSupplier applicationCookieSameSiteSupplier() {
-//        return CookieSameSiteSupplier.ofNone();
-//    }
-//
+
+    @Bean
+    public CookieSameSiteSupplier applicationCookieSameSiteSupplier() {
+        return CookieSameSiteSupplier.ofNone();
+    }
+
 //    // CORS 설정
 //    @Bean
 //    public CorsConfigurationSource corsConfigurationSource() {
