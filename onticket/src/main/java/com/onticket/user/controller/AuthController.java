@@ -73,15 +73,19 @@ public class AuthController {
 
             // HttpOnly 쿠키로 토큰 설정
             Cookie accessTokenCookie = new Cookie("accessToken", accessToken);
+            accessTokenCookie.setDomain("nginx.onboardingticket.shop");
             accessTokenCookie.setHttpOnly(true);
-            //모든경로
+            accessTokenCookie.setSecure(true);
             accessTokenCookie.setPath("/");
             accessTokenCookie.setMaxAge(60 * 60); // 60분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setDomain("nginx.onboardingticket.shop");
             refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setSecure(true);
             refreshTokenCookie.setPath("/");
             refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+
 
             response.addCookie(accessTokenCookie);
             response.addCookie(refreshTokenCookie);
@@ -104,15 +108,17 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
         Cookie accessTokenCookie = new Cookie("accessToken", null);
+        accessTokenCookie.setDomain("nginx.onboardingticket.shop");
         accessTokenCookie.setHttpOnly(true);
         accessTokenCookie.setPath("/");
-        accessTokenCookie.setMaxAge(0);  // 쿠키를 즉시 삭제
-
+        accessTokenCookie.setMaxAge(0);
+        accessTokenCookie.setSecure(true);
         Cookie refreshTokenCookie = new Cookie("refreshToken", null);
         refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setDomain("nginx.onboardingticket.shop");
         refreshTokenCookie.setPath("/");
         refreshTokenCookie.setMaxAge(0);  // 쿠키를 즉시 삭제
-
+        refreshTokenCookie.setSecure(true);
         response.addCookie(accessTokenCookie);
         response.addCookie(refreshTokenCookie);
 
@@ -120,20 +126,28 @@ public class AuthController {
     }
 
     @GetMapping("/valid")
-    public ResponseEntity<?> validateToken(@CookieValue(value = "accessToken", required = false) String token) {
-        if (token != null && jwtUtil.validateToken(token)) {
-            String username = jwtUtil.getUsernameFromToken(token);
-            SiteUser siteUser = userRepository.findByUsername(username);
-            UserInfoDto userInfoDto = new UserInfoDto();
-            userInfoDto.setNickName(siteUser.getNickname());
-            userInfoDto.setUserName(username);
-            userInfoDto.setCode(siteUser.getCode());
-            userInfoDto.setValid(true);
+    public ResponseEntity<?> validateToken(@CookieValue(value = "accessToken", required = false) String token ) {
+        try{
+            if (token != null && jwtUtil.validateToken(token)) {
+                String username = jwtUtil.getUsernameFromToken(token);
+                SiteUser siteUser = userRepository.findByUsername(username);
+                if (siteUser == null) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("valid", false));
+                }
+                UserInfoDto userInfoDto = new UserInfoDto();
+                userInfoDto.setNickName(siteUser.getNickname());
+                userInfoDto.setUserName(username);
+                userInfoDto.setCode(siteUser.getCode());
+                userInfoDto.setValid(true);
 
-            return ResponseEntity.ok(userInfoDto);
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("valid",false));
+                return ResponseEntity.ok(userInfoDto);
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("valid",false));
+            }
+        }catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("valid",false));
         }
+
     }
 
     @PostMapping("/refresh")
@@ -154,6 +168,8 @@ public class AuthController {
 
             Cookie accessTokenCookie = new Cookie("accessToken", newAccessToken);
             accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setDomain("nginx.onboardingticket.shop");
+            accessTokenCookie.setSecure(true);
             accessTokenCookie.setPath("/");
             accessTokenCookie.setMaxAge(15 * 60); // 15분
             response.addCookie(accessTokenCookie);
@@ -216,12 +232,16 @@ public class AuthController {
 
             // HttpOnly 쿠키로 토큰 설정
             Cookie accessTokenCookie = new Cookie("accessToken", token);
+            accessTokenCookie.setDomain("nginx.onboardingticket.shop");
             accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setSecure(true);
             //모든경로
             accessTokenCookie.setPath("/");
             accessTokenCookie.setMaxAge(60 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setDomain("nginx.onboardingticket.shop");
+            refreshTokenCookie.setSecure(true);
             refreshTokenCookie.setHttpOnly(true);
             refreshTokenCookie.setPath("/");
             refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
@@ -279,12 +299,16 @@ public class AuthController {
 
             // HttpOnly 쿠키로 토큰 설정
             Cookie accessTokenCookie = new Cookie("accessToken", token);
+            accessTokenCookie.setDomain("nginx.onboardingticket.shop");
             accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setSecure(true);
             //모든경로
             accessTokenCookie.setPath("/");
             accessTokenCookie.setMaxAge(60 * 60); // 15분
 
             Cookie refreshTokenCookie = new Cookie("refreshToken", refreshToken);
+            refreshTokenCookie.setDomain("nginx.onboardingticket.shop");
+            refreshTokenCookie.setSecure(true);
             refreshTokenCookie.setHttpOnly(true);
             refreshTokenCookie.setPath("/");
             refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60); // 7일
