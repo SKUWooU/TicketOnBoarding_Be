@@ -17,7 +17,6 @@ KOPIS 공연 데이터를 바탕으로 공연·회차·가상 좌석을 구성�
 
 - [현재 기준선](docs/project-improvement/PROJECT_BASELINE.md)
 - [예매 트랜잭션·경합 기준선](docs/project-improvement/reservation-transaction-concurrency-baseline.md)
-- [예약 원자성·잔여 좌석 갱신 정합성 개선](docs/project-improvement/reservation-atomicity-inventory-consistency.md)
 - [개선 BACKLOG](BACKLOG.md)
 - [작업 절차](WORKFLOW.md)
 - [작업 진행 기록](WORK_PROGRESS.md)
