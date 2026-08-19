@@ -40,3 +40,23 @@ GlobalTimes의 기존 범용·리팩터링 Issue template과 PR template에서 �
 
 - [Backend Issue #1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1)
 - [Backend PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2)
+
+## Issue #3 — 예매 트랜잭션·경합 기준선
+
+### 관찰과 재현
+
+MariaDB 10.11.8 Testcontainers에 공연 1개, 회차 1개와 가상 좌석 24개를 만들고 start latch로 8개 service 호출을 동시에 시작했습니다. 실제 외부 연동과 운영 DB는 사용하지 않았습니다.
+
+좌석별 `PESSIMISTIC_WRITE`는 동일 좌석의 중복 성공을 막았지만 별도 `ConcertTime` row의 잔여 좌석 집계까지 보호하지 않았습니다. 서로 다른 8좌석이 모두 예약되어도 각 트랜잭션이 먼저 읽은 24에서 1을 뺀 23을 덮어써 불변식이 깨졌습니다.
+
+또한 메서드가 checked `Exception`을 선언하고 있어 복수 좌석 중 두 번째 좌석에서 실패해도 첫 좌석과 예약 row가 commit됐습니다. 좌석 잠금 SQL은 `(concert_time_id, seat_number)` 복합 인덱스를 사용하지 못하고 fixture 24행 전체를 검사했습니다.
+
+### 범위와 다음 단계
+
+이번 Issue는 현재 결함을 재현하는 characterization test와 근거 문서만 추가하고 운영 로직은 바꾸지 않습니다. 다음 Issue에서 rollback 원자성과 회차 집계 갱신을 먼저 바로잡고, 복수 좌석 lock ordering·deadlock은 별도 시나리오로 분리합니다. 분산 락이나 대기열은 이 결과만으로 도입하지 않습니다.
+
+상세 조건과 결과는 [예매 트랜잭션·경합 기준선](reservation-transaction-concurrency-baseline.md)에서 확인합니다.
+
+### 링크
+
+- [Backend Issue #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)
