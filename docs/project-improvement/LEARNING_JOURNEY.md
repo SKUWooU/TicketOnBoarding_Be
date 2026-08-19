@@ -104,3 +104,4 @@ Issue #3에서 같은 예약 transaction 안의 두 결함을 분리해 확인�
 ### 링크
 
 - [Backend Issue #9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9)
+- [Backend PR #10](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/10)

@@ -97,6 +97,7 @@ remaining seats = 22
 ## 연결
 
 - [Issue #9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9)
+- [PR #10](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/10)
 - [예매 transaction·경합 기준선](reservation-transaction-concurrency-baseline.md)
 - [예약 원자성·잔여 좌석 정합성 개선](reservation-atomicity-inventory-consistency.md)
 - [Backend 아키텍처 학습 기준선](backend-architecture-learning-baseline.md)
