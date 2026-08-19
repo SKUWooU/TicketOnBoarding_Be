@@ -14,11 +14,15 @@ import com.onticket.user.jwt.JwtUtil;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -29,6 +33,8 @@ import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -36,10 +42,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -49,7 +57,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.jpa.show-sql=false"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(SeatReservationService.class)
+@Import({
+        SeatReservationService.class,
+        SeatReservationConcurrencyBaselineTest.SeatRepositoryBarrierConfiguration.class
+})
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class SeatReservationConcurrencyBaselineTest {
@@ -57,6 +68,7 @@ class SeatReservationConcurrencyBaselineTest {
     private static final int TOTAL_SEATS = 24;
     private static final String CONCERT_ID = "BASELINE-CONCERT";
     private static final String USERNAME = "baseline-user";
+    private static final AtomicReference<CyclicBarrier> AGGREGATE_READ_BARRIER = new AtomicReference<>();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -156,10 +168,17 @@ class SeatReservationConcurrencyBaselineTest {
         );
     }
 
-    @Test
+    @RepeatedTest(3)
     void differentSeatConcurrentReservationCapturesAggregateBaseline() throws Exception {
         List<String> differentSeats = List.of("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8");
-        List<AttemptResult> results = runConcurrently(differentSeats);
+        AGGREGATE_READ_BARRIER.set(new CyclicBarrier(differentSeats.size()));
+
+        List<AttemptResult> results;
+        try {
+            results = runConcurrently(differentSeats);
+        } finally {
+            AGGREGATE_READ_BARRIER.set(null);
+        }
 
         InventorySnapshot snapshot = inventorySnapshot();
 
@@ -347,6 +366,41 @@ class SeatReservationConcurrencyBaselineTest {
     private record InventorySnapshot(int remainingSeats, long successfullyReservedSeats, long reservations) {
         boolean inventoryEquationHolds() {
             return TOTAL_SEATS == remainingSeats + successfullyReservedSeats;
+        }
+    }
+
+    @TestConfiguration
+    static class SeatRepositoryBarrierConfiguration {
+
+        @Bean
+        static BeanPostProcessor seatRepositoryBarrierBeanPostProcessor() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (!(bean instanceof SeatRepository seatRepository)) {
+                        return bean;
+                    }
+
+                    return Proxy.newProxyInstance(
+                            SeatRepository.class.getClassLoader(),
+                            new Class<?>[]{SeatRepository.class},
+                            (proxy, method, args) -> {
+                                if (method.getName().equals("findByConcertTimeIdAndSeatNumberWithLock")) {
+                                    CyclicBarrier barrier = AGGREGATE_READ_BARRIER.get();
+                                    if (barrier != null) {
+                                        barrier.await(5, TimeUnit.SECONDS);
+                                    }
+                                }
+
+                                try {
+                                    return method.invoke(seatRepository, args);
+                                } catch (InvocationTargetException exception) {
+                                    throw exception.getCause();
+                                }
+                            }
+                    );
+                }
+            };
         }
     }
 }

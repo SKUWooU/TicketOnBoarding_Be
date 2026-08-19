@@ -14,6 +14,7 @@
 - 애플리케이션: 로컬 단일 JVM, service 직접 호출
 - fixture: 공연 1개, 회차 1개, `A1`부터 `C8`까지 가상 좌석 24개
 - 동시 요청: 고정 크기 thread pool과 start latch, 시나리오당 8개 요청
+- 결정적 경합 지점: 각 요청이 회차 집계를 읽은 뒤 실제 좌석 잠금 repository 호출 직전 테스트 전용 barrier에서 대기하고, 8개가 모두 도착하면 원래 Spring Data repository bean으로 위임
 - 외부 연동: KOPIS, CoolSMS, OAuth, 결제와 운영 DB 미사용
 
 실행 명령:
@@ -34,9 +35,9 @@ Docker Desktop이 실행 중이어야 한다. 테스트가 disposable MariaDB co
 | 서로 다른 `A1`~`A8` 8개 동시 요청 | 성공 8 | 8 | 8 | 23 | **불충족** |
 | `[A1, NOT-EXISTING]` 한 트랜잭션 | checked `Exception` | 1 | 1 | 24 | **불충족** |
 
-유효 실행 1회와 동일 조건 반복 3회에서 서로 다른 좌석 결과는 모두 `remaining=23, reserved=8, reservations=8`, checked exception 결과는 모두 `remaining=24, reserved=1, reservations=1`로 같았다.
+서로 다른 좌석 시나리오는 한 테스트 실행 안에서 3회 반복하며, 결정적 barrier 적용 후 세 번 모두 `remaining=23, reserved=8, reservations=8`로 같았다. checked exception 결과는 `remaining=24, reserved=1, reservations=1`이었다.
 
-전체 `gradlew test`에서도 기존 context smoke test 1개와 신규 기준선 테스트 5개, 총 6개가 통과했다. 기존 smoke test에는 같은 disposable MariaDB와 사용되지 않는 외부 연동 placeholder를 제공하고 batch job을 비활성화했다.
+전체 `gradlew test`에서도 기존 context smoke test 1개와 신규 기준선 테스트 invocation 7개, 총 8개가 통과했다. 기존 smoke test에는 같은 disposable MariaDB와 사용되지 않는 외부 연동 placeholder를 제공하고 batch job을 비활성화했다.
 
 ### 동일 좌석
 

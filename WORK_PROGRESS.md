@@ -18,11 +18,11 @@
 - Issue: [#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)
 - PR: [#4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)
 - Branch: `test/#3-reservation-concurrency-baseline`
-- 상태: PR 생성, Reviewer 검토 대기
+- 상태: Reviewer Blocking 수정·전체 검증 완료, 재검토 준비
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 시나리오 유효 실행 1회 + 동일 조건 3회 반복 통과, 전체 `test` 6개 통과, `git diff --check` 통과
-- Reviewer: PR #4 최신 HEAD 검토 대기
+- 검증: 집계 조회 후 잠금 호출 전 결정적 barrier에서 상이 좌석 시나리오 3회 통과, 전체 `test` invocation 8개 통과, `git diff --check` 통과
+- Reviewer: HEAD `1921c31`에서 재현 안정성 Blocking 1건, 테스트 전용 위임 proxy로 수정 후 재검토 예정
 - 사용자 merge 승인: 대기
 - 범위: MariaDB Testcontainers, 가상 좌석 fixture, 단건·동일 좌석·상이 좌석·복수 좌석 실패 기준선
 - 제외: 운영 로직 수정, deadlock 해결, 취소·결제·인증·Frontend와 부하 테스트

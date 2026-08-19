@@ -41,7 +41,7 @@
 
 Gradle wrapper 배포 파일과 의존성 다운로드에는 네트워크가 필요합니다. 로컬의 ignored `application.yml`은 DB와 외부 연동 비밀값을 포함할 수 있으므로 내용과 값은 공개 문서에 기록하지 않습니다.
 
-위 항목은 최초 조사 시점의 실행 상태입니다. Issue #3에서 Temurin JDK 21.0.12와 Testcontainers MariaDB 10.11.8 기반 테스트 환경을 추가한 뒤 `compileJava`와 전체 테스트 6개가 통과했습니다. 애플리케이션의 운영 설정과 실제 외부 연동을 포함한 실행 가능 여부는 아직 검증하지 않았습니다.
+위 항목은 최초 조사 시점의 실행 상태입니다. Issue #3에서 Temurin JDK 21.0.12와 Testcontainers MariaDB 10.11.8 기반 테스트 환경을 추가한 뒤 `compileJava`와 전체 테스트 invocation 8개가 통과했습니다. 애플리케이션의 운영 설정과 실제 외부 연동을 포함한 실행 가능 여부는 아직 검증하지 않았습니다.
 
 ### 예약 흐름에서 확인된 사실
 
