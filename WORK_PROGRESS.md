@@ -16,12 +16,13 @@
 ### Backend Issue #7 — 백엔드 아키텍처 학습 기준선
 
 - Issue: [#7](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/7)
+- PR: [#8](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/8)
 - Branch: `docs/#7-backend-architecture-baseline`
-- 상태: 문서 작성·검증 완료, PR 생성 전
+- 상태: PR 생성, Reviewer 검토 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 전체 Gradle test 실제 재실행 성공, 문서 상대 경로 확인, `git diff --check` 통과
-- Reviewer: 대기
+- Reviewer: PR #8 최신 HEAD 검토 대기
 - 사용자 merge 승인: 대기
 - 범위: Backend 기술 스택, KOPIS 수집, 도메인·DB·인증·예약·결제·취소·FE 연동과 차별화 Phase를 단일 학습 문서로 정리
 - 제외: README, 애플리케이션·Frontend 코드, 외부 API·결제·운영 데이터 실행
