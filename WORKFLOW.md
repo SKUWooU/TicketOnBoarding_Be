@@ -27,9 +27,13 @@
 
 - Issue·PR 본문은 Markdown 파일로 작성하고 `--body-file`로 전달합니다.
 - Issue 하나의 결과는 최종적으로 squash commit 하나로 정리합니다.
-- PR은 연결 Issue, 문제, 변경사항, 테스트, 측정 결과, 한계와 Reviewer 확인 항목을 포함합니다.
+- Issue·PR 본문은 목적, 범위, 작은 작업 항목, 완료 기준, 테스트와 참고 링크만 간결하게 기록합니다.
+- 상세한 전후 코드, 측정 조건, 결과와 한계는 `docs/project-improvement`에 기록하고 Issue·PR에서는 해당 문서를 연결합니다.
+- Reviewer에게 전달할 검토 요청 문구와 확인 항목은 PR 본문에 복제하지 않습니다. Reviewer의 최종 판단만 PR comment로 남깁니다.
 - Issue 범위를 바꿀 때에는 먼저 Issue body-file을 고치고 GitHub 본문을 갱신합니다.
 - Backend와 Frontend는 각각 독립된 Issue·Branch·PR을 사용하고 관련 작업을 상호 링크합니다.
+
+README는 매 Issue의 작업 일지로 수정하지 않습니다. 실제 코드와 설명이 달라졌거나 Phase 단위의 기능·실행 방법·문서 진입점을 정리할 시점에 묶어서 갱신합니다.
 
 첫 부트스트랩 Issue에서는 `WORK_PROGRESS.md` 자체가 존재하지 않습니다. 이 경우 승인 후 작업 Branch에서 파일을 만들고 최초 항목에 작업 시작 상태를 기록합니다.
 
