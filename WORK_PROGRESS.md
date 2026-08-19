@@ -17,6 +17,20 @@
 
 ## 완료
 
+### Backend Issue #9 — 복수 좌석 잠금 순서와 deadlock 기준선
+
+- Issue: [#9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9)
+- PR: [#10](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/10)
+- Branch: `test/#9-multi-seat-deadlock-baseline`
+- 상태: 완료
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 반대 순서 기준선 3회와 전체 Testcontainers test invocation 12개 통과, `git diff --check` 통과
+- Reviewer: 최종 검토 HEAD `97310c0`, Blocking 없음, Non-blocking 2건, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-20 squash merge
+- 범위: 반대 순서 복수 좌석 transaction의 첫 lock 동기화, deadlock·예외·rollback·최종 재고 기준선
+- 제외: 운영 로직·lock ordering·인덱스·retry·임시 점유·결제·Frontend·부하 테스트와 분산 기술
+
 ### Backend Issue #7 — 백엔드 아키텍처 학습 기준선
 
 - Issue: [#7](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/7)

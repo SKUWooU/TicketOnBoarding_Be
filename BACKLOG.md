@@ -8,8 +8,8 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 | 0-FE | FE | 독립 저장소의 작업 기록 기준이 없다 | BE 기준과 중복·차이를 조사한 FE Issue | BE Issue 한 개로 FE까지 수정 | 후보 |
 | 1 | BE | 예약 경합을 반복 재현할 기반이 없다 | Java 21, MariaDB Testcontainers, 외부 연동 비활성화, 명시적 fixture | 동시성 로직 개선 | 완료 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3), [PR #4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)) |
 | 2 | BE | 동일 좌석 잠금과 서로 다른 좌석 집계·복수 좌석 rollback이 검증되지 않았다 | 동시 요청 성공 수, 예약 row, 좌석 상태, 잔여 수량 | 잠금 방식 선제 교체 | 기준선 완료 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3), [PR #4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)) |
-| 3 | BE | 공통 회차 잔여 좌석 갱신 유실과 checked exception 부분 commit | 결정적 경합·중간 실패 fixture의 개선 후 불변식 | Redis·분산 락 | 진행 중 ([#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)) |
-| 4 | BE | 복수 좌석의 입력 순서가 달라 deadlock이 발생할 수 있다 | 반대 순서 fixture, DB deadlock과 rollback 기록 | 무제한 재시도 | 후보 |
+| 3 | BE | 공통 회차 잔여 좌석 갱신 유실과 checked exception 부분 commit | 결정적 경합·중간 실패 fixture의 개선 후 불변식 | Redis·분산 락 | 완료 ([#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5), [PR #6](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/6)) |
+| 4 | BE | 복수 좌석의 입력 순서가 달라 deadlock이 발생할 수 있다 | 반대 순서 fixture, 첫 lock 동시 획득, DB 예외와 rollback 기록 | 무제한 재시도 | 기준선 완료 ([#9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9)): 현 schema에서는 첫 lock부터 직렬화 |
 | 5 | BE/FE | 예약과 결제 완료가 결합되고 상태 전이가 불명확하다 | 현재 흐름 재현, mock 결제, 허용·거부 전이 테스트 | 실제 결제 실행 | 후보 |
 | 6 | BE/FE | 예약·결제·취소 중복 요청의 결과가 안정적이지 않다 | 중복 key, 응답 유실, payload 충돌 fixture | 브로커 선제 도입 | 후보 |
 | 7 | BE | 고경합 병목 위치가 측정되지 않았다 | k6 TPS·p95·오류율, lock wait, Hikari, DB 자원 | 운영 SLA 주장 | 후보 |
