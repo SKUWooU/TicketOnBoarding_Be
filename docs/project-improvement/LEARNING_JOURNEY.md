@@ -25,6 +25,13 @@ Backend와 Frontend가 별도 저장소지만 Issue·PR template, 공통 workflo
 
 Backend 저장소에 전체 개선의 기준 문서와 진행 상태를 두고, Frontend 변경은 독립 Issue·PR로 수행해 상호 링크합니다. 채팅 세션 전달만을 위한 별도 문서는 만들지 않고 `WORK_PROGRESS.md`를 진행 상태의 단일 원본으로 사용합니다.
 
+GlobalTimes의 기존 범용·리팩터링 Issue template과 PR template에서 변경 유형, 영향 범위, 외부 동작·예외 정책, 기술적 배경, 대상 Branch, 리뷰 요구사항과 후속 계획 항목을 참고했습니다. TicketOnBoarding에서 더 중요한 제외 범위, 측정 조건, 정합성, 과도한 기술 도입 통제 항목은 유지했습니다.
+
+참고 자료:
+
+- [GlobalTimes Issue template](https://github.com/SKU-GlobalTimes/GlobalTimes_BeSide/tree/develop/.github/ISSUE_TEMPLATE)
+- [GlobalTimes PR template](https://github.com/SKU-GlobalTimes/GlobalTimes_BeSide/blob/develop/.github/PULL_REQUEST_TEMPLATE.md)
+
 ### 범위 제한
 
 이번 Issue에서는 애플리케이션 코드, 동시성 로직, 결제 흐름과 Frontend 파일을 변경하지 않습니다. 확인된 사실과 미검증 가설을 분리하며 개선 효과나 성능 수치를 만들지 않습니다.
