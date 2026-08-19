@@ -6,9 +6,9 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 | --- | --- | --- | --- | --- | --- |
 | 0 | BE | 협업 절차와 근거 기록 기준이 없다 | Template·workflow·기준선 문서 검토 | 애플리케이션 코드 변경 | 완료 ([#1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1), [PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2)) |
 | 0-FE | FE | 독립 저장소의 작업 기록 기준이 없다 | BE 기준과 중복·차이를 조사한 FE Issue | BE Issue 한 개로 FE까지 수정 | 후보 |
-| 1 | BE | 예약 경합을 반복 재현할 기반이 없다 | Java 21, MariaDB Testcontainers, 외부 연동 비활성화, 명시적 fixture | 동시성 로직 개선 | 기준선 검증 완료, PR 준비 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)) |
-| 2 | BE | 동일 좌석 잠금과 서로 다른 좌석 집계·복수 좌석 rollback이 검증되지 않았다 | 동시 요청 성공 수, 예약 row, 좌석 상태, 잔여 수량 | 잠금 방식 선제 교체 | 집계 유실·부분 commit 재현, PR 준비 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)) |
-| 3 | BE | 공통 회차 잔여 좌석 갱신이 유실될 수 있다 | 재현 테스트와 개선안별 정합성·lock wait 비교 | Redis·분산 락 | 후보 |
+| 1 | BE | 예약 경합을 반복 재현할 기반이 없다 | Java 21, MariaDB Testcontainers, 외부 연동 비활성화, 명시적 fixture | 동시성 로직 개선 | 완료 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3), [PR #4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)) |
+| 2 | BE | 동일 좌석 잠금과 서로 다른 좌석 집계·복수 좌석 rollback이 검증되지 않았다 | 동시 요청 성공 수, 예약 row, 좌석 상태, 잔여 수량 | 잠금 방식 선제 교체 | 기준선 완료 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3), [PR #4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)) |
+| 3 | BE | 공통 회차 잔여 좌석 갱신 유실과 checked exception 부분 commit | 결정적 경합·중간 실패 fixture의 개선 후 불변식 | Redis·분산 락 | 진행 중 ([#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)) |
 | 4 | BE | 복수 좌석의 입력 순서가 달라 deadlock이 발생할 수 있다 | 반대 순서 fixture, DB deadlock과 rollback 기록 | 무제한 재시도 | 후보 |
 | 5 | BE/FE | 예약과 결제 완료가 결합되고 상태 전이가 불명확하다 | 현재 흐름 재현, mock 결제, 허용·거부 전이 테스트 | 실제 결제 실행 | 후보 |
 | 6 | BE/FE | 예약·결제·취소 중복 요청의 결과가 안정적이지 않다 | 중복 key, 응답 유실, payload 충돌 fixture | 브로커 선제 도입 | 후보 |

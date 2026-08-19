@@ -25,7 +25,7 @@ Backend와 Frontend가 별도 저장소지만 Issue·PR template, 공통 workflo
 
 Backend 저장소에 전체 개선의 기준 문서와 진행 상태를 두고, Frontend 변경은 독립 Issue·PR로 수행해 상호 링크합니다. 채팅 세션 전달만을 위한 별도 문서는 만들지 않고 `WORK_PROGRESS.md`를 진행 상태의 단일 원본으로 사용합니다.
 
-GlobalTimes의 기존 범용·리팩터링 Issue template과 PR template에서 변경 유형, 영향 범위, 외부 동작·예외 정책, 기술적 배경, 대상 Branch, 리뷰 요구사항과 후속 계획 항목을 참고했습니다. TicketOnBoarding에서 더 중요한 제외 범위, 측정 조건, 정합성, 과도한 기술 도입 통제 항목은 유지했습니다.
+GlobalTimes의 범용 작업 형식을 기준으로 Issue·PR template을 목적, 범위, 작은 작업 항목, 완료 기준, 테스트와 참고 링크 중심으로 유지합니다. 상세 기술 근거와 측정 한계는 `docs/project-improvement`에 분리하고 Reviewer 전달 문구는 PR 본문에 복제하지 않습니다. README는 Issue마다 갱신하지 않고 실제 코드와 설명이 달라지거나 Phase가 정리되는 시점에 갱신합니다.
 
 참고 자료:
 
@@ -60,3 +60,27 @@ MariaDB 10.11.8 Testcontainers에 공연 1개, 회차 1개와 가상 좌석 24�
 ### 링크
 
 - [Backend Issue #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)
+
+## Issue #5 — 예약 원자성·잔여 좌석 갱신 정합성
+
+### 문제 경계
+
+Issue #3에서 같은 예약 transaction 안의 두 결함을 분리해 확인했습니다. checked exception은 앞선 좌석과 예약을 부분 commit했고, 서로 다른 좌석 transaction은 각자 읽은 회차 집계값을 덮어썼습니다.
+
+### 결정
+
+기존 예외 signature를 바꾸지 않고 `rollbackFor = Exception.class`을 명시해 모든 예약 실패를 rollback 대상으로 만들었습니다. 회차 전체를 예약 시작부터 잠그는 대신 조건부 원자 감소 update를 사용해 서로 다른 좌석 작업을 선제적으로 직렬화하지 않았습니다. update 영향 row가 1이 아니면 예외를 발생시켜 앞서 flush된 좌석과 예약도 함께 rollback합니다.
+
+### 전후 결과
+
+같은 가상 좌석 24개와 결정적 barrier에서 서로 다른 8좌석 예약은 `잔여 23·불변식 위반`에서 `잔여 16·불변식 충족`으로 바뀌었습니다. 복수 좌석 checked exception은 첫 좌석·예약 부분 commit에서 전체 rollback으로 바뀌었습니다. 잔여 부족 guard fixture에서도 음수 집계와 부분 commit이 발생하지 않았습니다.
+
+### 범위 제한
+
+이번 변경은 처리량 최적화가 아니며 lock wait를 측정하지 않았습니다. 복수 좌석 lock ordering, 좌석 복합·유일 인덱스, 취소·결제·멱등성과 API 예외 모델은 후속 Issue로 남겼습니다.
+
+상세 조건과 결과는 [예약 원자성·잔여 좌석 갱신 정합성 개선](reservation-atomicity-inventory-consistency.md)에서 확인합니다.
+
+### 링크
+
+- [Backend Issue #5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)

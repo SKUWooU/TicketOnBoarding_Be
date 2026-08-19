@@ -67,7 +67,7 @@ public class SeatReservationService {
 
 
     //좌석에약
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void reserveSeat(String username,String concertId, ReservRequest reservRequest) throws Exception {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
         Long concertTimeId= reservRequest.getConcertTimeId();
@@ -113,14 +113,16 @@ public class SeatReservationService {
             reservationList.add(reservation);
             reservationRepository.save(reservation);
         }
-
-
-
-        //전체 좌석수 감소
-        concertTime.setSeatAmount(concertTime.getSeatAmount() - seatNumberList.size()); // 좌석 수 감소
-        concertTimeRepository.save(concertTime);
         seatRepository.saveAll(seatList);
         reservationRepository.saveAll(reservationList);
+
+        int updatedConcertTimes = concertTimeRepository.decreaseSeatAmountIfAvailable(
+                concertTimeId,
+                seatNumberList.size()
+        );
+        if (updatedConcertTimes != 1) {
+            throw new Exception("잔여 좌석이 부족합니다.");
+        }
     }
 
     //예약내역 조회(지난 날짜는 제외)
