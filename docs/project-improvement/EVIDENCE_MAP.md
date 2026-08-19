@@ -4,7 +4,7 @@
 
 | 문제 | 재현·기준선 | 개선 | 테스트·측정 | 결과 | Issue / PR |
 | --- | --- | --- | --- | --- | --- |
-| 협업·검증 기준 문서 부재 | 두 저장소에서 Template·workflow·진행 문서 부재 확인 | 문서와 Template 기준 구성 | 필수 항목, 링크, diff 검사 | 진행 중 | [BE #1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1) / PR 대기 |
+| 협업·검증 기준 문서 부재 | 두 저장소에서 Template·workflow·진행 문서 부재 확인 | 문서와 Template 기준 구성 | 필수 항목, 링크, diff 검사 | Reviewer 대기 | [BE #1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1) / [PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2) |
 | 동일 좌석 동시 예약 결과 미검증 | MySQL 동시성 fixture 필요 | 미정 | 성공 수, 예약 row, 좌석·집계 상태 | 미측정 | 후속 Issue |
 | 서로 다른 좌석의 잔여 수량 갱신 유실 가능성 | 동일 회차의 서로 다른 좌석 동시 예약 | 미정 | 최종 `reserved`와 `seatAmount` 교차 검증 | 미측정 | 후속 Issue |
 | 복수 좌석 잠금 순서의 deadlock 가능성 | `[A,B]`, `[B,A]` 동시 요청 | 미정 | deadlock, rollback, lock wait | 미측정 | 후속 Issue |

@@ -32,4 +32,4 @@ Backend 저장소에 전체 개선의 기준 문서와 진행 상태를 두고, 
 ### 링크
 
 - [Backend Issue #1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1)
-- PR: 생성 후 연결
+- [Backend PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2)

@@ -16,12 +16,13 @@
 ### Backend Issue #1 — 문서·협업 절차 부트스트랩
 
 - Issue: [#1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1)
+- PR: [#2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2)
 - Branch: `docs/#1-improvement-baseline`
-- 상태: 구현·검증 완료, PR 준비
+- 상태: PR 생성, Reviewer 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: Markdown 필수 항목·상대 링크·변경 범위·`git diff --check` 확인 완료
-- Reviewer: 대기
+- Reviewer: 별도 Reviewer 검토 대기
 - 사용자 merge 승인: 대기
 - 범위: Template, workflow, 기준선, backlog와 근거 문서 진입점
 - 제외: 애플리케이션 코드, Frontend 파일, 외부 API, 부하 테스트와 성능 개선
