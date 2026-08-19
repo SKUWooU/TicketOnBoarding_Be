@@ -13,22 +13,36 @@
 
 ## 진행 중
 
+### Backend Issue #7 — 백엔드 아키텍처 학습 기준선
+
+- Issue: [#7](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/7)
+- Branch: `docs/#7-backend-architecture-baseline`
+- 상태: 문서 작성·검증 완료, PR 생성 전
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 전체 Gradle test 실제 재실행 성공, 문서 상대 경로 확인, `git diff --check` 통과
+- Reviewer: 대기
+- 사용자 merge 승인: 대기
+- 범위: Backend 기술 스택, KOPIS 수집, 도메인·DB·인증·예약·결제·취소·FE 연동과 차별화 Phase를 단일 학습 문서로 정리
+- 제외: README, 애플리케이션·Frontend 코드, 외부 API·결제·운영 데이터 실행
+
+## 완료
+
 ### Backend Issue #5 — 예약 원자성·잔여 좌석 갱신 정합성
 
 - Issue: [#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)
 - PR: [#6](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/6)
 - Branch: `fix/#5-reservation-atomicity-inventory`
-- 상태: PR 생성, Reviewer 검토 대기
+- squash commit: `ab9a103cd5306ca6f25515f1292bf0e0318586c0`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 예약 통합 테스트 invocation 8개 통과, 전체 테스트 invocation 9개 통과, `git diff --check` 통과
-- Reviewer: PR #6 최신 HEAD 검토 대기
-- 사용자 merge 승인: 대기
+- Reviewer: 최종 HEAD Blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-20 squash merge
 - 범위: checked exception 전체 rollback, 회차 잔여 수량 조건부 원자 감소, Issue #3 회귀 테스트 전환
 - 제외: deadlock·인덱스·취소·결제·멱등성·인증·Frontend·부하 테스트와 분산 기술
 - 결과: 상이 좌석 8개 반복 예약 시 잔여 16, checked exception과 잔여 부족 시 좌석·예약 전체 rollback
-
-## 완료
 
 ### Backend Issue #3 — 예매 트랜잭션·경합 기준선
 
