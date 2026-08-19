@@ -18,6 +18,19 @@ public interface ConcertTimeRepository extends JpaRepository<ConcertTime,Long> {
     @Query("SELECT ct.id FROM ConcertTime ct WHERE ct.concert.concertId = :concertId")
     List<Long> findConcertTimeIdsByConcertId(@Param("concertId") String concertId);
 
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query("""
+            UPDATE ConcertTime ct
+            SET ct.seatAmount = ct.seatAmount - :seatCount
+            WHERE ct.id = :concertTimeId
+              AND ct.seatAmount >= :seatCount
+            """)
+    int decreaseSeatAmountIfAvailable(
+            @Param("concertTimeId") Long concertTimeId,
+            @Param("seatCount") int seatCount
+    );
+
     @Modifying
     @Transactional
     @Query("DELETE FROM ConcertTime ct WHERE ct.concert.concertId = :concertId")

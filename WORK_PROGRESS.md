@@ -13,22 +13,37 @@
 
 ## 진행 중
 
+### Backend Issue #5 — 예약 원자성·잔여 좌석 갱신 정합성
+
+- Issue: [#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)
+- Branch: `fix/#5-reservation-atomicity-inventory`
+- 상태: 구현·검증 완료, PR 준비
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 예약 통합 테스트 invocation 8개 통과, 전체 테스트 invocation 9개 통과, `git diff --check` 통과
+- Reviewer: 대기
+- 사용자 merge 승인: 대기
+- 범위: checked exception 전체 rollback, 회차 잔여 수량 조건부 원자 감소, Issue #3 회귀 테스트 전환
+- 제외: deadlock·인덱스·취소·결제·멱등성·인증·Frontend·부하 테스트와 분산 기술
+- 결과: 상이 좌석 8개 반복 예약 시 잔여 16, checked exception과 잔여 부족 시 좌석·예약 전체 rollback
+
+## 완료
+
 ### Backend Issue #3 — 예매 트랜잭션·경합 기준선
 
 - Issue: [#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)
 - PR: [#4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)
 - Branch: `test/#3-reservation-concurrency-baseline`
-- 상태: Reviewer Blocking 수정·전체 검증 완료, 재검토 준비
+- squash commit: `a5db362373833c3847e28a47ad082a265bc1429d`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 집계 조회 후 잠금 호출 전 결정적 barrier에서 상이 좌석 시나리오 3회 통과, 전체 `test` invocation 8개 통과, `git diff --check` 통과
-- Reviewer: HEAD `1921c31`에서 재현 안정성 Blocking 1건, 테스트 전용 위임 proxy로 수정 후 재검토 예정
-- 사용자 merge 승인: 대기
+- Reviewer: 최종 HEAD `ca069e1`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-19 squash merge
 - 범위: MariaDB Testcontainers, 가상 좌석 fixture, 단건·동일 좌석·상이 좌석·복수 좌석 실패 기준선
 - 제외: 운영 로직 수정, deadlock 해결, 취소·결제·인증·Frontend와 부하 테스트
 - 관찰: 동일 좌석 8개 요청은 1개만 성공, 상이 좌석 8개는 모두 성공했으나 잔여 수량은 1만 감소, checked exception에서 첫 좌석·예약 부분 commit
-
-## 완료
 
 ### Backend Issue #1 — 문서·협업 절차 부트스트랩
 
@@ -42,7 +57,7 @@
 
 ## 다음 후보
 
-1. Issue #3 결과에 따른 rollback·잔여 좌석 집계 개선
-2. 복수 좌석 lock ordering과 deadlock 재현
+1. 복수 좌석 lock ordering과 deadlock 재현
+2. `(concert_time_id, seat_number)` 복합·유일 인덱스 검증
 3. Frontend: 별도 Issue로 Issue·PR template과 개선 문서 진입점 구성
 4. 예약·결제·취소 멱등성과 상태 전이 Issue 분리

@@ -59,11 +59,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
         SeatReservationService.class,
-        SeatReservationConcurrencyBaselineTest.SeatRepositoryBarrierConfiguration.class
+        SeatReservationConcurrencyIntegrationTest.SeatRepositoryBarrierConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-class SeatReservationConcurrencyBaselineTest {
+class SeatReservationConcurrencyIntegrationTest {
 
     private static final int TOTAL_SEATS = 24;
     private static final String CONCERT_ID = "BASELINE-CONCERT";
@@ -169,7 +169,7 @@ class SeatReservationConcurrencyBaselineTest {
     }
 
     @RepeatedTest(3)
-    void differentSeatConcurrentReservationCapturesAggregateBaseline() throws Exception {
+    void differentSeatConcurrentReservationKeepsAggregateConsistent() throws Exception {
         List<String> differentSeats = List.of("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8");
         AGGREGATE_READ_BARRIER.set(new CyclicBarrier(differentSeats.size()));
 
@@ -187,7 +187,7 @@ class SeatReservationConcurrencyBaselineTest {
         assertThat(snapshot.reservations()).isEqualTo(differentSeats.size());
 
         System.out.printf(
-                "DIFFERENT_SEAT_BASELINE attempts=%d remaining=%d reserved=%d reservations=%d invariant=%s%n",
+                "DIFFERENT_SEAT_AFTER attempts=%d remaining=%d reserved=%d reservations=%d invariant=%s%n",
                 differentSeats.size(),
                 snapshot.remainingSeats(),
                 snapshot.successfullyReservedSeats(),
@@ -196,13 +196,12 @@ class SeatReservationConcurrencyBaselineTest {
         );
 
         assertThat(snapshot.remainingSeats())
-                .as("8회 감소 중 하나 이상이 유실되는 현재 기준선")
-                .isBetween(TOTAL_SEATS - differentSeats.size() + 1, TOTAL_SEATS - 1);
-        assertThat(snapshot.inventoryEquationHolds()).isFalse();
+                .isEqualTo(TOTAL_SEATS - differentSeats.size());
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
     }
 
     @Test
-    void checkedFailureAfterFirstSeatCapturesPartialCommitBaseline() {
+    void checkedFailureAfterFirstSeatRollsBackEntireReservation() {
         assertThatThrownBy(() -> seatReservationService.reserveSeat(
                 USERNAME,
                 CONCERT_ID,
@@ -214,17 +213,39 @@ class SeatReservationConcurrencyBaselineTest {
         InventorySnapshot snapshot = inventorySnapshot();
 
         System.out.printf(
-                "CHECKED_EXCEPTION_BASELINE remaining=%d reserved=%d reservations=%d invariant=%s%n",
+                "CHECKED_EXCEPTION_AFTER remaining=%d reserved=%d reservations=%d invariant=%s%n",
                 snapshot.remainingSeats(),
                 snapshot.successfullyReservedSeats(),
                 snapshot.reservations(),
                 snapshot.inventoryEquationHolds()
         );
 
-        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(1);
-        assertThat(snapshot.reservations()).isEqualTo(1);
+        assertThat(snapshot.successfullyReservedSeats()).isZero();
+        assertThat(snapshot.reservations()).isZero();
         assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
-        assertThat(snapshot.inventoryEquationHolds()).isFalse();
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void insufficientAggregateRollsBackSeatsAndReservationsWithoutGoingNegative() {
+        ConcertTime concertTime = concertTimeRepository.findById(concertTimeId).orElseThrow();
+        concertTime.setSeatAmount(1);
+        concertTimeRepository.saveAndFlush(concertTime);
+        entityManager.clear();
+
+        assertThatThrownBy(() -> seatReservationService.reserveSeat(
+                USERNAME,
+                CONCERT_ID,
+                request("A1", "A2")
+        ))
+                .isExactlyInstanceOf(Exception.class)
+                .hasMessage("잔여 좌석이 부족합니다.");
+
+        InventorySnapshot snapshot = inventorySnapshot();
+
+        assertThat(snapshot.successfullyReservedSeats()).isZero();
+        assertThat(snapshot.reservations()).isZero();
+        assertThat(snapshot.remainingSeats()).isEqualTo(1);
     }
 
     @Test

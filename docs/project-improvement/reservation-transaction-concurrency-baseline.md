@@ -21,7 +21,7 @@
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot'
-.\gradlew.bat test --tests "com.onticket.concert.service.SeatReservationConcurrencyBaselineTest" --rerun-tasks
+.\gradlew.bat test --tests "com.onticket.concert.service.SeatReservationConcurrencyIntegrationTest" --rerun-tasks
 ```
 
 Docker Desktop이 실행 중이어야 한다. 테스트가 disposable MariaDB container와 schema를 만들며 테스트별로 예약·좌석·회차·공연 상세·공연 순서로 fixture를 정리한다.
@@ -75,11 +75,12 @@ FOR UPDATE;
 - HTTP, 인증 filter, network, connection pool 포화와 k6 부하는 포함하지 않았다.
 - deadlock을 유도하는 반대 순서 복수 좌석 요청은 포함하지 않았다.
 - 취소·결제·만료·중복 요청과 상태 전이는 포함하지 않았다.
-- 테스트는 현재 결함을 의도적으로 assertion한다. 후속 수정 PR에서는 같은 조건의 기대값을 정합한 결과로 바꿔 회귀 테스트로 전환한다.
+- 이 문서는 Issue #3 시점의 변경 전 결과를 보존한다. 테스트는 Issue #5에서 정합한 기대값의 회귀 테스트로 전환했으며 개선 후 결과는 [예약 원자성·잔여 좌석 갱신 정합성 개선](reservation-atomicity-inventory-consistency.md)에 기록한다.
 - 대기열, Redis·분산 락, outbox와 메시지 브로커를 도입할 근거는 아직 없다.
 
 ## 연결
 
 - [Issue #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)
+- [개선 Issue #5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)
 - [Spring transaction rollback 규칙](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html)
 - [Testcontainers MariaDB module](https://java.testcontainers.org/modules/databases/mariadb/)
