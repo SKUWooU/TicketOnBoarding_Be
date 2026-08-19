@@ -16,12 +16,13 @@
 ### Backend Issue #5 — 예약 원자성·잔여 좌석 갱신 정합성
 
 - Issue: [#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)
+- PR: [#6](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/6)
 - Branch: `fix/#5-reservation-atomicity-inventory`
-- 상태: 구현·검증 완료, PR 준비
+- 상태: PR 생성, Reviewer 검토 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 예약 통합 테스트 invocation 8개 통과, 전체 테스트 invocation 9개 통과, `git diff --check` 통과
-- Reviewer: 대기
+- Reviewer: PR #6 최신 HEAD 검토 대기
 - 사용자 merge 승인: 대기
 - 범위: checked exception 전체 rollback, 회차 잔여 수량 조건부 원자 감소, Issue #3 회귀 테스트 전환
 - 제외: deadlock·인덱스·취소·결제·멱등성·인증·Frontend·부하 테스트와 분산 기술
