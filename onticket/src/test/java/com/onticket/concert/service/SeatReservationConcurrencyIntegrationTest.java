@@ -35,6 +35,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -47,6 +48,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,6 +72,9 @@ class SeatReservationConcurrencyIntegrationTest {
     private static final String CONCERT_ID = "BASELINE-CONCERT";
     private static final String USERNAME = "baseline-user";
     private static final AtomicReference<CyclicBarrier> AGGREGATE_READ_BARRIER = new AtomicReference<>();
+    private static final AtomicReference<CyclicBarrier> FIRST_SEAT_LOCK_BARRIER = new AtomicReference<>();
+    private static final AtomicBoolean BOTH_FIRST_SEAT_LOCKS_ACQUIRED = new AtomicBoolean();
+    private static final ThreadLocal<Integer> SEAT_LOCK_CALL_COUNT = ThreadLocal.withInitial(() -> 0);
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -200,6 +206,51 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(snapshot.inventoryEquationHolds()).isTrue();
     }
 
+    @RepeatedTest(3)
+    void oppositeSeatOrderConcurrentReservationSerializesAtFirstLockWithoutDeadlock() throws Exception {
+        FIRST_SEAT_LOCK_BARRIER.set(new CyclicBarrier(2));
+        BOTH_FIRST_SEAT_LOCKS_ACQUIRED.set(false);
+
+        List<LockAttemptResult> results;
+        try {
+            results = runRequestsConcurrently(List.of(
+                    List.of("A1", "A2"),
+                    List.of("A2", "A1")
+            ));
+        } finally {
+            FIRST_SEAT_LOCK_BARRIER.set(null);
+        }
+
+        InventorySnapshot snapshot = inventorySnapshot();
+
+        System.out.printf(
+                "OPPOSITE_ORDER_BASELINE firstLocksConcurrent=%s results=%s remaining=%d reserved=%d reservations=%d invariant=%s%n",
+                BOTH_FIRST_SEAT_LOCKS_ACQUIRED.get(),
+                results,
+                snapshot.remainingSeats(),
+                snapshot.successfullyReservedSeats(),
+                snapshot.reservations(),
+                snapshot.inventoryEquationHolds()
+        );
+
+        assertThat(results).hasSize(2);
+        assertThat(BOTH_FIRST_SEAT_LOCKS_ACQUIRED.get()).isFalse();
+        assertThat(results).filteredOn(LockAttemptResult::success).hasSize(1);
+        assertThat(results).filteredOn(result -> !result.success())
+                .hasSize(1)
+                .allSatisfy(result -> {
+                    assertThat(result.exceptionType()).isEqualTo("Exception");
+                    assertThat(result.message()).isEqualTo("이미 예약된 좌석입니다.");
+                    assertThat(result.sqlState()).isNull();
+                    assertThat(result.errorCode()).isNull();
+                });
+        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(2);
+        assertThat(snapshot.reservations()).isEqualTo(2);
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 2);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(snapshot.reservations());
+    }
+
     @Test
     void checkedFailureAfterFirstSeatRollsBackEntireReservation() {
         assertThatThrownBy(() -> seatReservationService.reserveSeat(
@@ -311,6 +362,54 @@ class SeatReservationConcurrencyIntegrationTest {
         }
     }
 
+    private List<LockAttemptResult> runRequestsConcurrently(List<List<String>> seatNumberRequests) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(seatNumberRequests.size());
+        CountDownLatch ready = new CountDownLatch(seatNumberRequests.size());
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<LockAttemptResult>> futures = new ArrayList<>();
+
+        try {
+            for (int i = 0; i < seatNumberRequests.size(); i++) {
+                String username = USERNAME + "-opposite-" + i;
+                List<String> seatNumbers = seatNumberRequests.get(i);
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(5, TimeUnit.SECONDS)) {
+                        return LockAttemptResult.failure(
+                                new TimeoutException("동시 시작 신호 대기 시간 초과")
+                        );
+                    }
+
+                    try {
+                        seatReservationService.reserveSeat(
+                                username,
+                                CONCERT_ID,
+                                request(seatNumbers.toArray(String[]::new))
+                        );
+                        return LockAttemptResult.succeeded();
+                    } catch (Exception exception) {
+                        return LockAttemptResult.failure(exception);
+                    } finally {
+                        SEAT_LOCK_CALL_COUNT.remove();
+                    }
+                }));
+            }
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<LockAttemptResult> results = new ArrayList<>();
+            for (Future<LockAttemptResult> future : futures) {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     private ReservRequest request(String... seatNumbers) {
         ReservRequest request = new ReservRequest();
         request.setConcertTimeId(concertTimeId);
@@ -384,6 +483,40 @@ class SeatReservationConcurrencyIntegrationTest {
         }
     }
 
+    private record LockAttemptResult(
+            boolean success,
+            String exceptionType,
+            String message,
+            String sqlState,
+            Integer errorCode
+    ) {
+        static LockAttemptResult succeeded() {
+            return new LockAttemptResult(true, null, null, null, null);
+        }
+
+        static LockAttemptResult failure(Throwable throwable) {
+            SQLException sqlException = findSqlException(throwable);
+            return new LockAttemptResult(
+                    false,
+                    throwable.getClass().getSimpleName(),
+                    throwable.getMessage(),
+                    sqlException == null ? null : sqlException.getSQLState(),
+                    sqlException == null ? null : sqlException.getErrorCode()
+            );
+        }
+
+        private static SQLException findSqlException(Throwable throwable) {
+            Throwable current = throwable;
+            while (current != null) {
+                if (current instanceof SQLException sqlException) {
+                    return sqlException;
+                }
+                current = current.getCause();
+            }
+            return null;
+        }
+    }
+
     private record InventorySnapshot(int remainingSeats, long successfullyReservedSeats, long reservations) {
         boolean inventoryEquationHolds() {
             return TOTAL_SEATS == remainingSeats + successfullyReservedSeats;
@@ -413,11 +546,34 @@ class SeatReservationConcurrencyIntegrationTest {
                                     }
                                 }
 
+                                Object result;
                                 try {
-                                    return method.invoke(seatRepository, args);
+                                    result = method.invoke(seatRepository, args);
                                 } catch (InvocationTargetException exception) {
                                     throw exception.getCause();
                                 }
+
+                                if (method.getName().equals("findByConcertTimeIdAndSeatNumberWithLock")) {
+                                    CyclicBarrier barrier = FIRST_SEAT_LOCK_BARRIER.get();
+                                    if (barrier != null) {
+                                        int lockCallCount = SEAT_LOCK_CALL_COUNT.get() + 1;
+                                        SEAT_LOCK_CALL_COUNT.set(lockCallCount);
+                                        if (lockCallCount != 1) {
+                                            return result;
+                                        }
+
+                                        try {
+                                            barrier.await(2, TimeUnit.SECONDS);
+                                            BOTH_FIRST_SEAT_LOCKS_ACQUIRED.set(true);
+                                        } catch (TimeoutException ignored) {
+                                            // 첫 lock 조회 자체가 넓게 직렬화되면 transaction을 실패시키지 않고 계속 진행한다.
+                                        } catch (java.util.concurrent.BrokenBarrierException ignored) {
+                                            // 상대 transaction의 timeout 이후 도달한 경우에도 현재 동작 관찰을 계속한다.
+                                        }
+                                    }
+                                }
+
+                                return result;
                             }
                     );
                 }

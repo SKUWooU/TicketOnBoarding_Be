@@ -84,3 +84,23 @@ Issue #3에서 같은 예약 transaction 안의 두 결함을 분리해 확인�
 ### 링크
 
 - [Backend Issue #5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5)
+
+## Issue #9 — 복수 좌석 잠금 순서와 deadlock 기준선
+
+### 관찰
+
+같은 회차의 `[A1,A2]`와 `[A2,A1]`을 동시에 예약하고, test 전용 Repository proxy에서 각 transaction의 첫 좌석 lock 반환 직후 barrier를 기다렸습니다. 세 번 모두 두 transaction이 서로 다른 첫 lock을 동시에 획득하지 못했고 SQL deadlock은 발생하지 않았습니다. 한 transaction이 두 좌석을 commit한 뒤 다른 transaction은 `이미 예약된 좌석입니다.`로 실패했습니다.
+
+### 해석
+
+이 결과는 입력 순서 잠금이 안전하다는 뜻이 아닙니다. 기존 `EXPLAIN`의 full scan과 복합 index 부재를 함께 보면 현재 잠금 조회가 첫 좌석부터 넓게 직렬화된 것으로 추론할 수 있습니다. 좌석 식별 index로 잠금 범위를 좁히면 반대 순서 cycle이 드러날 수 있으므로 index와 canonical lock ordering을 함께 비교해야 합니다.
+
+### 최종 상태
+
+매회 성공 1·business 실패 1, 예약 좌석 2, 예약 row 2, 잔여 22로 `24 = reserved + remaining`을 충족했습니다. 실패 transaction의 부분 commit과 SQL deadlock error는 없었습니다. 결과는 MariaDB 10.11.8 단일 컨테이너와 가상 좌석 24개 조건이며 운영 deadlock 발생률이나 처리량을 의미하지 않습니다.
+
+상세 동기화 방식과 다음 검증 조건은 [복수 좌석 잠금 순서와 deadlock 기준선](multi-seat-lock-order-deadlock-baseline.md)에 기록합니다.
+
+### 링크
+
+- [Backend Issue #9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9)
