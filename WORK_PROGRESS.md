@@ -13,26 +13,36 @@
 
 ## 진행 중
 
+### Backend Issue #3 — 예매 트랜잭션·경합 기준선
+
+- Issue: [#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3)
+- PR: [#4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)
+- Branch: `test/#3-reservation-concurrency-baseline`
+- 상태: Reviewer Blocking 수정·전체 검증 완료, 재검토 준비
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 집계 조회 후 잠금 호출 전 결정적 barrier에서 상이 좌석 시나리오 3회 통과, 전체 `test` invocation 8개 통과, `git diff --check` 통과
+- Reviewer: HEAD `1921c31`에서 재현 안정성 Blocking 1건, 테스트 전용 위임 proxy로 수정 후 재검토 예정
+- 사용자 merge 승인: 대기
+- 범위: MariaDB Testcontainers, 가상 좌석 fixture, 단건·동일 좌석·상이 좌석·복수 좌석 실패 기준선
+- 제외: 운영 로직 수정, deadlock 해결, 취소·결제·인증·Frontend와 부하 테스트
+- 관찰: 동일 좌석 8개 요청은 1개만 성공, 상이 좌석 8개는 모두 성공했으나 잔여 수량은 1만 감소, checked exception에서 첫 좌석·예약 부분 commit
+
+## 완료
+
 ### Backend Issue #1 — 문서·협업 절차 부트스트랩
 
 - Issue: [#1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1)
 - PR: [#2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2)
-- Branch: `docs/#1-improvement-baseline`
-- 상태: GlobalTimes template 참고 반영, Reviewer 재검토 대기
-- 계획 승인: 완료
-- 구현: 완료
-- 검증: Markdown 필수 항목·상대 링크·변경 범위·`git diff --check` 확인 완료
-- Reviewer: 이전 HEAD `4aad3ce`에서 `MERGE_READY: YES`; template 보완 후 최신 HEAD 재검토 필요
-- 사용자 merge 승인: 대기
-- 범위: Template, workflow, 기준선, backlog와 근거 문서 진입점
-- 제외: 애플리케이션 코드, Frontend 파일, 외부 API, 부하 테스트와 성능 개선
-
-## 완료
-
-아직 병합 완료된 개선 Issue가 없습니다.
+- squash commit: `9b9b18405ce29a110cd67fcef6c923d5d9505d65`
+- 상태: 완료
+- Reviewer: 최신 검토 HEAD `485c071`, Blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-19 squash merge
+- Frontend 변경과 외부 API·결제·운영 데이터 호출 없음
 
 ## 다음 후보
 
-1. Backend: MySQL Testcontainers와 명시적 가상 좌석 fixture로 기존 비관적 잠금 및 잔여 좌석 정합성 기준선 검증
-2. Frontend: 별도 Issue로 Issue·PR template과 개선 문서 진입점 구성
-3. 재현 결과에 따라 잔여 좌석 집계, 복수 좌석 deadlock, 멱등성과 상태 전이 Issue 분리
+1. Issue #3 결과에 따른 rollback·잔여 좌석 집계 개선
+2. 복수 좌석 lock ordering과 deadlock 재현
+3. Frontend: 별도 Issue로 Issue·PR template과 개선 문서 진입점 구성
+4. 예약·결제·취소 멱등성과 상태 전이 Issue 분리

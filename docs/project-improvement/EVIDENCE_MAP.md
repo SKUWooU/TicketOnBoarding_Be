@@ -4,9 +4,11 @@
 
 | 문제 | 재현·기준선 | 개선 | 테스트·측정 | 결과 | Issue / PR |
 | --- | --- | --- | --- | --- | --- |
-| 협업·검증 기준 문서 부재 | 두 저장소에서 Template·workflow·진행 문서 부재 확인 | 문서와 Template 기준 구성 | 필수 항목, 링크, diff 검사 | Reviewer 대기 | [BE #1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1) / [PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2) |
-| 동일 좌석 동시 예약 결과 미검증 | MySQL 동시성 fixture 필요 | 미정 | 성공 수, 예약 row, 좌석·집계 상태 | 미측정 | 후속 Issue |
-| 서로 다른 좌석의 잔여 수량 갱신 유실 가능성 | 동일 회차의 서로 다른 좌석 동시 예약 | 미정 | 최종 `reserved`와 `seatAmount` 교차 검증 | 미측정 | 후속 Issue |
+| 협업·검증 기준 문서 부재 | 두 저장소에서 Template·workflow·진행 문서 부재 확인 | 문서와 Template 기준 구성 | 필수 항목, 링크, diff 검사 | Reviewer `MERGE_READY: YES`, 사용자 승인 후 병합 | [BE #1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1) / [PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2) |
+| 동일 좌석 동시 예약 결과 미검증 | MariaDB 10.11.8, 가상 좌석 24개, `A1` 8개 동시 요청 | 운영 코드 변경 없음 | 성공 수, 예약 row, 좌석·집계 상태 | 1회 성공·7회 실패, 예약/좌석 각 1, 잔여 23, 불변식 충족 | [BE #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3) |
+| 서로 다른 좌석의 잔여 수량 갱신 유실 가능성 | 같은 회차 `A1`~`A8` 8개 동시 예약 | 운영 코드 변경 없음 | 집계 조회 후 잠금 호출 전 결정적 barrier, 한 실행에서 3회 반복 | 매회 8좌석·8예약 반영, 잔여 23으로 7회 감소 유실, 불변식 위반 | [BE #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3) |
+| checked exception에서 복수 좌석 부분 commit 가능성 | `[A1, NOT-EXISTING]` 요청 | 운영 코드 변경 없음 | 좌석·예약·잔여 수량, 동일 조건 4회 | 첫 좌석·예약 commit, 잔여 24, 불변식 위반 | [BE #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3) |
+| 좌석 잠금 조회의 복합 인덱스 부재 | 생성 schema `SHOW INDEX`, 잠금 SQL `EXPLAIN` | 운영 schema 변경 없음 | index column, access type, selected key | `seat_number` 미포함, `type=ALL`, `key=null`, fixture 24행 | [BE #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3) |
 | 복수 좌석 잠금 순서의 deadlock 가능성 | `[A,B]`, `[B,A]` 동시 요청 | 미정 | deadlock, rollback, lock wait | 미측정 | 후속 Issue |
 | 예약·결제·취소 중복 요청 | 중복 key와 응답 유실 fixture 필요 | 미정 | 결과 재사용, 중복 row, 상태·재고 | 미측정 | 후속 Issue |
 

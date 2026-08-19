@@ -41,6 +41,8 @@
 
 Gradle wrapper 배포 파일과 의존성 다운로드에는 네트워크가 필요합니다. 로컬의 ignored `application.yml`은 DB와 외부 연동 비밀값을 포함할 수 있으므로 내용과 값은 공개 문서에 기록하지 않습니다.
 
+위 항목은 최초 조사 시점의 실행 상태입니다. Issue #3에서 Temurin JDK 21.0.12와 Testcontainers MariaDB 10.11.8 기반 테스트 환경을 추가한 뒤 `compileJava`와 전체 테스트 invocation 8개가 통과했습니다. 애플리케이션의 운영 설정과 실제 외부 연동을 포함한 실행 가능 여부는 아직 검증하지 않았습니다.
+
 ### 예약 흐름에서 확인된 사실
 
 - 특정 회차·좌석 번호 조회에 `PESSIMISTIC_WRITE` 사용
@@ -53,14 +55,14 @@ Gradle wrapper 배포 파일과 의존성 다운로드에는 네트워크가 필
 
 ### 아직 검증하지 않은 가설
 
-- 동일 좌석 동시 요청에서 성공이 정확히 한 건인지
-- 대기한 트랜잭션이 최신 `reserved` 상태를 읽는지
-- 서로 다른 좌석 예약이 `seatAmount` 갱신을 유실하는지
 - 반대 순서 복수 좌석 요청이 deadlock을 만드는지
-- 예약 중 예외 발생 시 모든 좌석과 예약 row가 rollback되는지
 - 동일 예약·취소 요청의 반복 결과가 정합한지
 
-이 가설은 동시성 fixture와 실제 MySQL 통합 테스트 전에는 개선 성과나 결함 확정으로 표현하지 않습니다.
+### Issue #3에서 검증한 기준선
+
+Java 21과 Testcontainers MariaDB 10.11.8 환경을 구성해 가상 좌석 24개로 검증했습니다. 동일 좌석 8개 동시 요청은 한 건만 성공했고, 대기 요청은 commit된 예약 상태를 확인했습니다. 반면 서로 다른 8좌석의 예약은 모두 성공했지만 잔여 수량 감소 7회가 유실됐습니다. 복수 좌석 중 checked exception이 발생하면 앞선 좌석과 예약 row가 부분 commit되는 것도 확인했습니다.
+
+상세 fixture, 반복 횟수, 최종 DB 상태와 한계는 [예매 트랜잭션·경합 기준선](reservation-transaction-concurrency-baseline.md)에 기록합니다. 아직 검증하지 않은 항목은 동시성 fixture로 확인하기 전까지 개선 성과나 결함 확정으로 표현하지 않습니다.
 
 ## Frontend
 
