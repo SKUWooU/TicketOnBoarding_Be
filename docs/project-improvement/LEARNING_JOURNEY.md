@@ -105,3 +105,23 @@ Issue #3에서 같은 예약 transaction 안의 두 결함을 분리해 확인�
 
 - [Backend Issue #9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9)
 - [Backend PR #10](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/10)
+
+## Issue #11 — 좌석 복합 인덱스와 deadlock 비교 기준선
+
+### 비교
+
+Issue #9와 같은 fixture에 test용 `(concert_time_id, seat_number)` 복합 unique index만 적용했습니다. 잠금 query plan은 `ALL/key=null`에서 `const/복합 key/rows=1`로 바뀌었고, 반대 순서 transaction은 서로 다른 첫 좌석 lock을 동시에 획득했습니다.
+
+### 관찰
+
+`[A1,A2]`와 `[A2,A1]` 시나리오를 3회 반복한 결과 매회 MariaDB error `1213`, SQL state `40001`이 발생했고 Spring은 `CannotAcquireLockException`으로 변환했습니다. 한 transaction만 성공했으며 deadlock victim 사용자의 예약 row는 0개였습니다. 최종 좌석 2·예약 2·잔여 22로 rollback 후 불변식은 유지됐습니다.
+
+### 다음 결정
+
+복합 index는 좌석 식별과 잠금 query plan을 개선하지만 입력 순서 잠금의 cycle을 실제로 드러냈습니다. 따라서 운영 변경에서는 index migration과 canonical lock ordering을 함께 검증해야 합니다. retry·분산 lock·대기열은 도입하지 않습니다.
+
+상세 조건은 [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)에 기록합니다.
+
+### 링크
+
+- [Backend Issue #11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11)

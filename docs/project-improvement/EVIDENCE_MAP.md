@@ -14,6 +14,7 @@
 | 잔여 수량 음수 방지 | 잔여 1, 예약 가능한 좌석 `A1`, `A2`의 guard fixture | `seatAmount >= seatCount` 조건과 영향 row 확인 | 실패 후 좌석·예약·집계 확인 | update 0행, 좌석·예약 0, 잔여 1 | [BE #5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5) |
 | 좌석 잠금 조회의 복합 인덱스 부재 | 생성 schema `SHOW INDEX`, 잠금 SQL `EXPLAIN` | 운영 schema 변경 없음 | index column, access type, selected key | `seat_number` 미포함, `type=ALL`, `key=null`, fixture 24행 | [BE #3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3) |
 | 복수 좌석 반대 순서의 deadlock 가능성 | MariaDB 10.11.8, `[A1,A2]`·`[A2,A1]`, 첫 lock 반환 후 barrier, 3회 반복 | 운영 코드 변경 없음 | 첫 lock 동시 획득, SQL 예외, rollback, 좌석·예약·잔여 수량 | 3회 모두 첫 lock부터 직렬화, deadlock 없음, 성공 1·business 실패 1, 좌석·예약 2·잔여 22 | [BE #9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9) / [PR #10](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/10) |
+| 좌석 복합 index 적용 시 잠금·deadlock 변화 | 같은 fixture에 `(concert_time_id, seat_number)` test unique index 적용 | 운영 코드·schema 변경 없음 | EXPLAIN, 첫 lock barrier, 반대 순서 3회, SQL state·error code, 사용자별 예약 row | `ALL/key=null`→`const/복합 key/rows=1`, 첫 lock 동시 획득, 3회 모두 `1213/40001`, victim 예약 0·최종 좌석/예약 2·잔여 22 | [BE #11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11) |
 | 예약·결제·취소 중복 요청 | 중복 key와 응답 유실 fixture 필요 | 미정 | 결과 재사용, 중복 row, 상태·재고 | 미측정 | 후속 Issue |
 
 ## 기록 규칙

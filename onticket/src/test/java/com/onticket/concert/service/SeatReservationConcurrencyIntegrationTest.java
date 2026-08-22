@@ -3,6 +3,7 @@ package com.onticket.concert.service;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
+import com.onticket.concert.domain.Reservation;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.repository.ConcertDetailRepository;
@@ -71,6 +72,8 @@ class SeatReservationConcurrencyIntegrationTest {
     private static final int TOTAL_SEATS = 24;
     private static final String CONCERT_ID = "BASELINE-CONCERT";
     private static final String USERNAME = "baseline-user";
+    private static final String SEAT_COMPOSITE_UNIQUE_INDEX = "uk_seat_concert_time_number";
+    private static final String SEAT_FOREIGN_KEY_SUPPORT_INDEX = "idx_seat_concert_time_test_restore";
     private static final AtomicReference<CyclicBarrier> AGGREGATE_READ_BARRIER = new AtomicReference<>();
     private static final AtomicReference<CyclicBarrier> FIRST_SEAT_LOCK_BARRIER = new AtomicReference<>();
     private static final AtomicBoolean BOTH_FIRST_SEAT_LOCKS_ACQUIRED = new AtomicBoolean();
@@ -251,6 +254,51 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(snapshot.successfullyReservedSeats()).isEqualTo(snapshot.reservations());
     }
 
+    @RepeatedTest(3)
+    void indexedOppositeSeatOrderConcurrentReservationProducesDeadlockAndRollsBackVictim() throws Exception {
+        createSeatCompositeUniqueIndex();
+        FIRST_SEAT_LOCK_BARRIER.set(new CyclicBarrier(2));
+        BOTH_FIRST_SEAT_LOCKS_ACQUIRED.set(false);
+
+        List<LockAttemptResult> results;
+        try {
+            results = runRequestsConcurrently(List.of(
+                    List.of("A1", "A2"),
+                    List.of("A2", "A1")
+            ));
+        } finally {
+            FIRST_SEAT_LOCK_BARRIER.set(null);
+            dropSeatCompositeUniqueIndex();
+        }
+
+        InventorySnapshot snapshot = inventorySnapshot();
+
+        System.out.printf(
+                "INDEXED_OPPOSITE_ORDER_BASELINE firstLocksConcurrent=%s results=%s remaining=%d reserved=%d reservations=%d invariant=%s%n",
+                BOTH_FIRST_SEAT_LOCKS_ACQUIRED.get(),
+                results,
+                snapshot.remainingSeats(),
+                snapshot.successfullyReservedSeats(),
+                snapshot.reservations(),
+                snapshot.inventoryEquationHolds()
+        );
+
+        assertThat(BOTH_FIRST_SEAT_LOCKS_ACQUIRED.get()).isTrue();
+        assertThat(results).filteredOn(LockAttemptResult::success).hasSize(1);
+        assertThat(results).filteredOn(result -> !result.success())
+                .hasSize(1)
+                .allSatisfy(result -> {
+                    assertThat(result.exceptionType()).isEqualTo("CannotAcquireLockException");
+                    assertThat(result.sqlState()).isEqualTo("40001");
+                    assertThat(result.errorCode()).isEqualTo(1213);
+                });
+        assertReservationsMatchAttemptResults(results);
+        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(2);
+        assertThat(snapshot.reservations()).isEqualTo(2);
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 2);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
     @Test
     void checkedFailureAfterFirstSeatRollsBackEntireReservation() {
         assertThatThrownBy(() -> seatReservationService.reserveSeat(
@@ -320,6 +368,40 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(explain).hasSize(1);
         assertThat(explain.getFirst().get("type")).isEqualTo("ALL");
         assertThat(explain.getFirst().get("key")).isNull();
+    }
+
+    @Test
+    void compositeUniqueIndexChangesSeatLockQueryPlan() {
+        createSeatCompositeUniqueIndex();
+
+        try {
+            List<Map<String, Object>> indexes = jdbcTemplate.queryForList("SHOW INDEX FROM seat");
+            List<String> compositeIndexColumns = indexes.stream()
+                    .filter(row -> SEAT_COMPOSITE_UNIQUE_INDEX.equals(row.get("Key_name")))
+                    .sorted(Comparator.comparingInt(row -> ((Number) row.get("Seq_in_index")).intValue()))
+                    .map(row -> String.valueOf(row.get("Column_name")))
+                    .toList();
+
+            List<Map<String, Object>> explain = jdbcTemplate.queryForList(
+                    "EXPLAIN SELECT * FROM seat WHERE concert_time_id = ? AND seat_number = ? FOR UPDATE",
+                    concertTimeId,
+                    "A1"
+            );
+
+            System.out.printf(
+                    "SEAT_COMPOSITE_INDEX columns=%s explain=%s%n",
+                    compositeIndexColumns,
+                    explain
+            );
+
+            assertThat(compositeIndexColumns).containsExactly("concert_time_id", "seat_number");
+            assertThat(explain).hasSize(1);
+            assertThat(explain.getFirst().get("type")).isEqualTo("const");
+            assertThat(explain.getFirst().get("key")).isEqualTo(SEAT_COMPOSITE_UNIQUE_INDEX);
+            assertThat(Integer.parseInt(String.valueOf(explain.getFirst().get("rows")))).isEqualTo(1);
+        } finally {
+            dropSeatCompositeUniqueIndex();
+        }
     }
 
     private List<AttemptResult> runConcurrently(List<String> seatNumbers) throws Exception {
@@ -415,6 +497,39 @@ class SeatReservationConcurrencyIntegrationTest {
         request.setConcertTimeId(concertTimeId);
         request.setSeatNumberList(List.of(seatNumbers));
         return request;
+    }
+
+    private void createSeatCompositeUniqueIndex() {
+        jdbcTemplate.execute("""
+                CREATE UNIQUE INDEX %s
+                ON seat (concert_time_id, seat_number)
+                """.formatted(SEAT_COMPOSITE_UNIQUE_INDEX));
+    }
+
+    private void dropSeatCompositeUniqueIndex() {
+        boolean supportIndexExists = jdbcTemplate.queryForList("SHOW INDEX FROM seat").stream()
+                .anyMatch(row -> SEAT_FOREIGN_KEY_SUPPORT_INDEX.equals(row.get("Key_name")));
+        if (!supportIndexExists) {
+            jdbcTemplate.execute("""
+                    CREATE INDEX %s
+                    ON seat (concert_time_id)
+                    """.formatted(SEAT_FOREIGN_KEY_SUPPORT_INDEX));
+        }
+        jdbcTemplate.execute("DROP INDEX %s ON seat".formatted(SEAT_COMPOSITE_UNIQUE_INDEX));
+    }
+
+    private void assertReservationsMatchAttemptResults(List<LockAttemptResult> results) {
+        for (int i = 0; i < results.size(); i++) {
+            String username = USERNAME + "-opposite-" + i;
+            List<Reservation> reservations = reservationRepository.findByUsername(username)
+                    .orElseGet(List::of);
+
+            if (results.get(i).success()) {
+                assertThat(reservations).hasSize(2);
+            } else {
+                assertThat(reservations).isEmpty();
+            }
+        }
     }
 
     private Long createFixture() {

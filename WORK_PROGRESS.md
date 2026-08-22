@@ -13,7 +13,16 @@
 
 ## 진행 중
 
-없음.
+### Backend Issue #11 — 좌석 복합 인덱스와 deadlock 비교 기준선
+
+- Issue: [#11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11)
+- Branch: `test/#11-seat-index-deadlock-comparison`
+- 상태: 비교 테스트·문서 구현 및 전체 검증 완료, PR 생성 전
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: indexed 반대 순서 시나리오 3회 모두 `1213/40001` deadlock·victim rollback 확인, 전체 Testcontainers test invocation 16개 통과, `git diff --check` 통과
+- 범위: test schema 복합 unique index, 잠금 query plan, 첫 lock 동시 획득, 반대 순서 deadlock·rollback·최종 재고 비교
+- 제외: 운영 Entity·schema·예약 로직, Flyway, retry·분산 lock·대기열, 임시 점유·결제·Frontend·부하 테스트
 
 ## 완료
 
