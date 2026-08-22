@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 @RequiredArgsConstructor
@@ -70,8 +71,8 @@ public class SeatReservationService {
     @Transactional(rollbackFor = Exception.class)
     public void reserveSeat(String username,String concertId, ReservRequest reservRequest) throws Exception {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+        List<String> seatNumberList = canonicalSeatNumbers(reservRequest);
         Long concertTimeId= reservRequest.getConcertTimeId();
-        List<String> seatNumberList= reservRequest.getSeatNumberList();
         Concert concert = concertRepository.findByConcertId(concertId);
         ConcertTime concertTime = concertTimeRepository.findById(concertTimeId)
                 .orElseThrow(() -> new Exception("해당 콘서트가 없습니다."));
@@ -123,6 +124,27 @@ public class SeatReservationService {
         if (updatedConcertTimes != 1) {
             throw new Exception("잔여 좌석이 부족합니다.");
         }
+    }
+
+    private List<String> canonicalSeatNumbers(ReservRequest reservRequest) {
+        if (reservRequest == null) {
+            throw new IllegalArgumentException("예약 요청이 필요합니다.");
+        }
+
+        List<String> seatNumbers = reservRequest.getSeatNumberList();
+        if (seatNumbers == null || seatNumbers.isEmpty()) {
+            throw new IllegalArgumentException("좌석을 한 개 이상 선택해야 합니다.");
+        }
+        if (seatNumbers.stream().anyMatch(seatNumber -> seatNumber == null || seatNumber.isBlank())) {
+            throw new IllegalArgumentException("좌석 번호는 비어 있을 수 없습니다.");
+        }
+        if (new HashSet<>(seatNumbers).size() != seatNumbers.size()) {
+            throw new IllegalArgumentException("중복된 좌석을 선택할 수 없습니다.");
+        }
+
+        return seatNumbers.stream()
+                .sorted()
+                .toList();
     }
 
     //예약내역 조회(지난 날짜는 제외)

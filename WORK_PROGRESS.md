@@ -13,19 +13,34 @@
 
 ## 진행 중
 
+### Backend Issue #15 — 복수 좌석 잠금 순서 정규화와 예약 요청 검증
+
+- Issue: [#15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15)
+- PR: [#16](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/16)
+- Branch: `fix/#15-canonical-seat-lock-order`
+- 상태: PR 생성 및 전체 검증 완료, Reviewer 검토 전
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: indexed 반대 순서 3회 모두 canonical `A1` 첫 query·deadlock 0·성공 1/예약 충돌 1, invalid input lock query 0, 전체 Testcontainers test invocation 18개 통과
+- 범위: canonical 좌석 잠금 순서, 요청 좌석 목록 검증, indexed 반대 순서 deadlock 회귀, 기존 예약 정합성 회귀
+- 제외: 운영 복합 index·Flyway, retry·분산 lock·대기열, 임시 점유·결제·Frontend
+
+## 완료
+
 ### Backend Issue #13 — PR 전용 템플릿 분리
 
 - Issue: [#13](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/13)
 - PR: [#14](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/14)
 - Branch: `docs/#13-pr-template-separation`
-- 상태: PR 생성 및 문서 검증 완료, Reviewer 검토 전
+- squash commit: `1c874e531861bb066cf562f6ea705552006e31fd`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: PR 전용 7개 섹션·체크박스 확인, Issue template 변경 없음, 애플리케이션·Frontend 변경 없음, `git diff --check` 통과
+- Reviewer: 최신 HEAD `009200c`, Blocking 수정 후 Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-23 squash merge
 - 범위: PR 전용 template, 당시 open 상태였던 PR #12 본문에 merge 전 새 형식 적용, Issue #11 완료 기록
 - 제외: Issue template, 애플리케이션·Frontend 코드, 템플릿 적용 전에 이미 병합된 PR #2·#4·#6·#8·#10 본문 수정
-
-## 완료
 
 ### Backend Issue #11 — 좌석 복합 인덱스와 deadlock 비교 기준선
 
