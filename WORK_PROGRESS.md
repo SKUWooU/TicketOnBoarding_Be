@@ -16,8 +16,9 @@
 ### Backend Issue #19 — Docker Compose 기반 로컬 Backend 실행 기준선
 
 - Issue: [#19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
+- PR: [#20](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/20)
 - Branch: `chore/#19-local-backend-runtime`
-- 상태: 구성·실제 기동·HTTP smoke·근거 문서 및 전체 검증 완료, PR 생성 전
+- 상태: 구성·실제 기동·HTTP smoke·근거 문서 및 전체 검증 완료, Reviewer 검토 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: Compose config 통과·MariaDB healthy, local `bootRun` port 18080 기동, `GET /main` 200 JSON, DB admin 1·concert 0 및 실제 SELECT 확인, 외부 호출 없음, 종료·volume 보존, 전체 Testcontainers test invocation 19개·`git diff --check` 통과

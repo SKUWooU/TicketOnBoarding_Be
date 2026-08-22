@@ -192,3 +192,4 @@ Compose MariaDB가 healthy인 상태에서 `bootRun`이 18080 port로 시작했�
 ### 링크
 
 - [Backend Issue #19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
+- [Backend PR #20](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/20)

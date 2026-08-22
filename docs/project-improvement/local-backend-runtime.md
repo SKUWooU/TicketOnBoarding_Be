@@ -157,5 +157,6 @@ docker compose -f compose.yml down -v
 ## 연결
 
 - [Issue #19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
+- [PR #20](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/20)
 - [Backend 아키텍처 학습 기준선](backend-architecture-learning-baseline.md)
 - [ADR-0001](adr/0001-schema-migration-ownership.md)
