@@ -22,8 +22,8 @@
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: PR 전용 7개 섹션·체크박스 확인, Issue template 변경 없음, 애플리케이션·Frontend 변경 없음, `git diff --check` 통과
-- 범위: PR 전용 template, PR #12 본문 새 형식 적용, Issue #11 완료 기록
-- 제외: Issue template, 애플리케이션·Frontend 코드, 과거 병합 PR 본문 일괄 수정
+- 범위: PR 전용 template, 당시 open 상태였던 PR #12 본문에 merge 전 새 형식 적용, Issue #11 완료 기록
+- 제외: Issue template, 애플리케이션·Frontend 코드, 템플릿 적용 전에 이미 병합된 PR #2·#4·#6·#8·#10 본문 수정
 
 ## 완료
 
