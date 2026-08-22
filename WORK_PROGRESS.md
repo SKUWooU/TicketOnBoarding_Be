@@ -13,19 +13,33 @@
 
 ## 진행 중
 
+### Backend Issue #17 — 좌석 복합 unique index migration 안전성 기준선
+
+- Issue: [#17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
+- Branch: `test/#17-seat-index-migration-baseline`
+- 상태: migration 테스트·근거 문서·ADR 및 전체 검증 완료, PR 생성 전
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 중복 key count 2, DDL `23000/1062`, index 없음·row 2 유지; clean unique index 후 중복 insert `23000/1062`·row 1 유지; 전체 Testcontainers test invocation 19개 통과
+- 범위: 중복 사전 점검 SQL, 복합 unique index DDL 성공·실패와 실패 후 상태, schema ownership·Flyway 적용 조건
+- 제외: 운영 DB·데이터 정리, Flyway 활성화·전체 schema baseline, 애플리케이션·Frontend 동작 변경
+
+## 완료
+
 ### Backend Issue #15 — 복수 좌석 잠금 순서 정규화와 예약 요청 검증
 
 - Issue: [#15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15)
 - PR: [#16](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/16)
 - Branch: `fix/#15-canonical-seat-lock-order`
-- 상태: PR 생성 및 전체 검증 완료, Reviewer 검토 전
+- squash commit: `757ea05b35b91d87e0bb7a779c0cd1c14a368858`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: indexed 반대 순서 3회 모두 canonical `A1` 첫 query·deadlock 0·성공 1/예약 충돌 1, invalid input lock query 0, 전체 Testcontainers test invocation 18개 통과
+- Reviewer: 최신 HEAD `6ed1403`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-23 squash merge
 - 범위: canonical 좌석 잠금 순서, 요청 좌석 목록 검증, indexed 반대 순서 deadlock 회귀, 기존 예약 정합성 회귀
 - 제외: 운영 복합 index·Flyway, retry·분산 lock·대기열, 임시 점유·결제·Frontend
-
-## 완료
 
 ### Backend Issue #13 — PR 전용 템플릿 분리
 
