@@ -148,3 +148,4 @@ Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3�
 ### 링크
 
 - [Backend Issue #15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15)
+- [Backend PR #16](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/16)

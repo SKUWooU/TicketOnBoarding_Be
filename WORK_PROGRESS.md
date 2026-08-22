@@ -16,8 +16,9 @@
 ### Backend Issue #15 — 복수 좌석 잠금 순서 정규화와 예약 요청 검증
 
 - Issue: [#15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15)
+- PR: [#16](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/16)
 - Branch: `fix/#15-canonical-seat-lock-order`
-- 상태: 구현·근거 문서 및 전체 검증 완료, PR 생성 전
+- 상태: PR 생성 및 전체 검증 완료, Reviewer 검토 전
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: indexed 반대 순서 3회 모두 canonical `A1` 첫 query·deadlock 0·성공 1/예약 충돌 1, invalid input lock query 0, 전체 Testcontainers test invocation 18개 통과
