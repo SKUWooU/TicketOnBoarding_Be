@@ -25,6 +25,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -60,6 +61,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create",
@@ -421,9 +424,11 @@ class SeatReservationConcurrencyIntegrationTest {
 
         try {
             List<Map<String, Object>> indexes = jdbcTemplate.queryForList("SHOW INDEX FROM seat");
-            List<String> compositeIndexColumns = indexes.stream()
+            List<Map<String, Object>> compositeIndexRows = indexes.stream()
                     .filter(row -> SEAT_COMPOSITE_UNIQUE_INDEX.equals(row.get("Key_name")))
                     .sorted(Comparator.comparingInt(row -> ((Number) row.get("Seq_in_index")).intValue()))
+                    .toList();
+            List<String> compositeIndexColumns = compositeIndexRows.stream()
                     .map(row -> String.valueOf(row.get("Column_name")))
                     .toList();
 
@@ -440,13 +445,49 @@ class SeatReservationConcurrencyIntegrationTest {
             );
 
             assertThat(compositeIndexColumns).containsExactly("concert_time_id", "seat_number");
+            assertThat(compositeIndexRows)
+                    .allSatisfy(row -> assertThat(((Number) row.get("Non_unique")).intValue()).isZero());
             assertThat(explain).hasSize(1);
             assertThat(explain.getFirst().get("type")).isEqualTo("const");
             assertThat(explain.getFirst().get("key")).isEqualTo(SEAT_COMPOSITE_UNIQUE_INDEX);
             assertThat(Integer.parseInt(String.valueOf(explain.getFirst().get("rows")))).isEqualTo(1);
+
+            DataAccessException duplicateInsertFailure = catchThrowableOfType(
+                    () -> insertSeat("A1"),
+                    DataAccessException.class
+            );
+            assertSqlFailure(duplicateInsertFailure, "23000", 1062);
+            assertThat(countSeats("A1")).isEqualTo(1);
         } finally {
             dropSeatCompositeUniqueIndex();
         }
+    }
+
+    @Test
+    void duplicateSeatIdentityBlocksUniqueIndexMigrationWithoutChangingData() {
+        insertSeat("A1");
+
+        List<Map<String, Object>> duplicates = jdbcTemplate.queryForList("""
+                SELECT concert_time_id, seat_number, COUNT(*) AS duplicate_count
+                FROM seat
+                GROUP BY concert_time_id, seat_number
+                HAVING COUNT(*) > 1
+                """);
+
+        assertThat(duplicates).singleElement().satisfies(duplicate -> {
+            assertThat(((Number) duplicate.get("concert_time_id")).longValue()).isEqualTo(concertTimeId);
+            assertThat(duplicate.get("seat_number")).isEqualTo("A1");
+            assertThat(((Number) duplicate.get("duplicate_count")).intValue()).isEqualTo(2);
+        });
+
+        DataAccessException migrationFailure = catchThrowableOfType(
+                this::createSeatCompositeUniqueIndex,
+                DataAccessException.class
+        );
+
+        assertSqlFailure(migrationFailure, "23000", 1062);
+        assertThat(hasSeatCompositeUniqueIndex()).isFalse();
+        assertThat(countSeats("A1")).isEqualTo(2);
     }
 
     private List<AttemptResult> runConcurrently(List<String> seatNumbers) throws Exception {
@@ -558,6 +599,42 @@ class SeatReservationConcurrencyIntegrationTest {
                 CREATE UNIQUE INDEX %s
                 ON seat (concert_time_id, seat_number)
                 """.formatted(SEAT_COMPOSITE_UNIQUE_INDEX));
+    }
+
+    private void insertSeat(String seatNumber) {
+        jdbcTemplate.update(
+                "INSERT INTO seat (concert_time_id, reserved, seat_number) VALUES (?, false, ?)",
+                concertTimeId,
+                seatNumber
+        );
+    }
+
+    private int countSeats(String seatNumber) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM seat WHERE concert_time_id = ? AND seat_number = ?",
+                Integer.class,
+                concertTimeId,
+                seatNumber
+        );
+    }
+
+    private boolean hasSeatCompositeUniqueIndex() {
+        return jdbcTemplate.queryForList("SHOW INDEX FROM seat").stream()
+                .anyMatch(row -> SEAT_COMPOSITE_UNIQUE_INDEX.equals(row.get("Key_name")));
+    }
+
+    private void assertSqlFailure(DataAccessException failure, String sqlState, int errorCode) {
+        assertThat(failure).isNotNull();
+        SQLException sqlException = findSqlException(failure);
+        assertNotNull(sqlException);
+        assertThat(sqlException.getSQLState()).isEqualTo(sqlState);
+        assertThat(sqlException.getErrorCode()).isEqualTo(errorCode);
+        System.out.printf(
+                "SEAT_UNIQUE_CONSTRAINT_FAILURE sqlState=%s errorCode=%d message=%s%n",
+                sqlException.getSQLState(),
+                sqlException.getErrorCode(),
+                sqlException.getMessage()
+        );
     }
 
     private void dropSeatCompositeUniqueIndex() {
@@ -674,16 +751,17 @@ class SeatReservationConcurrencyIntegrationTest {
             );
         }
 
-        private static SQLException findSqlException(Throwable throwable) {
-            Throwable current = throwable;
-            while (current != null) {
-                if (current instanceof SQLException sqlException) {
-                    return sqlException;
-                }
-                current = current.getCause();
+    }
+
+    private static SQLException findSqlException(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof SQLException sqlException) {
+                return sqlException;
             }
-            return null;
+            current = current.getCause();
         }
+        return null;
     }
 
     private record InventorySnapshot(int remainingSeats, long successfullyReservedSeats, long reservations) {

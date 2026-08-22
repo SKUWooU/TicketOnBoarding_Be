@@ -36,4 +36,6 @@ ADR은 기술을 도입하거나 보류한 이유와 재검토 조건을 기록�
 
 ## 현재 상태
 
-아직 승인된 ADR이 없습니다. 좌석 잠금, 집계 재고, 대기열, outbox와 메시지 브로커는 재현 근거가 생기기 전까지 BACKLOG 후보이며 ADR 결정으로 취급하지 않습니다.
+- [ADR-0001: 전체 schema baseline 전까지 Flyway 운영 활성화 보류](0001-schema-migration-ownership.md) — 보류
+
+대기열, outbox와 메시지 브로커는 재현 근거가 생기기 전까지 BACKLOG 후보이며 ADR 결정으로 취급하지 않습니다.

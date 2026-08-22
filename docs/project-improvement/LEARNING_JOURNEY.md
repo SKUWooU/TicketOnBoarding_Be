@@ -149,3 +149,24 @@ Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3�
 
 - [Backend Issue #15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15)
 - [Backend PR #16](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/16)
+
+## Issue #17 — 좌석 복합 unique index migration 안전성 기준선
+
+### 재현
+
+현재 JPA 생성 schema에 같은 회차의 `A1`을 한 개 더 insert했다. 중복 사전 점검 query는 해당 key와 count 2를 반환했고 복합 unique index DDL은 SQL state `23000`, MariaDB error `1062`로 실패했다. 실패 후 index는 없었고 두 row는 그대로 유지됐다.
+
+### clean schema 비교
+
+중복이 없는 fixture에서는 `(concert_time_id, seat_number)` column 순서와 `Non_unique=0`을 확인했다. 이후 같은 `A1` insert는 동일한 `23000/1062`로 거부됐고 기존 row는 1개였다.
+
+### 결정
+
+좌석 ALTER migration만 추가하면 신규 DB에 전체 schema가 없어 실패한다. 10개 Entity의 baseline DDL과 기존 DB version을 확인하기 전까지 Flyway 운영 활성화를 보류한다. 실제 조건과 대안은 [ADR-0001](adr/0001-schema-migration-ownership.md)에 기록한다.
+
+상세 내용은 [좌석 복합 unique index migration 안전성 기준선](seat-unique-index-migration-baseline.md)에서 확인한다.
+
+### 링크
+
+- [Backend Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
+- [Backend PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
