@@ -13,19 +13,34 @@
 
 ## 진행 중
 
+### Backend Issue #13 — PR 전용 템플릿 분리
+
+- Issue: [#13](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/13)
+- PR: [#14](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/14)
+- Branch: `docs/#13-pr-template-separation`
+- 상태: PR 생성 및 문서 검증 완료, Reviewer 검토 전
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: PR 전용 7개 섹션·체크박스 확인, Issue template 변경 없음, 애플리케이션·Frontend 변경 없음, `git diff --check` 통과
+- 범위: PR 전용 template, 당시 open 상태였던 PR #12 본문에 merge 전 새 형식 적용, Issue #11 완료 기록
+- 제외: Issue template, 애플리케이션·Frontend 코드, 템플릿 적용 전에 이미 병합된 PR #2·#4·#6·#8·#10 본문 수정
+
+## 완료
+
 ### Backend Issue #11 — 좌석 복합 인덱스와 deadlock 비교 기준선
 
 - Issue: [#11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11)
 - PR: [#12](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/12)
 - Branch: `test/#11-seat-index-deadlock-comparison`
-- 상태: PR 생성 및 전체 검증 완료, Reviewer 검토 전
+- squash commit: `cab2a1663867458065b459c69ca76d81f8f61295`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: indexed 반대 순서 시나리오 3회 모두 `1213/40001` deadlock·victim rollback 확인, 전체 Testcontainers test invocation 16개 통과, `git diff --check` 통과
+- Reviewer: 최신 HEAD `85ff490`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-23 squash merge
 - 범위: test schema 복합 unique index, 잠금 query plan, 첫 lock 동시 획득, 반대 순서 deadlock·rollback·최종 재고 비교
 - 제외: 운영 Entity·schema·예약 로직, Flyway, retry·분산 lock·대기열, 임시 점유·결제·Frontend·부하 테스트
-
-## 완료
 
 ### Backend Issue #9 — 복수 좌석 잠금 순서와 deadlock 기준선
 
