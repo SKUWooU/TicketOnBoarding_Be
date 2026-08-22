@@ -13,19 +13,33 @@
 
 ## 진행 중
 
+### Backend Issue #19 — Docker Compose 기반 로컬 Backend 실행 기준선
+
+- Issue: [#19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
+- Branch: `chore/#19-local-backend-runtime`
+- 상태: 구성·실제 기동·HTTP smoke·근거 문서 및 전체 검증 완료, PR 생성 전
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: Compose config 통과·MariaDB healthy, local `bootRun` port 18080 기동, `GET /main` 200 JSON, DB admin 1·concert 0 및 실제 SELECT 확인, 외부 호출 없음, 종료·volume 보존, 전체 Testcontainers test invocation 19개·`git diff --check` 통과
+- 범위: MariaDB Compose, 공개 가능한 local profile, `bootRun`·HTTP smoke, 실행 근거 문서
+- 제외: Backend Dockerfile·Frontend, 실제 외부 API·결제, Flyway·운영 schema, k6·Actuator·Prometheus
+
+## 완료
+
 ### Backend Issue #17 — 좌석 복합 unique index migration 안전성 기준선
 
 - Issue: [#17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
 - PR: [#18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
 - Branch: `test/#17-seat-index-migration-baseline`
-- 상태: PR 생성 및 전체 검증 완료, Reviewer 검토 전
+- squash commit: `c7ecbc27126ab0553ec39fea26567a2757b166b2`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 중복 key count 2, DDL `23000/1062`, index 없음·row 2 유지; clean unique index 후 중복 insert `23000/1062`·row 1 유지; 전체 Testcontainers test invocation 19개 통과
+- Reviewer: 최신 HEAD `fcdd5c3`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-23 squash merge
 - 범위: 중복 사전 점검 SQL, 복합 unique index DDL 성공·실패와 실패 후 상태, schema ownership·Flyway 적용 조건
 - 제외: 운영 DB·데이터 정리, Flyway 활성화·전체 schema baseline, 애플리케이션·Frontend 동작 변경
-
-## 완료
 
 ### Backend Issue #15 — 복수 좌석 잠금 순서 정규화와 예약 요청 검증
 

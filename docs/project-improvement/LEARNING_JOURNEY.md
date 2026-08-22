@@ -170,3 +170,25 @@ Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3�
 
 - [Backend Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
 - [Backend PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
+
+## Issue #19 — Docker Compose 기반 로컬 Backend 실행 기준선
+
+### 이전 상태
+
+테스트는 Testcontainers property로 실행됐지만 추적된 `application.yml`이 비어 있어 실제 `bootRun`에 필요한 DB와 외부 연동 placeholder가 없었다. HTTP server와 DB를 함께 재현하는 명령도 없었다.
+
+### 구성
+
+MariaDB 10.11.8만 Compose로 실행하고 Backend는 host JVM의 local profile로 실행했다. local profile은 port 18080, Compose DB, disposable Hibernate schema, 비활성 Batch와 외부 호출 불가 기본값을 사용한다.
+
+### 실제 검증
+
+Compose MariaDB가 healthy인 상태에서 `bootRun`이 18080 port로 시작했다. `GET /main`은 200과 두 개의 빈 공연 목록을 반환했고 Backend 로그의 실제 JPA SELECT와 DB의 concert 0건이 일치했다. 기존 DataInitializer의 admin 1건 생성도 확인했다.
+
+서버와 container는 검증 후 종료했고 named volume은 삭제하지 않았다. KOPIS·CoolSMS·OAuth·결제·운영 DB 호출은 없었다.
+
+상세 명령과 환경변수는 [Docker Compose 기반 로컬 Backend 실행 기준선](local-backend-runtime.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
