@@ -16,8 +16,9 @@
 ### Backend Issue #13 — PR 전용 템플릿 분리
 
 - Issue: [#13](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/13)
+- PR: [#14](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/14)
 - Branch: `docs/#13-pr-template-separation`
-- 상태: 구현 및 문서 검증 완료, PR 생성 전
+- 상태: PR 생성 및 문서 검증 완료, Reviewer 검토 전
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: PR 전용 7개 섹션·체크박스 확인, Issue template 변경 없음, 애플리케이션·Frontend 변경 없음, `git diff --check` 통과
