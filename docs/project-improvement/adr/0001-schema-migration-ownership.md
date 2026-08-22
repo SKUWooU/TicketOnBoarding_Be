@@ -52,4 +52,5 @@ test `ddl-auto=create`에서는 제약이 생기지만 운영 `ddl-auto` 정책�
 ## 관련 Issue·PR·측정
 
 - [Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
+- [PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
 - [좌석 복합 unique index migration 안전성 기준선](../seat-unique-index-migration-baseline.md)

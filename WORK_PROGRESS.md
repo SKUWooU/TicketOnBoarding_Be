@@ -16,8 +16,9 @@
 ### Backend Issue #17 — 좌석 복합 unique index migration 안전성 기준선
 
 - Issue: [#17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
+- PR: [#18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
 - Branch: `test/#17-seat-index-migration-baseline`
-- 상태: migration 테스트·근거 문서·ADR 및 전체 검증 완료, PR 생성 전
+- 상태: PR 생성 및 전체 검증 완료, Reviewer 검토 전
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 중복 key count 2, DDL `23000/1062`, index 없음·row 2 유지; clean unique index 후 중복 insert `23000/1062`·row 1 유지; 전체 Testcontainers test invocation 19개 통과

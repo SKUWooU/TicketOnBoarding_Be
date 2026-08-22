@@ -92,6 +92,7 @@ index 생성 후 같은 회차에 `A1`을 다시 insert하면 SQL state `23000`,
 ## 연결
 
 - [Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
+- [PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
 - [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)
 - [복수 좌석 canonical 잠금 순서와 요청 검증](canonical-seat-lock-order.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
