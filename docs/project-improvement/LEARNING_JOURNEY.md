@@ -126,3 +126,25 @@ Issue #9와 같은 fixture에 test용 `(concert_time_id, seat_number)` 복합 un
 
 - [Backend Issue #11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11)
 - [Backend PR #12](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/12)
+
+## Issue #15 — 복수 좌석 canonical 잠금 순서와 요청 검증
+
+### 변경
+
+client가 전달한 좌석 목록을 직접 순회하던 흐름을 복사 후 natural order 정렬로 변경했다. 예약 요청·좌석 목록·좌석 번호의 null·blank와 payload 내부 중복은 첫 좌석 잠금 query 전에 거부한다. 요청 DTO의 원본 목록은 변경하지 않는다.
+
+### 검증
+
+Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3회 실행했다. 두 transaction의 repository query는 모두 `A1`부터 시작했고 SQL deadlock 없이 성공 1·예약 충돌 1로 끝났다. 최종 좌석 2·예약 2·잔여 22와 실패 사용자 예약 0건을 유지했다.
+
+잘못된 좌석 목록은 잠금 query 0회였으며 전체 18개 test invocation이 통과했다. 결과는 로컬 단일 MariaDB·가상 좌석 fixture의 정확성 검증이며 운영 deadlock 발생률이나 처리량 수치가 아니다.
+
+### 다음 결정
+
+운영 복합 unique index는 기존 schema migration 기준과 중복 데이터 검사 없이 추가하지 않는다. 후속 schema Issue에서 migration과 query plan을 검증한 뒤 Phase 5의 예약·결제 상태 전이로 이동한다.
+
+상세 내용은 [복수 좌석 canonical 잠금 순서와 요청 검증](canonical-seat-lock-order.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15)
