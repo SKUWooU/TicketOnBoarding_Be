@@ -125,3 +125,4 @@ Issue #9와 같은 fixture에 test용 `(concert_time_id, seat_number)` 복합 un
 ### 링크
 
 - [Backend Issue #11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11)
+- [Backend PR #12](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/12)

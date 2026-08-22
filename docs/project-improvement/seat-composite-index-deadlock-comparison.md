@@ -105,6 +105,7 @@ deadlock victim은 두 번째 좌석 query에서 실패하기 전에 첫 좌석 
 ## 연결
 
 - [Issue #11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11)
+- [PR #12](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/12)
 - [복수 좌석 잠금 순서와 deadlock 기준선](multi-seat-lock-order-deadlock-baseline.md)
 - [예약 원자성·잔여 좌석 정합성 개선](reservation-atomicity-inventory-consistency.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
