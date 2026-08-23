@@ -29,6 +29,9 @@ import java.util.Optional;
 @Service
 public class SeatReservationService {
 
+    private static final String CANCELLATION_REQUESTED = "취소신청";
+    private static final String CANCELLATION_COMPLETED = "취소완료";
+
     private final SeatRepository seatRepository;
     private final ConcertTimeRepository concertTimeRepository;
     private final ReservationRepository ReservationRepository;
@@ -162,22 +165,30 @@ public class SeatReservationService {
         return reservationRepository.findByStatus("취소신청");
     }
 
-    //에매 취소처리
+    //예매 취소처리
+    @Transactional(rollbackFor = Exception.class)
     public void cancelReservation(Long reservationId) throws Exception {
-        Optional<Reservation> reservation = reservationRepository.findById(reservationId);
-        System.out.println(reservationId);
-        if(reservation.isPresent()){
-            Reservation reservation1 = reservation.get();
-            Seat seat = seatRepository.findByConcertTimeAndSeatNumber(reservation1.getConcertTimeId(), reservation1.getSeatNumber());
-            System.out.println(seat.isReserved());
-            seat.setReserved(false);
-            seatRepository.save(seat);
-            reservation1.setStatus("취소완료");
-            reservationRepository.save(reservation1);
-            ConcertTime concertTime = concertTimeRepository.findById(reservation1.getConcertTimeId()).get();
-            concertTime.setSeatAmount(concertTime.getSeatAmount() + 1);
-            concertTimeRepository.save(concertTime);
-            reservationRepository.save(reservation1);
+        Reservation reservation = reservationRepository.findByIdWithLock(reservationId)
+                .orElseThrow(() -> new IllegalArgumentException("해당하는 예약이 없습니다."));
+
+        if (CANCELLATION_COMPLETED.equals(reservation.getStatus())) {
+            return;
+        }
+        if (!CANCELLATION_REQUESTED.equals(reservation.getStatus())) {
+            throw new IllegalStateException("취소 신청 상태의 예약만 취소할 수 있습니다.");
+        }
+
+        Seat seat = reservation.getSeat();
+        if (seat == null || !seat.isReserved()) {
+            throw new IllegalStateException("예약 좌석 상태가 올바르지 않습니다.");
+        }
+
+        seat.setReserved(false);
+        reservation.setStatus(CANCELLATION_COMPLETED);
+
+        int updatedConcertTimes = concertTimeRepository.increaseSeatAmount(reservation.getConcertTimeId());
+        if (updatedConcertTimes != 1) {
+            throw new IllegalStateException("공연 회차의 잔여 좌석을 복구할 수 없습니다.");
         }
     }
 

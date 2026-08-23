@@ -31,6 +31,15 @@ public interface ConcertTimeRepository extends JpaRepository<ConcertTime,Long> {
             @Param("seatCount") int seatCount
     );
 
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query("""
+            UPDATE ConcertTime ct
+            SET ct.seatAmount = ct.seatAmount + 1
+            WHERE ct.id = :concertTimeId
+            """)
+    int increaseSeatAmount(@Param("concertTimeId") Long concertTimeId);
+
     @Modifying
     @Transactional
     @Query("DELETE FROM ConcertTime ct WHERE ct.concert.concertId = :concertId")

@@ -34,8 +34,14 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create",
@@ -125,25 +131,8 @@ class CancellationConsistencyBaselineIntegrationTest {
     }
 
     @RepeatedTest(3)
-    void duplicateCancellationOverRestoresInventory() throws Exception {
+    void duplicateCancellationRestoresInventoryOnlyOnce() throws Exception {
         seatReservationService.cancelReservation(reservationId);
-        seatReservationService.cancelReservation(reservationId);
-
-        CancellationSnapshot snapshot = cancellationSnapshot();
-
-        assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
-        assertThat(snapshot.seatReserved()).isFalse();
-        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS + 1);
-        assertThat(snapshot.inventoryEquationHolds()).isFalse();
-    }
-
-    @Test
-    void paidReservationCanSkipCancellationRequestState() throws Exception {
-        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
-        reservation.setStatus("결제완료");
-        reservationRepository.saveAndFlush(reservation);
-        entityManager.clear();
-
         seatReservationService.cancelReservation(reservationId);
 
         CancellationSnapshot snapshot = cancellationSnapshot();
@@ -151,6 +140,64 @@ class CancellationConsistencyBaselineIntegrationTest {
         assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
         assertThat(snapshot.seatReserved()).isFalse();
         assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @RepeatedTest(3)
+    void concurrentDuplicateCancellationRestoresInventoryOnlyOnce() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<?> first = executor.submit(() -> cancelWhenStarted(ready, start));
+            Future<?> second = executor.submit(() -> cancelWhenStarted(ready, start));
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
+        assertThat(snapshot.seatReserved()).isFalse();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void paidReservationCannotSkipCancellationRequestState() {
+        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
+        reservation.setStatus("결제완료");
+        reservationRepository.saveAndFlush(reservation);
+        entityManager.clear();
+
+        assertThatThrownBy(() -> seatReservationService.cancelReservation(reservationId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("취소 신청 상태의 예약만 취소할 수 있습니다.");
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("결제완료");
+        assertThat(snapshot.seatReserved()).isTrue();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    private void cancelWhenStarted(CountDownLatch ready, CountDownLatch start) {
+        try {
+            ready.countDown();
+            if (!start.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("동시 취소 시작 신호를 기다리지 못했습니다.");
+            }
+            seatReservationService.cancelReservation(reservationId);
+        } catch (Exception exception) {
+            throw new RuntimeException(exception);
+        }
     }
 
     private CancellationFixture createFixture(String reservationStatus) {

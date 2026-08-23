@@ -13,20 +13,34 @@
 
 ## 진행 중
 
+### Backend Issue #31 — 취소 중복 요청의 재고 중복 복구 방지
+
+- Issue: [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)
+- PR: 생성 예정
+- Branch: `fix/#31-cancellation-idempotency`
+- 상태: 구현·로컬 검증 완료, PR 생성 예정
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: MariaDB 10.11.8 가상 좌석에서 대상 8개 invocation·전체 27개 invocation 성공, 순차·동시 중복 각 3회 모두 잔여 24·불변식 충족, 허용되지 않은 `결제완료` 직접 취소 거부·상태와 재고 유지, `git diff --check` 통과
+- Reviewer: PR 생성·Backend CI 성공 후 독립 Reviewer 검토 예정
+- 범위: 관리자 취소 transaction, 예약 row lock, 취소 상태 정책, 원자적 재고 복구, MariaDB Testcontainers 회귀 테스트
+- 제외: 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
+
+## 완료
+
 ### Backend Issue #29 — auto-merge 연결 Issue 종료 E2E 검증
 
 - Issue: [#29](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/29)
 - PR: [#30](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/30)
 - Branch: `test/#29-auto-merge-issue-close-e2e`
-- 상태: synthetic 문서 diff·Backend CI 완료, Reviewer Blocking 수정 후 재검토 대기
+- squash commit: `d514c791ebd81db6c0c3b8798afbfcfe85fdd51d`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 초기 synthetic 문서 커밋 `4ab4459ee1db2b1ca982a4ae90ec007ba3ae2ea1`의 Backend CI 1분 43초, 첫 Blocking 수정 커밋 `4de6f06e66029fd7db3768c74abbc413bf74cc90`의 Backend CI 1분 8초 성공; auto-merge, Issue #27·#29 종료, 원격 branch 삭제와 PR 결과 comment 확인은 재검토 후 수행 예정
-- Reviewer: 첫 검토에서 실제 PR·CI 상태와 진행 문서의 예정 표현 불일치 Blocking 확인, 수정 후 최신 HEAD 재검토 예정
+- 검증: 최종 HEAD `85a4cd712a46187d787aa025e953fa8ced76799b` Backend CI 58초 성공, auto-merge Action `32654934930` 성공, Issue #27·#29 종료와 원격 branch 삭제·결과 comment 확인
+- Reviewer: 두 차례 상태 기록 Blocking 수정 후 최종 HEAD Blocking 없음, PR 본문 CI 체크박스 Non-blocking, `MERGE_READY: YES`
 - 범위: 문서 상태 diff와 실제 GitHub Actions 성공 경로
 - 제외: 애플리케이션·Frontend·배포·외부 API·결제·운영 데이터 변경
-
-## 완료
 
 ### Backend Issue #27 — auto-merge 후 연결 Issue 명시적 종료
 
