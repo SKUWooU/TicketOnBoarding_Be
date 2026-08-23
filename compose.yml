@@ -1,0 +1,21 @@
+services:
+  mariadb:
+    image: mariadb:10.11.8
+    ports:
+      - "${ONTICKET_DB_PORT:-3307}:3306"
+    environment:
+      MARIADB_DATABASE: "${ONTICKET_DB_NAME:-onticket_local}"
+      MARIADB_USER: "${ONTICKET_DB_USERNAME:-onticket}"
+      MARIADB_PASSWORD: "${ONTICKET_DB_PASSWORD:-onticket}"
+      MARIADB_ROOT_PASSWORD: "${ONTICKET_DB_ROOT_PASSWORD:-onticket-root}"
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u$${MARIADB_USER} -p$${MARIADB_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - onticket-mariadb-data:/var/lib/mysql
+
+volumes:
+  onticket-mariadb-data:
