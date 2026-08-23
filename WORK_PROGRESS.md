@@ -13,19 +13,33 @@
 
 ## 진행 중
 
+### Backend Issue #27 — auto-merge 후 연결 Issue 명시적 종료
+
+- Issue: [#27](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/27)
+- Branch: `fix/#27-auto-merge-close-issues`
+- 상태: PR 자동 merge 후 연결 Issue 종료 누락 수정 중
+- 계획 승인: 완료
+- 구현: 진행 중
+- 검증: actionlint, Backend CI, no-reference·already-closed·same-repository OPEN Issue 분기, default branch 반영 후 synthetic E2E
+- 범위: auto-merge 후 같은 저장소의 열린 `closingIssuesReferences` 명시적 종료
+- 제외: 다른 저장소 Issue, 애플리케이션·Frontend·배포·외부 연동 변경
+
+## 완료
+
 ### Backend Issue #25 — Reviewer auto-merge gate E2E 검증
 
 - Issue: [#25](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/25)
 - PR: [#26](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/26)
 - Branch: `test/#25-auto-merge-e2e`
-- 상태: stale HEAD 거부·실패 comment·PR OPEN 확인, 최신 HEAD Reviewer 승인 기반 자동 병합 검증 대기
+- squash commit: `3496aa1c088fcace3e2fea6051ca0cd739144cb5`
+- 상태: partial 완료, Issue 자동 종료 누락은 #27로 분리
 - 계획 승인: 완료
-- 구현: stale gate 완료, 성공 gate 대기
-- 검증: 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd5531c8e` 승인 거부, Action run `32651317141` 실패, PR OPEN·실패 원인 comment 확인, Backend CI 1분 36초 성공; 최신 review 자동 merge 예정
+- 구현: 완료
+- 검증: stale HEAD Action 실패·PR OPEN·원인 comment, 최신 HEAD·Backend CI 기반 Action 성공·squash merge·원격 branch 삭제, Issue #25는 OPEN으로 남아 후속 연결 후 수동 종료
+- Reviewer: 최신 HEAD `e9f95034b477039dc037c22a24601248954ae57f`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- auto-merge Action run `32651816465` 성공 후 2026-08-24 squash merge
 - 범위: 문서 상태만 변경하는 synthetic PR과 실제 GitHub Actions gate
 - 제외: 애플리케이션·Frontend·배포·외부 API·결제·운영 데이터 변경
-
-## 완료
 
 ### Backend Issue #23 — Reviewer 판정 기반 안전한 auto-merge 구성
 

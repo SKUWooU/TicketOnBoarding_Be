@@ -17,7 +17,7 @@
 11. 별도 Reviewer Agent 검토
 12. Blocking 수정 및 재검토
 13. Reviewer가 검토한 40자리 `REVIEWED_HEAD`와 `MERGE_READY: YES` 기록
-14. GitHub Actions가 최신 HEAD·Backend CI·PR 경계를 검증하고 squash merge
+14. GitHub Actions가 최신 HEAD·Backend CI·PR 경계를 검증하고 squash merge한 뒤 같은 저장소의 열린 연결 Issue 종료
 15. `WORK_PROGRESS.md`, 근거 문서와 `main` 갱신
 16. 로컬·원격 작업 Branch 정리
 17. 다음 Issue 후보 제안
@@ -90,6 +90,6 @@ MERGE_READY: YES/NO
 
 주요 검토 대상은 Issue 범위, 데이터 정합성, transaction·lock·deadlock·멱등성, 인증·인가, 예외와 rollback, 경쟁 조건 테스트, 측정 표현과 과도한 기술 도입 여부입니다.
 
-`MERGE_READY: YES` comment는 허용된 Reviewer가 작성해야 하며 `REVIEWED_HEAD`는 PR의 현재 HEAD와 정확히 일치해야 합니다. Backend CI의 `Backend test`가 성공하지 않았거나 CI 대기 중 HEAD가 바뀌면 auto-merge하지 않습니다. Blocking 수정으로 HEAD가 바뀐 경우 Reviewer는 새 HEAD를 다시 검토합니다.
+`MERGE_READY: YES` comment는 허용된 Reviewer가 작성해야 하며 `REVIEWED_HEAD`는 PR의 현재 HEAD와 정확히 일치해야 합니다. Backend CI의 `Backend test`가 성공하지 않았거나 CI 대기 중 HEAD가 바뀌면 auto-merge하지 않습니다. Blocking 수정으로 HEAD가 바뀐 경우 Reviewer는 새 HEAD를 다시 검토합니다. merge 후에는 PR의 `closingIssuesReferences` 중 같은 저장소에 속한 열린 Issue만 명시적으로 종료하며, 연결 Issue가 없거나 이미 닫혔다면 건너뜁니다.
 
 GitHub Actions는 별도 Reviewer 채팅이나 Implementer 채팅을 호출하지 못합니다. 자동 병합 결과는 PR comment로 남기며, Implementer가 다음 활성 turn에서 main 최신화·로컬 branch 정리·다음 Issue 제안을 이어갑니다.
