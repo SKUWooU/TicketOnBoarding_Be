@@ -225,3 +225,23 @@ PR #28의 최신 HEAD `50d369c4c36756f56dcd3b31a17ff76f4f6aa7cd`는 Backend CI�
 - [Backend PR #24](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/24)
 - [Backend Issue #25](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/25)
 - [Backend PR #26](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/26)
+
+## Issue #31 — 취소 중복 요청의 재고 중복 복구 방지
+
+### 문제와 결정
+
+Issue #21에서 관리자 취소 Service가 상태 검사 없이 좌석 해제와 잔여 수량 증가를 반복해, 같은 예약의 두 번째 순차 호출만으로 잔여가 25가 되는 결함을 확인했다. 단순히 `취소완료`를 검사하는 것만으로는 두 transaction이 동시에 이전 상태를 읽는 경쟁 조건을 막지 못한다.
+
+취소 처리를 단일 transaction으로 묶고 예약 row를 `PESSIMISTIC_WRITE`로 조회한다. 첫 요청만 `취소신청 → 취소완료` 전이와 좌석 해제·회차 잔여 원자 증가를 수행하며, lock을 이어받은 중복 요청은 `취소완료`를 확인하고 변경 없이 성공한다. `결제완료` 등 허용되지 않은 상태와 존재하지 않는 예약, 이미 해제된 좌석은 예외로 거부한다.
+
+### 검증과 한계
+
+MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture에서 정상 취소와 순차 중복을 검증했다. 동시 중복은 test repository proxy가 첫 service transaction의 예약 lock 획득 직후 진행을 보류하고, 두 번째 service transaction이 같은 lock 조회에 진입한 뒤 200ms 동안 반환하지 못하는 것을 확인한 다음 첫 transaction을 commit하도록 제어했다. 이 조건을 3회 반복해 두 요청 모두 성공하고 최종 상태 `취소완료`·미점유·잔여 24와 `24 = remaining + reserved`를 충족했다.
+
+회차 잔여 증가 query가 0건을 반환하도록 reservation의 회차 ID를 명시적으로 어긋나게 한 fixture에서는, 좌석·예약 변경이 flush된 뒤 발생한 예외가 전체 transaction을 rollback해 `취소신청`·점유 1·잔여 23을 유지했다. `결제완료` 직접 취소, 없는 예약과 이미 해제된 좌석도 변경 없이 거부했다. 대상 11개와 전체 Backend 30개 test invocation이 통과했다.
+
+이는 단일 MariaDB와 가상 좌석의 정합성 결과이며 TPS·lock wait·운영 처리량을 측정한 결과가 아니다. 사용자 취소 신청과 관리자 승인 간 경쟁, 서로 다른 예약의 대량 동시 취소, 실제 결제 환불과 전체 상태 enum 전환은 후속 Issue로 남긴다.
+
+### 링크
+
+- [Backend Issue #31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)

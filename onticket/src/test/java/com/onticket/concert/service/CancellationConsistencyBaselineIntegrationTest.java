@@ -17,9 +17,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -32,17 +35,31 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create",
         "spring.jpa.show-sql=false"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(SeatReservationService.class)
+@Import({
+        SeatReservationService.class,
+        CancellationConsistencyBaselineIntegrationTest.ReservationLockBarrierConfiguration.class
+})
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class CancellationConsistencyBaselineIntegrationTest {
@@ -50,6 +67,8 @@ class CancellationConsistencyBaselineIntegrationTest {
     private static final int TOTAL_SEATS = 24;
     private static final String CONCERT_ID = "CANCELLATION-BASELINE-CONCERT";
     private static final String USERNAME = "cancellation-baseline-user";
+    private static final AtomicReference<ReservationLockBarrier> RESERVATION_LOCK_BARRIER =
+            new AtomicReference<>();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -94,6 +113,7 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        RESERVATION_LOCK_BARRIER.set(null);
         deleteFixture();
         CancellationFixture fixture = createFixture("취소신청");
         concertTimeId = fixture.concertTimeId();
@@ -109,6 +129,10 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @AfterEach
     void tearDown() {
+        ReservationLockBarrier barrier = RESERVATION_LOCK_BARRIER.getAndSet(null);
+        if (barrier != null) {
+            barrier.releaseFirstLock();
+        }
         deleteFixture();
     }
 
@@ -125,25 +149,8 @@ class CancellationConsistencyBaselineIntegrationTest {
     }
 
     @RepeatedTest(3)
-    void duplicateCancellationOverRestoresInventory() throws Exception {
+    void duplicateCancellationRestoresInventoryOnlyOnce() throws Exception {
         seatReservationService.cancelReservation(reservationId);
-        seatReservationService.cancelReservation(reservationId);
-
-        CancellationSnapshot snapshot = cancellationSnapshot();
-
-        assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
-        assertThat(snapshot.seatReserved()).isFalse();
-        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS + 1);
-        assertThat(snapshot.inventoryEquationHolds()).isFalse();
-    }
-
-    @Test
-    void paidReservationCanSkipCancellationRequestState() throws Exception {
-        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
-        reservation.setStatus("결제완료");
-        reservationRepository.saveAndFlush(reservation);
-        entityManager.clear();
-
         seatReservationService.cancelReservation(reservationId);
 
         CancellationSnapshot snapshot = cancellationSnapshot();
@@ -151,6 +158,120 @@ class CancellationConsistencyBaselineIntegrationTest {
         assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
         assertThat(snapshot.seatReserved()).isFalse();
         assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @RepeatedTest(3)
+    void concurrentDuplicateCancellationRestoresInventoryOnlyOnce() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ReservationLockBarrier barrier = new ReservationLockBarrier();
+        RESERVATION_LOCK_BARRIER.set(barrier);
+
+        try {
+            Future<?> first = executor.submit(this::cancelReservation);
+            assertThat(barrier.awaitFirstLock()).isTrue();
+
+            Future<?> second = executor.submit(this::cancelReservation);
+            assertThat(barrier.awaitSecondLockAttempt()).isTrue();
+            assertThat(barrier.awaitSecondLock(200, TimeUnit.MILLISECONDS)).isFalse();
+            assertThat(first.isDone()).isFalse();
+            assertThat(second.isDone()).isFalse();
+
+            barrier.releaseFirstLock();
+            assertThat(barrier.awaitSecondLock(5, TimeUnit.SECONDS)).isTrue();
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        } finally {
+            barrier.releaseFirstLock();
+            RESERVATION_LOCK_BARRIER.set(null);
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
+        assertThat(snapshot.seatReserved()).isFalse();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void inventoryRecoveryFailureRollsBackReservationAndSeat() {
+        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
+        reservation.setConcertTimeId(Long.MAX_VALUE);
+        reservationRepository.saveAndFlush(reservation);
+        entityManager.clear();
+
+        assertThatThrownBy(() -> seatReservationService.cancelReservation(reservationId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("공연 회차의 잔여 좌석을 복구할 수 없습니다.");
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소신청");
+        assertThat(snapshot.seatReserved()).isTrue();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void missingReservationIsRejectedWithoutInventoryChange() {
+        assertThatThrownBy(() -> seatReservationService.cancelReservation(Long.MAX_VALUE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("해당하는 예약이 없습니다.");
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소신청");
+        assertThat(snapshot.seatReserved()).isTrue();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void releasedSeatIsRejectedWithoutAdditionalInventoryRecovery() {
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        seat.setReserved(false);
+        seatRepository.saveAndFlush(seat);
+        entityManager.clear();
+
+        assertThatThrownBy(() -> seatReservationService.cancelReservation(reservationId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("예약 좌석 상태가 올바르지 않습니다.");
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소신청");
+        assertThat(snapshot.seatReserved()).isFalse();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+    }
+
+    @Test
+    void paidReservationCannotSkipCancellationRequestState() {
+        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
+        reservation.setStatus("결제완료");
+        reservationRepository.saveAndFlush(reservation);
+        entityManager.clear();
+
+        assertThatThrownBy(() -> seatReservationService.cancelReservation(reservationId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("취소 신청 상태의 예약만 취소할 수 있습니다.");
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("결제완료");
+        assertThat(snapshot.seatReserved()).isTrue();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    private void cancelReservation() {
+        try {
+            seatReservationService.cancelReservation(reservationId);
+        } catch (Exception exception) {
+            throw new RuntimeException(exception);
+        }
     }
 
     private CancellationFixture createFixture(String reservationStatus) {
@@ -245,6 +366,101 @@ class CancellationConsistencyBaselineIntegrationTest {
     ) {
         boolean inventoryEquationHolds() {
             return TOTAL_SEATS == remainingSeats + reservedSeats;
+        }
+    }
+
+    private static final class ReservationLockBarrier {
+        private final AtomicInteger lockAttempts = new AtomicInteger();
+        private final AtomicBoolean firstLockHolder = new AtomicBoolean();
+        private final CountDownLatch firstLockAcquired = new CountDownLatch(1);
+        private final CountDownLatch secondLockAttempted = new CountDownLatch(1);
+        private final CountDownLatch secondLockAcquired = new CountDownLatch(1);
+        private final CountDownLatch releaseFirstLock = new CountDownLatch(1);
+
+        int registerLockAttempt() {
+            int attempt = lockAttempts.incrementAndGet();
+            if (attempt == 2) {
+                secondLockAttempted.countDown();
+            }
+            return attempt;
+        }
+
+        boolean holdFirstLock(int attempt) {
+            return attempt == 1 && firstLockHolder.compareAndSet(false, true);
+        }
+
+        void firstLockAcquired() {
+            firstLockAcquired.countDown();
+        }
+
+        boolean awaitFirstLock() throws InterruptedException {
+            return firstLockAcquired.await(5, TimeUnit.SECONDS);
+        }
+
+        boolean awaitSecondLockAttempt() throws InterruptedException {
+            return secondLockAttempted.await(5, TimeUnit.SECONDS);
+        }
+
+        void secondLockAcquired(int attempt) {
+            if (attempt == 2) {
+                secondLockAcquired.countDown();
+            }
+        }
+
+        boolean awaitSecondLock(long timeout, TimeUnit unit) throws InterruptedException {
+            return secondLockAcquired.await(timeout, unit);
+        }
+
+        void awaitRelease() throws InterruptedException {
+            if (!releaseFirstLock.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("첫 취소 transaction의 lock 해제 신호를 기다리지 못했습니다.");
+            }
+        }
+
+        void releaseFirstLock() {
+            releaseFirstLock.countDown();
+        }
+    }
+
+    @TestConfiguration
+    static class ReservationLockBarrierConfiguration {
+
+        @Bean
+        static BeanPostProcessor reservationRepositoryBarrierBeanPostProcessor() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (!(bean instanceof ReservationRepository reservationRepository)) {
+                        return bean;
+                    }
+
+                    return Proxy.newProxyInstance(
+                            ReservationRepository.class.getClassLoader(),
+                            new Class<?>[]{ReservationRepository.class},
+                            (proxy, method, args) -> {
+                                ReservationLockBarrier barrier = RESERVATION_LOCK_BARRIER.get();
+                                boolean lockQuery = method.getName().equals("findByIdWithLock") && barrier != null;
+                                int lockAttempt = lockQuery ? barrier.registerLockAttempt() : 0;
+
+                                Object result;
+                                try {
+                                    result = method.invoke(reservationRepository, args);
+                                } catch (InvocationTargetException exception) {
+                                    throw exception.getCause();
+                                }
+
+                                if (lockQuery && barrier.holdFirstLock(lockAttempt)) {
+                                    barrier.firstLockAcquired();
+                                    barrier.awaitRelease();
+                                }
+                                if (lockQuery) {
+                                    barrier.secondLockAcquired(lockAttempt);
+                                }
+                                return result;
+                            }
+                    );
+                }
+            };
         }
     }
 }
