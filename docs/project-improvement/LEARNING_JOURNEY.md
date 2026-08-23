@@ -193,3 +193,14 @@ Compose MariaDB가 healthy인 상태에서 `bootRun`이 18080 port로 시작했�
 
 - [Backend Issue #19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
 - [Backend PR #20](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/20)
+
+## Issue #21 — 취소 중복 요청과 상태·재고 정합성 기준선
+
+취소 전 예약 1건, 점유 좌석 1개, 잔여 23인 MariaDB fixture에서 정상 취소는 예약을 `취소완료`, 좌석을 미점유, 잔여를 24로 만들었다. 같은 예약을 한 번 더 취소하면 상태와 좌석은 그대로지만 잔여가 25로 증가해 `24 = remaining + reserved` 불변식이 깨졌다. 동일 조건을 3회 반복해 같은 결과를 확인했다.
+
+현재 service는 기존 예약 상태를 검사하지 않으므로 사용자의 `취소신청`을 거치지 않은 `결제완료` 예약도 바로 `취소완료`로 바뀌었다. 이 기준선은 순차 재시도만으로 멱등성 결함을 확정하므로 동시 barrier나 k6를 추가하지 않았다. 후속 개선에서는 허용 상태 전이, 중복 완료의 결과 정책, 좌석·예약·잔여 수량의 단일 transaction과 잠금 순서를 함께 검증한다.
+
+### 링크
+
+- [Backend Issue #21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21)
+- [Backend PR #22](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/22)

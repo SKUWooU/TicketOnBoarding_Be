@@ -13,19 +13,34 @@
 
 ## 진행 중
 
+### Backend Issue #21 — 취소 중복 요청과 상태·재고 정합성 기준선
+
+- Issue: [#21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21)
+- PR: [#22](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/22)
+- Branch: `test/#21-cancellation-idempotency-baseline`
+- 상태: MariaDB fixture 기준선 구현·전체 검증 완료, Reviewer 검토 대기
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 정상 취소 잔여 24·불변식 충족, 동일 예약 2회 취소 잔여 25·불변식 위반 3회 재현, `결제완료 → 취소완료` 직접 전이 허용, 대상 invocation 5개·전체 invocation 24개·`git diff --check` 통과
+- 범위: MariaDB Testcontainers 가상 좌석 fixture와 현재 취소 동작 기준선
+- 제외: 운영 로직 수정, 동시 취소 barrier, 실제 결제·외부 API·Frontend, k6·Actuator·Prometheus
+
+## 완료
+
 ### Backend Issue #19 — Docker Compose 기반 로컬 Backend 실행 기준선
 
 - Issue: [#19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
 - PR: [#20](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/20)
 - Branch: `chore/#19-local-backend-runtime`
-- 상태: Reviewer Blocking의 외부 호출 차단 보장 표현 수정 및 재검토 준비
+- squash commit: `676325d97176ec7d38e3a4e75eb74910f1e607a6`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: Compose config 통과·MariaDB healthy, local `bootRun` port 18080 기동, `GET /main` 200 JSON, DB admin 1·concert 0 및 실제 SELECT 확인, 외부 호출 없음, 종료·volume 보존, 전체 Testcontainers test invocation 19개·`git diff --check` 통과
+- Reviewer: 최신 HEAD `8f1c493`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-24 squash merge
 - 범위: MariaDB Compose, 공개 가능한 local profile, `bootRun`·HTTP smoke, 실행 근거 문서
 - 제외: Backend Dockerfile·Frontend, 실제 외부 API·결제, Flyway·운영 schema, k6·Actuator·Prometheus
-
-## 완료
 
 ### Backend Issue #17 — 좌석 복합 unique index migration 안전성 기준선
 
