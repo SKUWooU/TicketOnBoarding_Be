@@ -16,13 +16,13 @@
 ### Backend Issue #31 — 취소 중복 요청의 재고 중복 복구 방지
 
 - Issue: [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)
-- PR: 생성 예정
+- PR: [#32](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/32)
 - Branch: `fix/#31-cancellation-idempotency`
-- 상태: 구현·로컬 검증 완료, PR 생성 예정
+- 상태: 구현·로컬 검증·PR 생성 완료, Backend CI 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: MariaDB 10.11.8 가상 좌석에서 대상 8개 invocation·전체 27개 invocation 성공, 순차·동시 중복 각 3회 모두 잔여 24·불변식 충족, 허용되지 않은 `결제완료` 직접 취소 거부·상태와 재고 유지, `git diff --check` 통과
-- Reviewer: PR 생성·Backend CI 성공 후 독립 Reviewer 검토 예정
+- Reviewer: Backend CI 성공 후 독립 Reviewer 검토 예정
 - 범위: 관리자 취소 transaction, 예약 row lock, 취소 상태 정책, 원자적 재고 복구, MariaDB Testcontainers 회귀 테스트
 - 제외: 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
 
