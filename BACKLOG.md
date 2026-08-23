@@ -5,6 +5,7 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 | Phase | 대상 | 문제 가설 또는 목적 | 필요한 근거 | 지금 제외할 것 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | 0 | BE | 협업 절차와 근거 기록 기준이 없다 | Template·workflow·기준선 문서 검토 | 애플리케이션 코드 변경 | 완료 ([#1](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/1), [PR #2](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/2)) |
+| 0-AUTO | BE | Reviewer 결과 전달과 merge 승인이 Issue마다 반복된다 | 최신 review HEAD, Backend CI, squash merge gate | 배포·외부 연동 자동 승인 | 진행 ([#23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)) |
 | 0-RUN | BE | 실제 Backend·DB 로컬 실행 경로가 없다 | Compose health, `bootRun`, HTTP·SQL smoke | Backend image·운영 배포·부하 측정 | 완료 ([#19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)) |
 | 0-FE | FE | 독립 저장소의 작업 기록 기준이 없다 | BE 기준과 중복·차이를 조사한 FE Issue | BE Issue 한 개로 FE까지 수정 | 후보 |
 | 1 | BE | 예약 경합을 반복 재현할 기반이 없다 | Java 21, MariaDB Testcontainers, 외부 연동 비활성화, 명시적 fixture | 동시성 로직 개선 | 완료 ([#3](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/3), [PR #4](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/4)) |

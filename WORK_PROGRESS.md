@@ -13,19 +13,33 @@
 
 ## 진행 중
 
+### Backend Issue #23 — Reviewer 판정 기반 안전한 auto-merge 구성
+
+- Issue: [#23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
+- Branch: `chore/#23-reviewer-auto-merge`
+- 상태: 계획 승인, Backend CI·Reviewer auto-merge gate 구현 중
+- 계획 승인: 완료
+- 구현: 진행 중
+- 검증: workflow 정적 검사, PR Backend CI, Reviewer actor·HEAD·판정·CI gate
+- 범위: Backend CI, Reviewer comment 기반 최신 HEAD squash merge, 협업 절차 갱신
+- 제외: Frontend, 배포, 외부 API·결제·운영 데이터 자동 승인, 다음 Agent 자동 호출
+
+## 완료
+
 ### Backend Issue #21 — 취소 중복 요청과 상태·재고 정합성 기준선
 
 - Issue: [#21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21)
 - PR: [#22](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/22)
 - Branch: `test/#21-cancellation-idempotency-baseline`
-- 상태: MariaDB fixture 기준선 구현·전체 검증 완료, Reviewer 검토 대기
+- squash commit: `a17f2812a698dac6323513d14414681de603a525`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 정상 취소 잔여 24·불변식 충족, 동일 예약 2회 취소 잔여 25·불변식 위반 3회 재현, `결제완료 → 취소완료` 직접 전이 허용, 대상 invocation 5개·전체 invocation 24개·`git diff --check` 통과
+- Reviewer: 최신 HEAD `d82e3f3`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 사용자 최종 승인 후 2026-08-24 squash merge
 - 범위: MariaDB Testcontainers 가상 좌석 fixture와 현재 취소 동작 기준선
 - 제외: 운영 로직 수정, 동시 취소 barrier, 실제 결제·외부 API·Frontend, k6·Actuator·Prometheus
-
-## 완료
 
 ### Backend Issue #19 — Docker Compose 기반 로컬 Backend 실행 기준선
 
