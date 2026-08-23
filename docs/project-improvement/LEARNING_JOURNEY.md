@@ -211,7 +211,11 @@ Compose MariaDB가 healthy인 상태에서 `bootRun`이 18080 port로 시작했�
 
 workflow는 `actionlint 1.7.7`을 통과했고 PR의 첫 Ubuntu `Backend test`는 1분 37초에 성공했다. `issue_comment` workflow는 default branch의 정의만 사용하므로 이 PR 병합 이후 synthetic PR에서 stale HEAD·실패 gate·성공 merge를 검증해야 한다. 외부 API·결제·운영 데이터·배포와 사용자 선택이 필요한 설계는 상시 승인 범위에서 제외한다.
 
+Issue #25의 synthetic PR에서 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd5531c8e`를 승인한 comment를 남기자 Action은 실패했고 PR은 OPEN을 유지했다. GitHub Actions는 `Reviewer가 검토한 HEAD와 현재 HEAD가 다릅니다`라는 원인을 comment로 남겼다. 최신 HEAD와 CI 성공을 사용하는 실제 Reviewer comment의 자동 squash merge는 같은 Issue의 성공 경로로 이어서 확인한다.
+
 ### 링크
 
 - [Backend Issue #23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
 - [Backend PR #24](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/24)
+- [Backend Issue #25](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/25)
+- [Backend PR #26](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/26)
