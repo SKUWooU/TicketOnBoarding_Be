@@ -16,11 +16,12 @@
 ### Backend Issue #23 — Reviewer 판정 기반 안전한 auto-merge 구성
 
 - Issue: [#23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
+- PR: [#24](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/24)
 - Branch: `chore/#23-reviewer-auto-merge`
-- 상태: 계획 승인, Backend CI·Reviewer auto-merge gate 구현 중
+- 상태: Backend CI·Reviewer auto-merge gate 구현 및 첫 CI 검증 완료, Reviewer 검토 대기
 - 계획 승인: 완료
-- 구현: 진행 중
-- 검증: workflow 정적 검사, PR Backend CI, Reviewer actor·HEAD·판정·CI gate
+- 구현: 완료
+- 검증: actionlint 1.7.7 통과, 로컬 전체 Gradle test 24 invocation 기준 성공, PR Ubuntu `Backend test` 1분 37초 통과, 실제 auto-merge 성공·거부 gate는 default branch 반영 후 synthetic PR에서 검증 예정
 - 범위: Backend CI, Reviewer comment 기반 최신 HEAD squash merge, 협업 절차 갱신
 - 제외: Frontend, 배포, 외부 API·결제·운영 데이터 자동 승인, 다음 Agent 자동 호출
 

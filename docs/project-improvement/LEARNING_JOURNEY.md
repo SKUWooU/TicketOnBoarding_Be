@@ -204,3 +204,14 @@ Compose MariaDB가 healthy인 상태에서 `bootRun`이 18080 port로 시작했�
 
 - [Backend Issue #21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21)
 - [Backend PR #22](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/22)
+
+## Issue #23 — Reviewer 판정 기반 안전한 auto-merge
+
+반복되는 최종 승인 전달을 줄이되 comment 문자열 하나만으로 병합하지 않는다. PR마다 Java 21·Testcontainers 전체 테스트를 실행하고, 허용 Reviewer가 기록한 40자리 `REVIEWED_HEAD`가 현재 같은 저장소의 `main` 대상 PR HEAD와 일치하는지 확인한다. 최신 `Backend test`가 성공한 뒤에도 HEAD를 다시 비교하고 `--match-head-commit`으로 squash merge한다.
+
+workflow는 `actionlint 1.7.7`을 통과했고 PR의 첫 Ubuntu `Backend test`는 1분 37초에 성공했다. `issue_comment` workflow는 default branch의 정의만 사용하므로 이 PR 병합 이후 synthetic PR에서 stale HEAD·실패 gate·성공 merge를 검증해야 한다. 외부 API·결제·운영 데이터·배포와 사용자 선택이 필요한 설계는 상시 승인 범위에서 제외한다.
+
+### 링크
+
+- [Backend Issue #23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
+- [Backend PR #24](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/24)
