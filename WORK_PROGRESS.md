@@ -16,11 +16,12 @@
 ### Backend Issue #27 — auto-merge 후 연결 Issue 명시적 종료
 
 - Issue: [#27](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/27)
+- PR: [#28](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/28)
 - Branch: `fix/#27-auto-merge-close-issues`
-- 상태: PR 자동 merge 후 연결 Issue 종료 누락 수정 중
+- 상태: 연결 Issue 종료 보완·정적 검사·Backend CI 완료, Reviewer 검토 대기
 - 계획 승인: 완료
-- 구현: 진행 중
-- 검증: actionlint, Backend CI, no-reference·already-closed·same-repository OPEN Issue 분기, default branch 반영 후 synthetic E2E
+- 구현: 완료
+- 검증: actionlint 1.7.7·`git diff --check` 통과, PR Backend CI 1분 48초 성공, no-reference·already-closed·same-repository OPEN Issue 분기 정적 검토, default branch 반영 후 synthetic E2E 예정
 - 범위: auto-merge 후 같은 저장소의 열린 `closingIssuesReferences` 명시적 종료
 - 제외: 다른 저장소 Issue, 애플리케이션·Frontend·배포·외부 연동 변경
 
