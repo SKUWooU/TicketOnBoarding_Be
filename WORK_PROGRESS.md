@@ -13,19 +13,33 @@
 
 ## 진행 중
 
+### Backend Issue #25 — Reviewer auto-merge gate E2E 검증
+
+- Issue: [#25](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/25)
+- Branch: `test/#25-auto-merge-e2e`
+- 상태: stale HEAD 거부와 최신 HEAD 자동 병합 synthetic PR 준비
+- 계획 승인: 완료
+- 구현: 진행 중
+- 검증: stale review Action 실패·PR OPEN, 최신 review·CI 성공 후 squash merge, Issue 종료·원격 branch 삭제
+- 범위: 문서 상태만 변경하는 synthetic PR과 실제 GitHub Actions gate
+- 제외: 애플리케이션·Frontend·배포·외부 API·결제·운영 데이터 변경
+
+## 완료
+
 ### Backend Issue #23 — Reviewer 판정 기반 안전한 auto-merge 구성
 
 - Issue: [#23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
 - PR: [#24](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/24)
 - Branch: `chore/#23-reviewer-auto-merge`
-- 상태: Reviewer Blocking의 배포 사전 승인 경계 명시 후 재검토 준비
+- squash commit: `2b0a0c7b0455c7f5ad61dcfce5915ddf43c93512`
+- 상태: 완료, 실제 gate E2E는 Issue #25에서 검증
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: actionlint 1.7.7 통과, 로컬 전체 Gradle test 24 invocation 기준 성공, PR Ubuntu `Backend test` 1분 37초 통과, 실제 auto-merge 성공·거부 gate는 default branch 반영 후 synthetic PR에서 검증 예정
+- 검증: actionlint 1.7.7 통과, 로컬 전체 Gradle test 24 invocation 기준 성공, 최신 PR Ubuntu `Backend test` 1분 5초 통과
+- Reviewer: 최신 HEAD `1e0898b306539697c335dcd35146382341a0236d`, Blocking·Non-blocking 없음, `MERGE_READY: YES`
+- 상시 승인 gate 충족 후 2026-08-24 squash merge
 - 범위: Backend CI, Reviewer comment 기반 최신 HEAD squash merge, 협업 절차 갱신
 - 제외: Frontend, 배포, 외부 API·결제·운영 데이터 자동 승인, 다음 Agent 자동 호출
-
-## 완료
 
 ### Backend Issue #21 — 취소 중복 요청과 상태·재고 정합성 기준선
 
