@@ -18,11 +18,11 @@
 - Issue: [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)
 - PR: [#32](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/32)
 - Branch: `fix/#31-cancellation-idempotency`
-- 상태: 첫 Reviewer Blocking 수정·로컬 재검증 완료, 최신 HEAD push 예정
+- 상태: 첫 Reviewer Blocking 수정·Backend CI 완료, 재검토 대기
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 대상 11개·전체 30개 invocation 성공, 첫 lock 보유 중 두 번째 lock 조회의 200ms 미반환과 해제 후 완료 확인, 회차 증가 0건 예외 후 예약·좌석 rollback, 없는 예약·이미 해제된 좌석 거부 검증; 이전 HEAD `1add2ad9970b4d6e0349942ef85d12c27d0c54d6` Backend CI 1분 34초 성공
-- Reviewer: HEAD `1add2ad9970b4d6e0349942ef85d12c27d0c54d6`에서 결정적 lock wait·변경 후 실패 rollback 테스트와 진행 상태 동기화 Blocking 확인, 세 항목 수정 후 재검토 예정
+- 검증: 대상 11개·전체 30개 invocation 성공, 첫 lock 보유 중 두 번째 lock 조회의 200ms 미반환과 해제 후 완료 확인, 회차 증가 0건 예외 후 예약·좌석 rollback, 없는 예약·이미 해제된 좌석 거부 검증; Blocking 수정 커밋 `47e7f254dd2310a63bdcce0e50dad8ffb1635279` Backend CI 56초 성공
+- Reviewer: HEAD `1add2ad9970b4d6e0349942ef85d12c27d0c54d6`에서 결정적 lock wait·변경 후 실패 rollback 테스트와 진행 상태 동기화 Blocking 확인, 세 항목 수정·CI 성공 후 재검토 대기
 - 범위: 관리자 취소 transaction, 예약 row lock, 취소 상태 정책, 원자적 재고 복구, MariaDB Testcontainers 회귀 테스트
 - 제외: 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
 
