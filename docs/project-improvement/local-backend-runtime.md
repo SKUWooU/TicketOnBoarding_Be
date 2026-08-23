@@ -2,7 +2,7 @@
 
 ## 목적
 
-기존 저장소는 추적된 `application.yml`이 비어 있어 Testcontainers 테스트는 실행할 수 있지만 실제 HTTP 서버를 `bootRun`으로 재현할 수 없었다. 이 기준선은 외부 연동 없이 host의 Spring Boot Backend와 Docker Compose MariaDB를 연결하고 실제 HTTP 요청까지 검증한다.
+기존 저장소는 추적된 `application.yml`이 비어 있어 Testcontainers 테스트는 실행할 수 있지만 실제 HTTP 서버를 `bootRun`으로 재현할 수 없었다. 이 기준선은 외부 연동 경로를 실행하지 않고 host의 Spring Boot Backend와 Docker Compose MariaDB를 연결해 실제 HTTP 요청까지 검증한다.
 
 Backend image나 Frontend는 포함하지 않는다.
 
@@ -20,7 +20,7 @@ MariaDB 10.11.8 (Docker Compose)
 - Docker Desktop과 Docker Compose
 - Backend 저장소 root
 
-실제 KOPIS·CoolSMS·Naver OAuth·결제 credential은 필요하지 않다. local profile의 기본값은 외부 호출에 사용할 수 없는 값이다.
+이번 smoke 경로에는 실제 KOPIS·CoolSMS·Naver OAuth·결제 credential이 필요하지 않다. local profile에는 실제 secret 대신 인증에 사용할 수 없는 placeholder가 들어가지만, 이 값이 외부 네트워크 요청 자체를 차단하지는 않는다.
 
 ## 구성
 
@@ -100,6 +100,8 @@ Backend 로그에서 `ConcertController#getMainPage()` 매핑과 `concert`, `con
 - `DataInitializer`는 기존 동작대로 local DB에 기본 admin row 1건을 생성한다.
 
 이번 검증 중 외부 API와 운영 DB 호출은 없었다.
+
+local profile은 외부 연동의 network isolation을 보장하지 않는다. KOPIS client와 CoolSMS SDK에는 실제 외부 host를 사용하는 경로가 있으므로 `local,batch` profile을 함께 활성화하거나 SMS·OAuth 관련 endpoint를 직접 호출하면 placeholder credential로도 외부 요청을 시도할 수 있다. 로컬 자동화 검증에서는 해당 경로를 호출하지 않고 명시적인 fixture 또는 mock server를 사용한다. 외부 client의 local 전용 대체와 강제 차단은 별도 Issue에서 다룬다.
 
 ## 환경변수 재정의
 

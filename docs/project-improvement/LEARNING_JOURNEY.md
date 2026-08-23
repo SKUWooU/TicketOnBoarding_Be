@@ -179,7 +179,7 @@ Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3�
 
 ### 구성
 
-MariaDB 10.11.8만 Compose로 실행하고 Backend는 host JVM의 local profile로 실행했다. local profile은 port 18080, Compose DB, disposable Hibernate schema, 비활성 Batch와 외부 호출 불가 기본값을 사용한다.
+MariaDB 10.11.8만 Compose로 실행하고 Backend는 host JVM의 local profile로 실행했다. local profile은 port 18080, Compose DB, disposable Hibernate schema, 비활성 Batch와 실제 인증에 사용할 수 없는 외부 연동 placeholder를 사용한다. placeholder는 외부 요청 자체를 차단하지 않으므로 smoke에서는 관련 endpoint를 호출하지 않았고, 자동화 검증은 fixture·mock을 사용해야 한다.
 
 ### 실제 검증
 
