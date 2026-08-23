@@ -16,8 +16,9 @@
 ### Backend Issue #25 — Reviewer auto-merge gate E2E 검증
 
 - Issue: [#25](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/25)
+- PR: [#26](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/26)
 - Branch: `test/#25-auto-merge-e2e`
-- 상태: stale HEAD 거부와 최신 HEAD 자동 병합 synthetic PR 준비
+- 상태: 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd5531c8e`와 최신 HEAD를 분리해 stale review gate 검증 준비
 - 계획 승인: 완료
 - 구현: 진행 중
 - 검증: stale review Action 실패·PR OPEN, 최신 review·CI 성공 후 squash merge, Issue 종료·원격 branch 삭제
