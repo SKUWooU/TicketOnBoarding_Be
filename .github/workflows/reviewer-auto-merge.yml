@@ -109,7 +109,7 @@ jobs:
 
           fail_gate "Backend CI 성공을 제한 시간 안에 확인하지 못했습니다."
 
-      - name: Revalidate HEAD and squash merge
+      - name: Revalidate, squash merge, and close linked issues
         shell: bash
         run: |
           set -euo pipefail
@@ -130,5 +130,37 @@ jobs:
             --delete-branch \
             --match-head-commit "$reviewed_head"
 
+          closing_issues_json="$(gh pr view "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json closingIssuesReferences)"
+          closed_issues=()
+
+          while IFS= read -r issue_number; do
+            [[ -n "$issue_number" ]] || continue
+            issue_state="$(gh issue view "$issue_number" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json state \
+              --jq '.state')"
+            if [[ "$issue_state" == "OPEN" ]]; then
+              if ! gh issue close "$issue_number" \
+                --repo "$GITHUB_REPOSITORY" \
+                --reason completed; then
+                gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
+                  --body "$(printf '## Auto-merge 결과\n\nPR은 squash merge했지만 연결 Issue #%s 종료에 실패했습니다.' "$issue_number")"
+                exit 1
+              fi
+              closed_issues+=("#$issue_number")
+            fi
+          done < <(jq -r --arg repository "$GITHUB_REPOSITORY" '
+            .closingIssuesReferences[]
+            | select((.repository.owner.login + "/" + .repository.name) == $repository)
+            | .number
+          ' <<< "$closing_issues_json")
+
+          closed_summary="없음"
+          if (( ${#closed_issues[@]} > 0 )); then
+            closed_summary="${closed_issues[*]}"
+          fi
+
           gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
-            --body $'## Auto-merge 결과\n\nReviewer 최신 HEAD 승인과 Backend CI 성공을 확인해 squash merge했습니다.'
+            --body "$(printf '## Auto-merge 결과\n\nReviewer 최신 HEAD 승인과 Backend CI 성공을 확인해 squash merge했습니다.\n\n종료한 연결 Issue: %s' "$closed_summary")"

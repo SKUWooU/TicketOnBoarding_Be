@@ -213,6 +213,10 @@ workflow는 `actionlint 1.7.7`을 통과했고 PR의 첫 Ubuntu `Backend test`�
 
 Issue #25의 synthetic PR에서 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd5531c8e`를 승인한 comment를 남기자 Action은 실패했고 PR은 OPEN을 유지했다. GitHub Actions는 `Reviewer가 검토한 HEAD와 현재 HEAD가 다릅니다`라는 원인을 comment로 남겼다. 최신 HEAD와 CI 성공을 사용하는 실제 Reviewer comment의 자동 squash merge는 같은 Issue의 성공 경로로 이어서 확인한다.
 
+최신 HEAD `e9f95034b477039dc037c22a24601248954ae57f`의 실제 Review 이후 Action run `32651816465`는 squash merge와 원격 branch 삭제에 성공했다. 다만 PR이 closing Issue로 #25를 인식했음에도 Issue는 OPEN으로 남았다. #25는 결과와 후속 #27을 연결해 수동 종료했고, workflow가 같은 저장소의 열린 `closingIssuesReferences`를 merge 후 명시적으로 닫도록 보완한다.
+
+Issue #27은 merge 후 같은 저장소의 closing Issue만 필터링하고 OPEN 상태만 명시적으로 닫는다. 이미 닫힌 Issue와 연결 Issue가 없는 PR은 건너뛰며, 종료 실패는 merge 이후 정리 실패로 Action과 PR comment에 드러낸다. [Backend Issue #27](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/27) / [PR #28](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/28)
+
 ### 링크
 
 - [Backend Issue #23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
