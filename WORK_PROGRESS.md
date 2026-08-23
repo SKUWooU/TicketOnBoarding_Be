@@ -16,8 +16,9 @@
 ### Backend Issue #21 — 취소 중복 요청과 상태·재고 정합성 기준선
 
 - Issue: [#21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21)
+- PR: [#22](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/22)
 - Branch: `test/#21-cancellation-idempotency-baseline`
-- 상태: MariaDB fixture 기준선 구현·전체 검증 완료, PR 생성 전
+- 상태: MariaDB fixture 기준선 구현·전체 검증 완료, Reviewer 검토 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 정상 취소 잔여 24·불변식 충족, 동일 예약 2회 취소 잔여 25·불변식 위반 3회 재현, `결제완료 → 취소완료` 직접 전이 허용, 대상 invocation 5개·전체 invocation 24개·`git diff --check` 통과
