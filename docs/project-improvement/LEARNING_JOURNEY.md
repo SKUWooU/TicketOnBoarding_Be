@@ -236,7 +236,9 @@ Issue #21에서 관리자 취소 Service가 상태 검사 없이 좌석 해제�
 
 ### 검증과 한계
 
-MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture에서 정상 취소, 순차 중복 3회, start latch 기반 동시 중복 3회와 `결제완료` 직접 취소 거부를 검증했다. 대상 8개와 전체 Backend 27개 test invocation이 통과했으며, 모든 중복 요청의 최종 상태는 `취소완료`·미점유·잔여 24로 `24 = remaining + reserved`를 충족했다. 허용되지 않은 전이는 상태 `결제완료`·점유 1·잔여 23을 유지했다.
+MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture에서 정상 취소와 순차 중복을 검증했다. 동시 중복은 test repository proxy가 첫 service transaction의 예약 lock 획득 직후 진행을 보류하고, 두 번째 service transaction이 같은 lock 조회에 진입한 뒤 200ms 동안 반환하지 못하는 것을 확인한 다음 첫 transaction을 commit하도록 제어했다. 이 조건을 3회 반복해 두 요청 모두 성공하고 최종 상태 `취소완료`·미점유·잔여 24와 `24 = remaining + reserved`를 충족했다.
+
+회차 잔여 증가 query가 0건을 반환하도록 reservation의 회차 ID를 명시적으로 어긋나게 한 fixture에서는, 좌석·예약 변경이 flush된 뒤 발생한 예외가 전체 transaction을 rollback해 `취소신청`·점유 1·잔여 23을 유지했다. `결제완료` 직접 취소, 없는 예약과 이미 해제된 좌석도 변경 없이 거부했다. 대상 11개와 전체 Backend 30개 test invocation이 통과했다.
 
 이는 단일 MariaDB와 가상 좌석의 정합성 결과이며 TPS·lock wait·운영 처리량을 측정한 결과가 아니다. 사용자 취소 신청과 관리자 승인 간 경쟁, 서로 다른 예약의 대량 동시 취소, 실제 결제 환불과 전체 상태 enum 전환은 후속 Issue로 남긴다.
 

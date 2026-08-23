@@ -18,11 +18,11 @@
 - Issue: [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)
 - PR: [#32](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/32)
 - Branch: `fix/#31-cancellation-idempotency`
-- 상태: 구현·로컬 검증·PR 생성 완료, Backend CI 대기
+- 상태: 첫 Reviewer Blocking 수정·로컬 재검증 완료, 최신 HEAD push 예정
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: MariaDB 10.11.8 가상 좌석에서 대상 8개 invocation·전체 27개 invocation 성공, 순차·동시 중복 각 3회 모두 잔여 24·불변식 충족, 허용되지 않은 `결제완료` 직접 취소 거부·상태와 재고 유지, `git diff --check` 통과
-- Reviewer: Backend CI 성공 후 독립 Reviewer 검토 예정
+- 검증: 대상 11개·전체 30개 invocation 성공, 첫 lock 보유 중 두 번째 lock 조회의 200ms 미반환과 해제 후 완료 확인, 회차 증가 0건 예외 후 예약·좌석 rollback, 없는 예약·이미 해제된 좌석 거부 검증; 이전 HEAD `1add2ad9970b4d6e0349942ef85d12c27d0c54d6` Backend CI 1분 34초 성공
+- Reviewer: HEAD `1add2ad9970b4d6e0349942ef85d12c27d0c54d6`에서 결정적 lock wait·변경 후 실패 rollback 테스트와 진행 상태 동기화 Blocking 확인, 세 항목 수정 후 재검토 예정
 - 범위: 관리자 취소 transaction, 예약 row lock, 취소 상태 정책, 원자적 재고 복구, MariaDB Testcontainers 회귀 테스트
 - 제외: 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
 
