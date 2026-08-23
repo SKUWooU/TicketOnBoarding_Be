@@ -13,19 +13,33 @@
 
 ## 진행 중
 
+### Backend Issue #29 — auto-merge 연결 Issue 종료 E2E 검증
+
+- Issue: [#29](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/29)
+- PR: #30 생성 예정
+- Branch: `test/#29-auto-merge-issue-close-e2e`
+- 상태: synthetic 문서 diff 준비 중
+- 계획 승인: 완료
+- 구현: 진행 중
+- 검증: Reviewer 최신 HEAD·Backend CI·auto-merge, Issue #27·#29 종료, 원격 branch 삭제, PR 결과 comment 확인 예정
+- 범위: 문서 상태 diff와 실제 GitHub Actions 성공 경로
+- 제외: 애플리케이션·Frontend·배포·외부 API·결제·운영 데이터 변경
+
+## 완료
+
 ### Backend Issue #27 — auto-merge 후 연결 Issue 명시적 종료
 
 - Issue: [#27](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/27)
 - PR: [#28](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/28)
 - Branch: `fix/#27-auto-merge-close-issues`
-- 상태: 연결 Issue 종료 보완·정적 검사·Backend CI 완료, Reviewer 검토 대기
+- squash commit: `b5d7347aadf7ce832e9c5df1a80f2765eb1700fe`
+- 상태: 구현·Reviewer 검토·자동 squash merge 완료, default branch의 실제 종료 E2E는 Issue #29에서 검증
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: actionlint 1.7.7·`git diff --check` 통과, PR Backend CI 1분 48초 성공, no-reference·already-closed·same-repository OPEN Issue 분기 정적 검토, default branch 반영 후 synthetic E2E 예정
+- 검증: actionlint 1.7.7·`git diff --check` 통과, 최신 HEAD `50d369c4c36756f56dcd3b31a17ff76f4f6aa7cd`의 Backend CI 56초 성공, no-reference·already-closed·same-repository OPEN Issue 분기 정적 검토
+- Reviewer: 최신 HEAD `50d369c4c36756f56dcd3b31a17ff76f4f6aa7cd`, Blocking 없음, CI 시간과 HEAD 연결 기록 Non-blocking 반영, `MERGE_READY: YES`
 - 범위: auto-merge 후 같은 저장소의 열린 `closingIssuesReferences` 명시적 종료
 - 제외: 다른 저장소 Issue, 애플리케이션·Frontend·배포·외부 연동 변경
-
-## 완료
 
 ### Backend Issue #25 — Reviewer auto-merge gate E2E 검증
 
