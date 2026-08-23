@@ -18,10 +18,10 @@
 - Issue: [#25](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/25)
 - PR: [#26](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/26)
 - Branch: `test/#25-auto-merge-e2e`
-- 상태: 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd5531c8e`와 최신 HEAD를 분리해 stale review gate 검증 준비
+- 상태: stale HEAD 거부·실패 comment·PR OPEN 확인, 최신 HEAD Reviewer 승인 기반 자동 병합 검증 대기
 - 계획 승인: 완료
-- 구현: 진행 중
-- 검증: stale review Action 실패·PR OPEN, 최신 review·CI 성공 후 squash merge, Issue 종료·원격 branch 삭제
+- 구현: stale gate 완료, 성공 gate 대기
+- 검증: 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd5531c8e` 승인 거부, Action run `32651317141` 실패, PR OPEN·실패 원인 comment 확인, Backend CI 1분 36초 성공; 최신 review 자동 merge 예정
 - 범위: 문서 상태만 변경하는 synthetic PR과 실제 GitHub Actions gate
 - 제외: 애플리케이션·Frontend·배포·외부 API·결제·운영 데이터 변경
 
