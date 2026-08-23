@@ -1,0 +1,134 @@
+name: Reviewer auto merge
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  checks: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: reviewer-auto-merge-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: Validate review and squash merge
+    if: >-
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login == 'Oyisbe' &&
+      contains(github.event.comment.body, '## AI Reviewer 검토 결과') &&
+      contains(github.event.comment.body, 'MERGE_READY: YES')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ALLOWED_REVIEWER: Oyisbe
+
+    steps:
+      - name: Validate reviewer decision and reviewed HEAD
+        id: review
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_number="${{ github.event.issue.number }}"
+          reviewer="$(jq -r '.comment.user.login' "$GITHUB_EVENT_PATH")"
+          body="$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")"
+
+          fail_gate() {
+            gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --body "$(printf '## Auto-merge gate\n\n병합하지 않았습니다: %s' "$1")"
+            exit 1
+          }
+
+          if [[ "$reviewer" != "$ALLOWED_REVIEWER" ]]; then
+            fail_gate "허용된 Reviewer의 comment가 아닙니다."
+          fi
+          if ! grep -Fqx '## AI Reviewer 검토 결과' <<< "$body"; then
+            fail_gate "Reviewer comment 제목이 계약과 일치하지 않습니다."
+          fi
+          if ! grep -Eq '^MERGE_READY:[[:space:]]+YES[[:space:]]*$' <<< "$body"; then
+            fail_gate "MERGE_READY: YES 판정이 없습니다."
+          fi
+          if grep -Eq '^MERGE_READY:[[:space:]]+NO[[:space:]]*$' <<< "$body"; then
+            fail_gate "MERGE_READY: NO가 함께 존재합니다."
+          fi
+
+          reviewed_head="$(grep -E '^REVIEWED_HEAD:[[:space:]]+[0-9a-f]{40}[[:space:]]*$' <<< "$body" | awk '{print $2}' | tail -n 1 || true)"
+          if [[ ! "$reviewed_head" =~ ^[0-9a-f]{40}$ ]]; then
+            fail_gate "40자리 REVIEWED_HEAD가 없습니다."
+          fi
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number")"
+          state="$(jq -r '.state' <<< "$pr_json")"
+          base_ref="$(jq -r '.base.ref' <<< "$pr_json")"
+          head_repo="$(jq -r '.head.repo.full_name' <<< "$pr_json")"
+          head_sha="$(jq -r '.head.sha' <<< "$pr_json")"
+
+          [[ "$state" == "open" ]] || fail_gate "열린 PR이 아닙니다."
+          [[ "$base_ref" == "main" ]] || fail_gate "base branch가 main이 아닙니다."
+          [[ "$head_repo" == "$GITHUB_REPOSITORY" ]] || fail_gate "같은 저장소의 branch가 아닙니다."
+          [[ "$reviewed_head" == "$head_sha" ]] || fail_gate "Reviewer가 검토한 HEAD와 현재 HEAD가 다릅니다."
+
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Backend CI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_number="${{ steps.review.outputs.pr_number }}"
+          head_sha="${{ steps.review.outputs.head_sha }}"
+
+          fail_gate() {
+            gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --body "$(printf '## Auto-merge gate\n\n병합하지 않았습니다: %s' "$1")"
+            exit 1
+          }
+
+          for attempt in $(seq 1 60); do
+            checks="$(gh api "repos/$GITHUB_REPOSITORY/commits/$head_sha/check-runs")"
+            status="$(jq -r '([.check_runs[] | select(.name == "Backend test")] | sort_by(.started_at) | last // {}) | .status // "missing"' <<< "$checks")"
+            conclusion="$(jq -r '([.check_runs[] | select(.name == "Backend test")] | sort_by(.started_at) | last // {}) | .conclusion // "pending"' <<< "$checks")"
+
+            if [[ "$status" == "completed" && "$conclusion" == "success" ]]; then
+              exit 0
+            fi
+            if [[ "$status" == "completed" && "$conclusion" != "success" ]]; then
+              fail_gate "Backend CI 결과가 $conclusion 입니다."
+            fi
+            echo "Backend CI 대기 ($attempt/60): status=$status conclusion=$conclusion"
+            sleep 10
+          done
+
+          fail_gate "Backend CI 성공을 제한 시간 안에 확인하지 못했습니다."
+
+      - name: Revalidate HEAD and squash merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_number="${{ steps.review.outputs.pr_number }}"
+          reviewed_head="${{ steps.review.outputs.head_sha }}"
+          current_head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number" --jq '.head.sha')"
+
+          if [[ "$current_head" != "$reviewed_head" ]]; then
+            gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --body $'## Auto-merge gate\n\n병합하지 않았습니다: CI 대기 중 PR HEAD가 변경됐습니다.'
+            exit 1
+          fi
+
+          gh pr merge "$pr_number" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --delete-branch \
+            --match-head-commit "$reviewed_head"
+
+          gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
+            --body $'## Auto-merge 결과\n\nReviewer 최신 HEAD 승인과 Backend CI 성공을 확인해 squash merge했습니다.'
