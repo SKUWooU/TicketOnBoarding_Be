@@ -217,6 +217,8 @@ Issue #25의 synthetic PR에서 이전 HEAD `09ddb4578671b1591f3dc33d9867a57fd55
 
 Issue #27은 merge 후 같은 저장소의 closing Issue만 필터링하고 OPEN 상태만 명시적으로 닫는다. 이미 닫힌 Issue와 연결 Issue가 없는 PR은 건너뛰며, 종료 실패는 merge 이후 정리 실패로 Action과 PR comment에 드러낸다. [Backend Issue #27](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/27) / [PR #28](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/28)
 
+PR #28의 최신 HEAD `50d369c4c36756f56dcd3b31a17ff76f4f6aa7cd`는 Backend CI를 56초에 통과했고 Reviewer `MERGE_READY: YES` 후 `b5d7347aadf7ce832e9c5df1a80f2765eb1700fe`로 자동 squash merge됐다. 이 때는 병합 전 `main`의 workflow가 실행됐으므로 연결 Issue #27은 열린 상태를 유지한다. Issue #29의 문서 전용 synthetic PR에 #27과 #29를 함께 연결해 default branch에 반영된 종료 로직을 실제 경로로 검증한다. [Backend Issue #29](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/29)
+
 ### 링크
 
 - [Backend Issue #23](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/23)
