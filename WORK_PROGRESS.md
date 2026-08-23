@@ -16,12 +16,13 @@
 ### Backend Issue #29 — auto-merge 연결 Issue 종료 E2E 검증
 
 - Issue: [#29](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/29)
-- PR: #30 생성 예정
+- PR: [#30](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/30)
 - Branch: `test/#29-auto-merge-issue-close-e2e`
-- 상태: synthetic 문서 diff 준비 중
+- 상태: synthetic 문서 diff·Backend CI 완료, Reviewer Blocking 수정 후 재검토 대기
 - 계획 승인: 완료
-- 구현: 진행 중
-- 검증: Reviewer 최신 HEAD·Backend CI·auto-merge, Issue #27·#29 종료, 원격 branch 삭제, PR 결과 comment 확인 예정
+- 구현: 완료
+- 검증: 최신 HEAD `4ab4459ee1db2b1ca982a4ae90ec007ba3ae2ea1`의 Backend CI 1분 43초 성공; auto-merge, Issue #27·#29 종료, 원격 branch 삭제와 PR 결과 comment 확인은 재검토 후 수행 예정
+- Reviewer: 첫 검토에서 실제 PR·CI 상태와 진행 문서의 예정 표현 불일치 Blocking 확인, 수정 후 최신 HEAD 재검토 예정
 - 범위: 문서 상태 diff와 실제 GitHub Actions 성공 경로
 - 제외: 애플리케이션·Frontend·배포·외부 API·결제·운영 데이터 변경
 
