@@ -16,9 +16,9 @@
 ### Backend Issue #35 — 사용자 취소 신청의 잠금·상태 전이 원자성 보장
 
 - Issue: [#35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35)
-- PR: 생성 전
+- PR: [#36](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/36)
 - Branch: `fix/35-cancellation-request-atomicity`
-- 상태: 구현·로컬 검증 완료, PR 준비
+- 상태: 구현·로컬 검증 완료, Backend CI 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 관리자 승인→사용자 신청과 사용자 신청→관리자 승인 양방향에서 두 번째 lock 조회의 200ms 미반환·해제 후 완료를 각 3회 확인, 최종 `취소완료`·미점유·잔여 24 유지; 정상·중복·완료 후 신청·다른 사용자·없는 예약·미지원 상태 Service 통합 23개와 Controller 위임·200·400·401 응답 3개, 전체 Backend 45개 invocation 및 `git diff --check` 성공
