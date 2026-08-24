@@ -16,9 +16,9 @@
 ### Backend Issue #37 — 결제 승인과 예약 확정 경계·중복 요청 기준선
 
 - Issue: [#37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37)
-- PR: 생성 전
+- PR: [#38](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/38)
 - Branch: `test/37-payment-reservation-boundary-baseline`
-- 상태: 구현·로컬 검증 완료, PR 준비
+- 상태: 구현·로컬 검증 완료, Backend CI 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 결제 ID·승인 token·금액이 없는 4필드 예약 DTO로 `결제완료` 예약 1건·점유 1·잔여 23 생성; 동일 요청 재시도는 `이미 예약된 좌석입니다.` 실패, 최종 DB snapshot은 첫 성공과 동일; 대상 20개·전체 Backend 47개 invocation 및 `git diff --check` 성공
