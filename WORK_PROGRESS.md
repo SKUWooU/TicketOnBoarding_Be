@@ -16,9 +16,9 @@
 ### Backend Issue #33 — 사용자 취소 신청과 관리자 승인 경합 상태 전이 기준선
 
 - Issue: [#33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33)
-- PR: 생성 전
+- PR: [#34](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/34)
 - Branch: `test/33-cancellation-request-approval-race-baseline`
-- 상태: 구현·로컬 검증 완료, PR 준비
+- 상태: 구현·로컬 검증 완료, Backend CI 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 사용자 조회 완료 → 관리자 승인 commit → 사용자 지연 저장 순서를 latch로 제어해 3회 모두 `취소완료`가 `취소신청`으로 되돌아감을 재현; 좌석 미점유·잔여 24는 유지되고 재승인은 이미 해제된 좌석으로 거부됨; 정상 순차 제어군 포함 대상 15개·전체 Backend 34개 invocation와 `git diff --check` 성공
