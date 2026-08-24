@@ -16,8 +16,9 @@
 ### Backend Issue #41 — 예약 상태 문자열을 명시적 전이 정책으로 전환
 
 - Issue: [#41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41)
+- PR: [#42](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/42)
 - Branch: `refactor/41-reservation-status-transition`
-- 상태: 구현·로컬 검증 완료, PR 준비
+- 상태: 구현·로컬 검증 완료, Backend CI 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 상태·converter·JSON·허용/거부/멱등 전이 단위 6개, 예약·취소 MariaDB 통합 52개와 전체 Backend 65개 invocation 통과; DB·JSON 한글 값과 기존 취소 lock·rollback·재고 불변식 유지
