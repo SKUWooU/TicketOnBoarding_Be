@@ -13,6 +13,16 @@
 
 ## 진행 중
 
+### Backend Issue #45 — Reviewer 자동 병합 알림과 줄바꿈 정규화
+
+- Issue: [#45](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/45)
+- Branch: `chore/45-reviewer-auto-merge-output`
+- 상태: 구현·로컬 검증 완료, PR·CI·Reviewer 대기
+- 계획 승인: 완료
+- 범위: Reviewer 댓글 CRLF 정규화, 성공 시 bot 댓글 제거, 실패 댓글 유지, PR #42 Markdown 댓글 교정
+- 제외: Reviewer의 Blocking/Non-blocking 검토 댓글 제거, 애플리케이션 코드, Frontend
+- 검증: Git Bash fixture에서 LF·CRLF 입력 통과 및 literal `\\n` 입력 거절, `git diff --check` 통과
+
 ### Backend Issue #41 — 예약 상태 문자열을 명시적 전이 정책으로 전환
 
 - Issue: [#41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41)
