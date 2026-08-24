@@ -265,3 +265,25 @@ MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture를 사�
 ### 링크
 
 - [Backend Issue #33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33)
+
+## Issue #35 — 사용자 취소 신청의 잠금·상태 전이 원자성 보장
+
+### 상태 정책과 transaction 경계
+
+사용자 취소 신청의 예약 조회·소유자 확인·상태 변경을 Controller에서 `@Transactional` Service로 이동하고 관리자 승인과 같은 `findByIdWithLock`을 사용한다. `결제완료`만 `취소신청`으로 변경하며 이미 `취소신청`이거나 `취소완료`이면 원하는 결과가 이미 진행 또는 달성된 것으로 보고 변경 없이 성공한다. 다른 사용자, 없는 예약과 알 수 없는 상태는 변경 없이 거부한다.
+
+이 정책은 응답 유실 뒤 같은 요청이 다시 도착해도 상태를 역전시키지 않는다. Controller는 JWT에서 얻은 username과 reservationId를 Service에 위임하고 기존 성공·인증·검증 실패 HTTP 응답을 유지한다.
+
+### 개선 후 경합 검증
+
+Issue #33과 같은 MariaDB 10.11.8·가상 좌석 24개 fixture에서 관리자 승인 transaction이 예약 lock을 획득한 직후 진행을 보류했다. 사용자 신청이 같은 lock 조회에 진입했지만 200ms 동안 반환하지 못하는 것을 확인한 뒤 관리자 transaction을 commit했다. lock을 이어받은 사용자 신청은 최신 `취소완료`를 읽어 변경 없이 성공했다. 반대로 `결제완료` 예약의 사용자 신청이 먼저 lock을 보유한 경우에는 관리자 승인이 대기한 뒤 `취소신청` commit을 이어받아 취소를 완료했다. 두 순서를 각 3회 반복해 최종 `취소완료`·좌석 미점유·잔여 24를 유지했다.
+
+정상 신청과 순차 중복, 취소 완료 후 재요청, 다른 사용자·없는 예약·미지원 상태도 예약·좌석·잔여 수량 snapshot으로 교차 검증했다. Controller 단위 테스트는 인증된 사용자 위임과 기존 200·400·401 응답을 확인했다. Service 통합 23개·Controller 3개와 전체 Backend 45개 test invocation이 통과했다.
+
+### 범위와 한계
+
+동일 예약의 사용자 신청과 관리자 승인 상태 전이만 단일 MariaDB fixture에서 검증했다. 실제 환불 API의 멱등성, 전체 상태 enum 전환, 운영 발생 빈도·처리량과 분산 환경의 lock은 이번 결과에 포함되지 않는다.
+
+### 링크
+
+- [Backend Issue #35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35)

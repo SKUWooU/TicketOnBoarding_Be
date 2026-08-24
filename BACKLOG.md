@@ -13,7 +13,7 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 | 3 | BE | 공통 회차 잔여 좌석 갱신 유실과 checked exception 부분 commit | 결정적 경합·중간 실패 fixture의 개선 후 불변식 | Redis·분산 락 | 완료 ([#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5), [PR #6](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/6)) |
 | 4 | BE | 복수 좌석의 입력 순서가 달라 deadlock이 발생할 수 있다 | 반대 순서 fixture, index 전후 query plan·첫 lock·DB 예외와 rollback | 무제한 재시도 | lock ordering 완료, migration 중복 기준선 완료 ([#9](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/9), [#11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11), [#15](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/15), [#17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)); 전체 schema baseline 전 운영 index 보류 |
 | 5 | BE/FE | 예약과 결제 완료가 결합되고 상태 전이가 불명확하다 | 현재 흐름 재현, mock 결제, 허용·거부 전이 테스트 | 실제 결제 실행 | 후보 |
-| 6 | BE/FE | 예약·결제·취소 중복 요청의 결과가 안정적이지 않다 | 중복 key, 응답 유실, payload 충돌 fixture | 브로커 선제 도입 | 관리자 중복 취소 개선 완료·사용자 신청/승인 경합 기준선 진행 ([#21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21), [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31), [#33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33)) |
+| 6 | BE/FE | 예약·결제·취소 중복 요청의 결과가 안정적이지 않다 | 중복 key, 응답 유실, payload 충돌 fixture | 브로커 선제 도입 | 관리자 중복 취소·사용자 신청/승인 경합 개선 완료 ([#21](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/21), [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31), [#33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33), [#35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35)) |
 | 7 | BE | 고경합 병목 위치가 측정되지 않았다 | k6 TPS·p95·오류율, lock wait, Hikari, DB 자원 | 운영 SLA 주장 | 후보 |
 | 8 | BE | 비동기·분산 구조의 필요성이 확인되지 않았다 | burst 수용 한계, 이벤트 유실, 독립 재시도 요구 | 기술 시연 목적의 도입 | 보류 |
 

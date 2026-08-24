@@ -24,11 +24,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 @RequiredArgsConstructor
 @Service
 public class SeatReservationService {
 
+    private static final String PAYMENT_COMPLETED = "결제완료";
     private static final String CANCELLATION_REQUESTED = "취소신청";
     private static final String CANCELLATION_COMPLETED = "취소완료";
 
@@ -163,6 +165,25 @@ public class SeatReservationService {
     //관리자페이지-취소신청내약 조회
     public List<Reservation> getCancelList(){
         return reservationRepository.findByStatus("취소신청");
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void requestCancellation(String username, Long reservationId) {
+        Reservation reservation = reservationRepository.findByIdWithLock(reservationId)
+                .orElseThrow(() -> new IllegalArgumentException("해당하는 예약이 없습니다."));
+
+        if (!Objects.equals(reservation.getUsername(), username)) {
+            throw new IllegalArgumentException("예약정보와 다른 사용자입니다.");
+        }
+        if (CANCELLATION_REQUESTED.equals(reservation.getStatus())
+                || CANCELLATION_COMPLETED.equals(reservation.getStatus())) {
+            return;
+        }
+        if (!PAYMENT_COMPLETED.equals(reservation.getStatus())) {
+            throw new IllegalStateException("취소 신청할 수 없는 예약 상태입니다.");
+        }
+
+        reservation.setStatus(CANCELLATION_REQUESTED);
     }
 
     //예매 취소처리
