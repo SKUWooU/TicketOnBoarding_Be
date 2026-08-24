@@ -24,7 +24,8 @@
 | 동일 예약 중복 취소의 재고 중복 복구 | Issue #21 fixture의 순차 중복과 첫 lock 보유·두 번째 lock 대기 동시 중복 각 3회 | 취소 transaction, 예약 `PESSIMISTIC_WRITE`, 허용 상태 검증, 회차 잔여 원자 증가 | 정상·순차·동시·직접 상태 전이·증가 실패 rollback·없는 예약·해제 좌석, 대상 11개·전체 30개 invocation | 중복 시나리오 잔여 24·불변식 충족, 두 번째 lock은 첫 lock 보유 중 200ms 미반환·해제 후 완료, 실패 경로 상태·재고 보존 | [BE #31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31) |
 | 사용자 중복 취소 신청과 관리자 승인 간 상태 덮어쓰기 | MariaDB 10.11.8, 예약 1·가상 좌석 24개, 사용자 조회 완료 → 관리자 승인 commit → 사용자 지연 저장 순서를 latch로 제어, 3회 반복 | 운영 코드 변경 없음 | 관리자 승인 직후와 사용자 저장 후의 예약 상태·좌석 점유·잔여 수량·재승인 결과, 대상 15개 invocation | 매회 승인 직후 `취소완료`·미점유·잔여 24였으나 사용자 저장 후 `취소신청`·미점유·잔여 24로 상태만 복귀, 재승인은 해제 좌석 오류 | [BE #33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33) |
 | 사용자 취소 신청의 지연 저장이 관리자 승인 상태를 덮어씀 | Issue #33의 동일 MariaDB·가상 좌석 fixture, 관리자 승인→사용자 신청과 사용자 신청→관리자 승인 lock 순서를 각 3회 반복 | 사용자 신청을 transaction Service로 이동, 예약 `PESSIMISTIC_WRITE`, 소유자·허용 상태 검증, 신청·완료 재시도 성공 재사용 | 양방향 두 번째 lock 조회의 200ms 미반환·해제 후 완료, 최종 예약·좌석·잔여 수량, Service 통합 23개·Controller 3개·전체 45개 invocation | 매회 최종 `취소완료`·미점유·잔여 24 유지, 관리자 재시도도 무변경 성공 | [BE #35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35) |
-| 예약·결제 중복 요청 | 중복 key와 응답 유실 fixture 필요 | 미정 | 결과 재사용, 중복 row, 상태·재고 | 미측정 | 후속 Issue |
+| 결제 증빙 없이 서버가 결제 완료 예약 생성 | 현재 4필드 `ReservRequest`의 필드 목록과 MariaDB 가상 좌석 단일 예약 | 운영 코드 변경 없음 | 예약 status·사용자·좌석, 점유·예약·잔여 수량, 대상 20개·전체 47개 invocation | payment ID·승인 token·금액 없이 `결제완료` 1건, 점유 1·잔여 23·재고 불변식 충족 | [BE #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37) |
+| 예약 성공 응답 유실 후 동일 요청 재시도 | 첫 요청 commit 후 같은 사용자·회차·좌석 payload 순차 재전송 | 운영 코드 변경 없음 | 두 번째 결과와 전후 DB snapshot, 대상 20개·전체 47개 invocation | 첫 요청 성공, 두 번째 `이미 예약된 좌석입니다.` 실패; 예약 1·점유 1·잔여 23은 유지되지만 원래 성공 결과 재사용 불가 | [BE #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37) |
 
 ## 기록 규칙
 
