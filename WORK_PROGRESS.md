@@ -6,26 +6,39 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `38b54fe1b7916d426a7dcde294036b172d7bd9f0` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `83eed9db39597121ed0296df52164c6dd4049211` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #43 — 서버 소유 가상 가격과 mock 결제 검증 경계 구성
+
+- Issue: [#43](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/43)
+- Branch: `feat/43-payment-verification-boundary`
+- 상태: 구현·로컬 검증 완료, PR 준비 중
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 서버 30,000원 단가·mock 승인/미승인·식별자/금액/사용자 불일치·순차/동시 재사용·예약 실패 rollback, Issue 대상 22개·전체 Backend 84개 invocation 통과
+- 범위: Backend 가상 좌석 가격, Payment 상태·mock 검증 경계, 검증된 결제 1회 소비와 예약 transaction 연계
+- 제외: 실제 PG·KOPIS·운영 DB 호출, Frontend, 좌석 hold·만료, 취소·환불 보상, Flyway 운영 migration, k6·분산 기술
+
+## 완료
+
 ### Backend Issue #41 — 예약 상태 문자열을 명시적 전이 정책으로 전환
 
 - Issue: [#41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41)
 - PR: [#42](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/42)
 - Branch: `refactor/41-reservation-status-transition`
-- 상태: 구현·로컬 검증 완료, Backend CI 대기
+- squash commit: `83eed9db39597121ed0296df52164c6dd4049211`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 상태·converter·JSON·허용/거부/멱등 전이 단위 6개, 예약·취소 MariaDB 통합 52개와 전체 Backend 65개 invocation 통과; DB·JSON 한글 값과 기존 취소 lock·rollback·재고 불변식 유지
+- 검증: 상태·converter·JSON·허용/거부/멱등 전이 단위 6개, 예약·취소 MariaDB 통합 52개와 전체 Backend 65개 invocation 통과; Backend CI 1분 46초 성공
+- Reviewer: 최신 HEAD `6c34d87cbbacd8b19689e582dbb0f215ecd4a330`, Blocking 없음, `MERGE_READY: YES`
 - 범위: Backend ReservationStatus enum·JPA/JSON 호환·도메인 전이, 기존 예약·취소 동시성·rollback 회귀
 - 제외: 실제 PG·Frontend, 별도 Payment/Order 전체 모델, 좌석 hold·만료·환불, 운영 migration, k6
-
-## 완료
 
 ### Backend Issue #39 — 예약 중복 요청의 결과 재사용과 payload 충돌 방지
 

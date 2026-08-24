@@ -1,9 +1,12 @@
 package com.onticket.concert.controller;
 
 import com.onticket.concert.dto.ReservRequest;
+import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.service.IdempotencyKeyConflictException;
 import com.onticket.concert.service.InvalidIdempotencyKeyException;
+import com.onticket.concert.service.PaymentVerificationUnavailableException;
 import com.onticket.concert.service.ReservationIdempotencyService;
+import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.user.jwt.JwtUtil;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +44,9 @@ class ReservationControllerTest {
     private ReservationIdempotencyService reservationIdempotencyService;
 
     @Mock
+    private VerifiedReservationService verifiedReservationService;
+
+    @Mock
     private JwtUtil jwtUtil;
 
     private MockMvc mockMvc;
@@ -48,7 +54,7 @@ class ReservationControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new ReservationController(reservationIdempotencyService, jwtUtil)
+                new ReservationController(reservationIdempotencyService, verifiedReservationService, jwtUtil)
         ).build();
         when(jwtUtil.validateToken(TOKEN)).thenReturn(true);
         when(jwtUtil.getUsernameFromToken(TOKEN)).thenReturn(USERNAME);
@@ -111,5 +117,81 @@ class ReservationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(REQUEST_BODY))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifiedReservationForwardsPaymentAndRequiredIdempotencyContract() throws Exception {
+        String requestBody = """
+                {
+                  "concertTimeId": 1,
+                  "seatNumberList": ["A1"],
+                  "paymentId": "payment-1"
+                }
+                """;
+        when(verifiedReservationService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq("verified-key")
+        )).thenReturn(LocalDateTime.of(2030, 1, 1, 12, 0));
+
+        mockMvc.perform(post("/main/detail/{concertId}/verified-reservation", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .header("Idempotency-Key", "verified-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk());
+
+        verify(verifiedReservationService).reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq("verified-key")
+        );
+    }
+
+    @Test
+    void verifiedReservationWithoutIdempotencyKeyReturnsHttp400() throws Exception {
+        when(verifiedReservationService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq(null)
+        )).thenThrow(new InvalidIdempotencyKeyException("검증 예약에는 멱등 키가 필요합니다."));
+
+        mockMvc.perform(post("/main/detail/{concertId}/verified-reservation", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "concertTimeId": 1,
+                                  "seatNumberList": ["A1"],
+                                  "paymentId": "payment-1"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifiedReservationWithoutPaymentAdapterReturnsHttp503() throws Exception {
+        when(verifiedReservationService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq("unavailable-key")
+        )).thenThrow(new PaymentVerificationUnavailableException());
+
+        mockMvc.perform(post("/main/detail/{concertId}/verified-reservation", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .header("Idempotency-Key", "unavailable-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "concertTimeId": 1,
+                                  "seatNumberList": ["A1"],
+                                  "paymentId": "payment-1"
+                                }
+                                """))
+                .andExpect(status().isServiceUnavailable());
     }
 }
