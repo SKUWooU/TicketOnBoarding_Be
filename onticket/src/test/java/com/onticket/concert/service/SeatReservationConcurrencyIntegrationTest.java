@@ -3,12 +3,14 @@ package com.onticket.concert.service;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
+import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Reservation;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
+import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
 import com.onticket.user.jwt.JwtUtil;
@@ -39,6 +41,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -71,6 +74,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
         SeatReservationService.class,
+        ReservationIdempotencyService.class,
+        ReservationBookingTransactionService.class,
         SeatReservationConcurrencyIntegrationTest.SeatRepositoryBarrierConfiguration.class
 })
 @Testcontainers
@@ -84,8 +89,10 @@ class SeatReservationConcurrencyIntegrationTest {
     private static final String SEAT_FOREIGN_KEY_SUPPORT_INDEX = "idx_seat_concert_time_test_restore";
     private static final AtomicReference<CyclicBarrier> AGGREGATE_READ_BARRIER = new AtomicReference<>();
     private static final AtomicReference<CyclicBarrier> FIRST_SEAT_LOCK_BARRIER = new AtomicReference<>();
+    private static final AtomicReference<CyclicBarrier> IDEMPOTENCY_LOOKUP_BARRIER = new AtomicReference<>();
     private static final AtomicBoolean BOTH_FIRST_SEAT_LOCKS_ACQUIRED = new AtomicBoolean();
     private static final AtomicInteger SEAT_LOCK_QUERY_COUNT = new AtomicInteger();
+    private static final AtomicInteger IDEMPOTENCY_LOOKUP_COUNT = new AtomicInteger();
     private static final ConcurrentMap<Long, List<String>> SEAT_LOCK_QUERY_ORDER = new ConcurrentHashMap<>();
     private static final ThreadLocal<Integer> SEAT_LOCK_CALL_COUNT = ThreadLocal.withInitial(() -> 0);
 
@@ -122,6 +129,12 @@ class SeatReservationConcurrencyIntegrationTest {
     private ReservationRepository reservationRepository;
 
     @Autowired
+    private BookingRepository bookingRepository;
+
+    @Autowired
+    private ReservationIdempotencyService reservationIdempotencyService;
+
+    @Autowired
     private EntityManager entityManager;
 
     @Autowired
@@ -136,6 +149,8 @@ class SeatReservationConcurrencyIntegrationTest {
     void setUp() {
         deleteFixture();
         SEAT_LOCK_QUERY_COUNT.set(0);
+        IDEMPOTENCY_LOOKUP_COUNT.set(0);
+        IDEMPOTENCY_LOOKUP_BARRIER.set(null);
         SEAT_LOCK_QUERY_ORDER.clear();
         concertTimeId = createFixture();
     }
@@ -205,6 +220,148 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(retrySnapshot.inventoryEquationHolds()).isTrue();
         assertThat(reservations).singleElement()
                 .satisfies(reservation -> assertThat(reservation.getStatus()).isEqualTo("결제완료"));
+    }
+
+    @Test
+    void sameIdempotencyKeyAndCanonicalPayloadReturnsFirstSuccess() throws Exception {
+        String idempotencyKey = "booking-retry-key";
+
+        LocalDateTime firstResult = reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A2", "A1"),
+                idempotencyKey
+        );
+        LocalDateTime replayResult = reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A1", "A2"),
+                idempotencyKey
+        );
+
+        InventorySnapshot snapshot = inventorySnapshot();
+        List<Reservation> reservations = reservationRepository.findAll();
+
+        assertThat(replayResult).isEqualTo(firstResult);
+        assertThat(bookingRepository.count()).isEqualTo(1);
+        assertThat(reservations).hasSize(2)
+                .allSatisfy(reservation -> assertThat(reservation.getBooking().getId()).isNotNull());
+        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(2);
+        assertThat(snapshot.reservations()).isEqualTo(2);
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 2);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void requestWithoutIdempotencyKeyKeepsLegacyReservationPath() throws Exception {
+        LocalDateTime result = reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A1"),
+                null
+        );
+
+        assertThat(result).isNotNull();
+        assertThat(bookingRepository.count()).isZero();
+        assertThat(inventorySnapshot()).isEqualTo(new InventorySnapshot(TOTAL_SEATS - 1, 1, 1));
+    }
+
+    @Test
+    void blankIdempotencyKeyIsRejectedBeforeStateChange() {
+        assertThatThrownBy(() -> reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A1"),
+                "   "
+        ))
+                .isExactlyInstanceOf(InvalidIdempotencyKeyException.class)
+                .hasMessage("멱등 키는 비어 있을 수 없습니다.");
+
+        assertThat(bookingRepository.count()).isZero();
+        assertThat(inventorySnapshot()).isEqualTo(new InventorySnapshot(TOTAL_SEATS, 0, 0));
+    }
+
+    @Test
+    void oversizedIdempotencyKeyIsRejectedBeforeStateChange() {
+        assertThatThrownBy(() -> reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A1"),
+                "k".repeat(101)
+        ))
+                .isExactlyInstanceOf(InvalidIdempotencyKeyException.class)
+                .hasMessage("멱등 키는 100자를 초과할 수 없습니다.");
+
+        assertThat(bookingRepository.count()).isZero();
+        assertThat(inventorySnapshot()).isEqualTo(new InventorySnapshot(TOTAL_SEATS, 0, 0));
+    }
+
+    @RepeatedTest(3)
+    void concurrentSameIdempotencyKeyReturnsOneBookingResult() throws Exception {
+        String idempotencyKey = "concurrent-booking-key";
+        IDEMPOTENCY_LOOKUP_BARRIER.set(new CyclicBarrier(2));
+
+        try {
+            List<LocalDateTime> results = runIdempotentRequestsConcurrently(idempotencyKey, request("A1"));
+            InventorySnapshot snapshot = inventorySnapshot();
+
+            assertThat(results).hasSize(2).allMatch(results.getFirst()::equals);
+            assertThat(IDEMPOTENCY_LOOKUP_COUNT).hasValue(3);
+            assertThat(bookingRepository.count()).isEqualTo(1);
+            assertThat(snapshot.successfullyReservedSeats()).isEqualTo(1);
+            assertThat(snapshot.reservations()).isEqualTo(1);
+            assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+            assertThat(snapshot.inventoryEquationHolds()).isTrue();
+        } finally {
+            IDEMPOTENCY_LOOKUP_BARRIER.set(null);
+        }
+    }
+
+    @Test
+    void sameIdempotencyKeyWithDifferentPayloadIsRejectedWithoutStateChange() throws Exception {
+        String idempotencyKey = "payload-conflict-key";
+        reservationIdempotencyService.reserve(USERNAME, CONCERT_ID, request("A1"), idempotencyKey);
+        InventorySnapshot firstSuccess = inventorySnapshot();
+
+        assertThatThrownBy(() -> reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A2"),
+                idempotencyKey
+        ))
+                .isExactlyInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessage("동일한 멱등 키가 다른 예약 요청에 사용되었습니다.");
+
+        assertThat(inventorySnapshot()).isEqualTo(firstSuccess);
+        assertThat(bookingRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void failedReservationRollsBackIdempotencyKeyForRetry() throws Exception {
+        String idempotencyKey = "retry-after-rollback-key";
+
+        assertThatThrownBy(() -> reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("Z9"),
+                idempotencyKey
+        ))
+                .isExactlyInstanceOf(Exception.class)
+                .hasMessage("존재하지 않는 좌석입니다.");
+
+        assertThat(bookingRepository.count()).isZero();
+        assertThat(inventorySnapshot()).isEqualTo(new InventorySnapshot(TOTAL_SEATS, 0, 0));
+
+        LocalDateTime retryResult = reservationIdempotencyService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("A1"),
+                idempotencyKey
+        );
+
+        assertThat(retryResult).isNotNull();
+        assertThat(bookingRepository.count()).isEqualTo(1);
+        assertThat(inventorySnapshot()).isEqualTo(new InventorySnapshot(TOTAL_SEATS - 1, 1, 1));
     }
 
     @Test
@@ -580,6 +737,46 @@ class SeatReservationConcurrencyIntegrationTest {
         }
     }
 
+    private List<LocalDateTime> runIdempotentRequestsConcurrently(
+            String idempotencyKey,
+            ReservRequest reservRequest
+    ) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<LocalDateTime>> futures = new ArrayList<>();
+
+        try {
+            for (int index = 0; index < 2; index++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(5, TimeUnit.SECONDS)) {
+                        throw new TimeoutException("동시 시작 신호 대기 시간 초과");
+                    }
+                    return reservationIdempotencyService.reserve(
+                            USERNAME,
+                            CONCERT_ID,
+                            reservRequest,
+                            idempotencyKey
+                    );
+                }));
+            }
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<LocalDateTime> results = new ArrayList<>();
+            for (Future<LocalDateTime> future : futures) {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
     private List<LockAttemptResult> runRequestsConcurrently(List<List<String>> seatNumberRequests) throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(seatNumberRequests.size());
         CountDownLatch ready = new CountDownLatch(seatNumberRequests.size());
@@ -762,6 +959,7 @@ class SeatReservationConcurrencyIntegrationTest {
 
     private void deleteFixture() {
         reservationRepository.deleteAllInBatch();
+        bookingRepository.deleteAllInBatch();
         seatRepository.deleteAllInBatch();
         concertTimeRepository.deleteAllInBatch();
         concertDetailRepository.deleteAllInBatch();
@@ -828,6 +1026,29 @@ class SeatReservationConcurrencyIntegrationTest {
             return new BeanPostProcessor() {
                 @Override
                 public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (bean instanceof BookingRepository bookingRepository) {
+                        return Proxy.newProxyInstance(
+                                BookingRepository.class.getClassLoader(),
+                                new Class<?>[]{BookingRepository.class},
+                                (proxy, method, args) -> {
+                                    Object result;
+                                    try {
+                                        result = method.invoke(bookingRepository, args);
+                                    } catch (InvocationTargetException exception) {
+                                        throw exception.getCause();
+                                    }
+
+                                    if (method.getName().equals("findByUsernameAndIdempotencyKey")) {
+                                        int lookupCount = IDEMPOTENCY_LOOKUP_COUNT.incrementAndGet();
+                                        CyclicBarrier barrier = IDEMPOTENCY_LOOKUP_BARRIER.get();
+                                        if (barrier != null && lookupCount <= 2) {
+                                            barrier.await(5, TimeUnit.SECONDS);
+                                        }
+                                    }
+                                    return result;
+                                }
+                        );
+                    }
                     if (!(bean instanceof SeatRepository seatRepository)) {
                         return bean;
                     }
