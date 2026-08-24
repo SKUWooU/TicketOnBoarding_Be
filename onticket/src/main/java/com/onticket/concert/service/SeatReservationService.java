@@ -4,6 +4,7 @@ import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Reservation;
+import com.onticket.concert.domain.ReservationStatus;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.CalDto;
 import com.onticket.concert.dto.ReservRequest;
@@ -29,10 +30,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Service
 public class SeatReservationService {
-
-    private static final String PAYMENT_COMPLETED = "결제완료";
-    private static final String CANCELLATION_REQUESTED = "취소신청";
-    private static final String CANCELLATION_COMPLETED = "취소완료";
 
     private final SeatRepository seatRepository;
     private final ConcertTimeRepository concertTimeRepository;
@@ -124,7 +121,7 @@ public class SeatReservationService {
             reservation.setConcertDate(concertTime.getDate());
             reservation.setSeat(seat);
             reservation.setSeatNumber(seatNumber);
-            reservation.setStatus("결제완료");
+            reservation.markPaymentCompleted();
             reservation.setBooking(booking);
 
             reservationList.add(reservation);
@@ -154,7 +151,7 @@ public class SeatReservationService {
 
     //관리자페이지-취소신청내약 조회
     public List<Reservation> getCancelList(){
-        return reservationRepository.findByStatus("취소신청");
+        return reservationRepository.findByStatus(ReservationStatus.CANCELLATION_REQUESTED);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -165,15 +162,7 @@ public class SeatReservationService {
         if (!Objects.equals(reservation.getUsername(), username)) {
             throw new IllegalArgumentException("예약정보와 다른 사용자입니다.");
         }
-        if (CANCELLATION_REQUESTED.equals(reservation.getStatus())
-                || CANCELLATION_COMPLETED.equals(reservation.getStatus())) {
-            return;
-        }
-        if (!PAYMENT_COMPLETED.equals(reservation.getStatus())) {
-            throw new IllegalStateException("취소 신청할 수 없는 예약 상태입니다.");
-        }
-
-        reservation.setStatus(CANCELLATION_REQUESTED);
+        reservation.requestCancellation();
     }
 
     //예매 취소처리
@@ -182,11 +171,8 @@ public class SeatReservationService {
         Reservation reservation = reservationRepository.findByIdWithLock(reservationId)
                 .orElseThrow(() -> new IllegalArgumentException("해당하는 예약이 없습니다."));
 
-        if (CANCELLATION_COMPLETED.equals(reservation.getStatus())) {
+        if (!reservation.completeCancellation()) {
             return;
-        }
-        if (!CANCELLATION_REQUESTED.equals(reservation.getStatus())) {
-            throw new IllegalStateException("취소 신청 상태의 예약만 취소할 수 있습니다.");
         }
 
         Seat seat = reservation.getSeat();
@@ -195,8 +181,6 @@ public class SeatReservationService {
         }
 
         seat.setReserved(false);
-        reservation.setStatus(CANCELLATION_COMPLETED);
-
         int updatedConcertTimes = concertTimeRepository.increaseSeatAmount(reservation.getConcertTimeId());
         if (updatedConcertTimes != 1) {
             throw new IllegalStateException("공연 회차의 잔여 좌석을 복구할 수 없습니다.");

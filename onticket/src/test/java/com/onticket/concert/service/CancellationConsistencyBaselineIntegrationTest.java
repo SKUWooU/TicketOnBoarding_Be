@@ -4,6 +4,7 @@ import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Reservation;
+import com.onticket.concert.domain.ReservationStatus;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
@@ -24,6 +25,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -105,6 +107,9 @@ class CancellationConsistencyBaselineIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @MockBean
     private JwtUtil jwtUtil;
 
@@ -115,7 +120,7 @@ class CancellationConsistencyBaselineIntegrationTest {
     void setUp() {
         RESERVATION_LOCK_BARRIER.set(null);
         deleteFixture();
-        CancellationFixture fixture = createFixture("취소신청");
+        CancellationFixture fixture = createFixture(ReservationStatus.CANCELLATION_REQUESTED);
         concertTimeId = fixture.concertTimeId();
         reservationId = fixture.reservationId();
 
@@ -146,6 +151,20 @@ class CancellationConsistencyBaselineIntegrationTest {
         assertThat(snapshot.seatReserved()).isFalse();
         assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
         assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void reservationStatusKeepsKoreanDatabaseValueAndTypedQuery() {
+        String storedStatus = jdbcTemplate.queryForObject(
+                "SELECT status FROM reservation WHERE id = ?",
+                String.class,
+                reservationId
+        );
+
+        assertThat(storedStatus).isEqualTo("취소신청");
+        assertThat(reservationRepository.findByStatus(ReservationStatus.CANCELLATION_REQUESTED))
+                .extracting(Reservation::getId)
+                .containsExactly(reservationId);
     }
 
     @RepeatedTest(3)
@@ -198,10 +217,7 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @Test
     void sequentialCancellationRequestThenApprovalEndsWithCompletedCancellation() throws Exception {
-        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
-        reservation.setStatus("결제완료");
-        reservationRepository.saveAndFlush(reservation);
-        entityManager.clear();
+        updateReservationStatus(ReservationStatus.PAYMENT_COMPLETED);
 
         seatReservationService.requestCancellation(USERNAME, reservationId);
         seatReservationService.cancelReservation(reservationId);
@@ -258,7 +274,7 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @RepeatedTest(3)
     void approvalWaitsForCancellationRequestAndCompletesAfterRequestCommit() throws Exception {
-        updateReservationStatus("결제완료");
+        updateReservationStatus(ReservationStatus.PAYMENT_COMPLETED);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         ReservationLockBarrier barrier = new ReservationLockBarrier();
         RESERVATION_LOCK_BARRIER.set(barrier);
@@ -296,7 +312,7 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @Test
     void duplicateCancellationRequestIsIdempotent() {
-        updateReservationStatus("결제완료");
+        updateReservationStatus(ReservationStatus.PAYMENT_COMPLETED);
 
         seatReservationService.requestCancellation(USERNAME, reservationId);
         CancellationSnapshot firstSnapshot = cancellationSnapshot();
@@ -321,7 +337,7 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @Test
     void cancellationRequestByAnotherUserIsRejectedWithoutChange() {
-        updateReservationStatus("결제완료");
+        updateReservationStatus(ReservationStatus.PAYMENT_COMPLETED);
         CancellationSnapshot beforeRequest = cancellationSnapshot();
 
         assertThatThrownBy(() -> seatReservationService.requestCancellation("another-user", reservationId))
@@ -338,18 +354,6 @@ class CancellationConsistencyBaselineIntegrationTest {
         assertThatThrownBy(() -> seatReservationService.requestCancellation(USERNAME, Long.MAX_VALUE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("해당하는 예약이 없습니다.");
-
-        assertThat(cancellationSnapshot()).isEqualTo(beforeRequest);
-    }
-
-    @Test
-    void unsupportedCancellationRequestStateIsRejectedWithoutChange() {
-        updateReservationStatus("알수없음");
-        CancellationSnapshot beforeRequest = cancellationSnapshot();
-
-        assertThatThrownBy(() -> seatReservationService.requestCancellation(USERNAME, reservationId))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("취소 신청할 수 없는 예약 상태입니다.");
 
         assertThat(cancellationSnapshot()).isEqualTo(beforeRequest);
     }
@@ -407,10 +411,7 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @Test
     void paidReservationCannotSkipCancellationRequestState() {
-        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
-        reservation.setStatus("결제완료");
-        reservationRepository.saveAndFlush(reservation);
-        entityManager.clear();
+        updateReservationStatus(ReservationStatus.PAYMENT_COMPLETED);
 
         assertThatThrownBy(() -> seatReservationService.cancelReservation(reservationId))
                 .isInstanceOf(IllegalStateException.class)
@@ -432,14 +433,16 @@ class CancellationConsistencyBaselineIntegrationTest {
         }
     }
 
-    private void updateReservationStatus(String status) {
-        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
-        reservation.setStatus(status);
-        reservationRepository.saveAndFlush(reservation);
+    private void updateReservationStatus(ReservationStatus status) {
+        jdbcTemplate.update(
+                "UPDATE reservation SET status = ? WHERE id = ?",
+                status.getValue(),
+                reservationId
+        );
         entityManager.clear();
     }
 
-    private CancellationFixture createFixture(String reservationStatus) {
+    private CancellationFixture createFixture(ReservationStatus reservationStatus) {
         Concert concert = new Concert();
         concert.setConcertId(CONCERT_ID);
         concert.setConcertName("취소 정합성 기준선 공연");
@@ -474,6 +477,22 @@ class CancellationConsistencyBaselineIntegrationTest {
         seatRepository.saveAllAndFlush(seats);
         Seat reservedSeat = seats.get(0);
 
+        Reservation reservation = createReservation(
+                reservationStatus,
+                concert,
+                concertTime,
+                reservedSeat
+        );
+        entityManager.clear();
+        return new CancellationFixture(concertTime.getId(), reservation.getId());
+    }
+
+    private Reservation createReservation(
+            ReservationStatus reservationStatus,
+            Concert concert,
+            ConcertTime concertTime,
+            Seat reservedSeat
+    ) {
         Reservation reservation = new Reservation();
         reservation.setConcertId(CONCERT_ID);
         reservation.setConcertName(concert.getConcertName());
@@ -485,11 +504,17 @@ class CancellationConsistencyBaselineIntegrationTest {
         reservation.setConcertTimeId(concertTime.getId());
         reservation.setSeat(reservedSeat);
         reservation.setSeatNumber(reservedSeat.getSeatNumber());
-        reservation.setStatus(reservationStatus);
-        reservation = reservationRepository.saveAndFlush(reservation);
-
-        entityManager.clear();
-        return new CancellationFixture(concertTime.getId(), reservation.getId());
+        if (reservationStatus == ReservationStatus.PAYMENT_COMPLETED) {
+            reservation.markPaymentCompleted();
+        } else if (reservationStatus == ReservationStatus.CANCELLATION_REQUESTED) {
+            reservation.markPaymentCompleted();
+            reservation.requestCancellation();
+        } else if (reservationStatus == ReservationStatus.CANCELLATION_COMPLETED) {
+            reservation.markPaymentCompleted();
+            reservation.requestCancellation();
+            reservation.completeCancellation();
+        }
+        return reservationRepository.saveAndFlush(reservation);
     }
 
     private CancellationSnapshot cancellationSnapshot() {
@@ -502,7 +527,7 @@ class CancellationConsistencyBaselineIntegrationTest {
                 .count();
         long reservations = reservationRepository.count();
         return new CancellationSnapshot(
-                reservation.getStatus(),
+                reservation.getStatus().getValue(),
                 seat.isReserved(),
                 remainingSeats,
                 reservedSeats,

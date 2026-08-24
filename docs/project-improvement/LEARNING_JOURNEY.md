@@ -333,3 +333,25 @@ MariaDB 10.11.8·가상 좌석 24개 fixture에서 순차 재시도, 두 요청�
 ### 링크
 
 - [Backend Issue #39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39)
+
+## Issue #41 — 예약 상태 문자열을 명시적 전이 정책으로 전환
+
+### 문자열 상태가 남긴 문제
+
+취소 transaction과 예약 row lock을 보강한 뒤에도 상태 자체는 Service가 한글 문자열을 비교하고 직접 setter로 변경했다. 이 구조에서는 새로운 문자열을 아무 곳에서나 저장할 수 있고, 허용 전이와 멱등 전이를 Entity가 보장하지 못한다. 후속 Payment 상태 분리 전에 현재 예약 상태의 책임부터 제한했다.
+
+### 타입과 외부 계약 분리
+
+Java 내부에서는 `ReservationStatus`만 사용하고 상태 setter를 제거했다. `Reservation`은 결제 완료 초기화, 취소 신청, 취소 완료 메서드로만 상태를 바꾼다. 사용자 신청 재시도와 완료 후 재신청, 관리자 완료 재시도는 기존 멱등 정책을 유지하고 `결제완료 → 취소완료` 직접 전이는 거부한다.
+
+DB와 Frontend는 기존 한글 값에 결합되어 있으므로 converter와 JSON value로 `결제완료`, `취소신청`, `취소완료`를 그대로 유지했다. MariaDB raw column과 typed repository 조회, Reservation JSON을 함께 검증해 enum 도입이 외부 계약을 바꾸지 않음을 확인했다.
+
+### 검증과 다음 단계
+
+상태 단위 6개, 예약·멱등성·좌석 경합 29개, 취소 경합·rollback 23개를 포함한 전체 Backend 65개 invocation이 통과했다. 상태가 먼저 `취소완료`로 바뀐 뒤 재고 복구 query가 실패하는 fixture도 transaction rollback 후 `취소신청`·점유·잔여 수량을 유지했다.
+
+이번 변경은 서버 미검증 `결제완료` 생성을 해결하지 않는다. 다음에는 Frontend 고정 가격이 아니라 서버가 소유하는 가상 가격 기준과 별도 Payment 상태·mock 검증 경계를 설계한다. 그 상태 불변식이 안정된 후에야 k6의 성공·충돌·실패 응답을 도메인 결과로 해석할 수 있다. 상세 내용은 [예약 상태의 타입 안전 전이 정책](reservation-status-transition.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41)

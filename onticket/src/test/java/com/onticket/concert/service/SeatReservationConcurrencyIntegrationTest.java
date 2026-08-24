@@ -5,6 +5,7 @@ import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Reservation;
+import com.onticket.concert.domain.ReservationStatus;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.repository.ConcertDetailRepository;
@@ -192,7 +193,7 @@ class SeatReservationConcurrencyIntegrationTest {
         InventorySnapshot snapshot = inventorySnapshot();
 
         assertThat(reservation.getUsername()).isEqualTo(USERNAME);
-        assertThat(reservation.getStatus()).isEqualTo("결제완료");
+        assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.PAYMENT_COMPLETED);
         assertThat(reservation.getSeatNumber()).isEqualTo("A1");
         assertThat(snapshot.successfullyReservedSeats()).isEqualTo(1);
         assertThat(snapshot.reservations()).isEqualTo(1);
@@ -219,7 +220,8 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(retrySnapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
         assertThat(retrySnapshot.inventoryEquationHolds()).isTrue();
         assertThat(reservations).singleElement()
-                .satisfies(reservation -> assertThat(reservation.getStatus()).isEqualTo("결제완료"));
+                .satisfies(reservation -> assertThat(reservation.getStatus())
+                        .isEqualTo(ReservationStatus.PAYMENT_COMPLETED));
     }
 
     @Test

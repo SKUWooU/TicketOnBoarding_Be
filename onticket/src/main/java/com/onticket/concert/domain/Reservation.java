@@ -1,11 +1,22 @@
 package com.onticket.concert.domain;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -53,5 +64,37 @@ public class Reservation {
     private Booking booking;
 
     // 예약 상태
-    private String status; //결제완료, 취소신정, 취소완료
+    @Column
+    @Setter(AccessLevel.NONE)
+    private ReservationStatus status;
+
+    public void markPaymentCompleted() {
+        if (status != null) {
+            throw new IllegalStateException("예약 상태가 이미 초기화되었습니다.");
+        }
+        status = ReservationStatus.PAYMENT_COMPLETED;
+    }
+
+    public void requestCancellation() {
+        if (status == ReservationStatus.PAYMENT_COMPLETED) {
+            status = ReservationStatus.CANCELLATION_REQUESTED;
+            return;
+        }
+        if (status == ReservationStatus.CANCELLATION_REQUESTED
+                || status == ReservationStatus.CANCELLATION_COMPLETED) {
+            return;
+        }
+        throw new IllegalStateException("취소 신청할 수 없는 예약 상태입니다.");
+    }
+
+    public boolean completeCancellation() {
+        if (status == ReservationStatus.CANCELLATION_COMPLETED) {
+            return false;
+        }
+        if (status != ReservationStatus.CANCELLATION_REQUESTED) {
+            throw new IllegalStateException("취소 신청 상태의 예약만 취소할 수 있습니다.");
+        }
+        status = ReservationStatus.CANCELLATION_COMPLETED;
+        return true;
+    }
 }
