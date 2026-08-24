@@ -39,6 +39,7 @@ jobs:
           pr_number="${{ github.event.issue.number }}"
           reviewer="$(jq -r '.comment.user.login' "$GITHUB_EVENT_PATH")"
           body="$(jq -r '.comment.body' "$GITHUB_EVENT_PATH")"
+          body="${body//$'\r'/}"
 
           fail_gate() {
             gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
@@ -162,5 +163,8 @@ jobs:
             closed_summary="${closed_issues[*]}"
           fi
 
-          gh pr comment "$pr_number" --repo "$GITHUB_REPOSITORY" \
-            --body "$(printf '## Auto-merge 결과\n\nReviewer 최신 HEAD 승인과 Backend CI 성공을 확인해 squash merge했습니다.\n\n종료한 연결 Issue: %s' "$closed_summary")"
+          {
+            printf '## Auto-merge result\n\n'
+            printf 'PR #%s was squash merged after validating the Reviewer HEAD and Backend CI.\n\n' "$pr_number"
+            printf 'Closed linked issues: %s\n' "$closed_summary"
+          } >> "$GITHUB_STEP_SUMMARY"
