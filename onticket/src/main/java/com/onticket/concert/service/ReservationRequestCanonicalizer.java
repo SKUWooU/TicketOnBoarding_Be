@@ -36,6 +36,23 @@ final class ReservationRequestCanonicalizer {
     }
 
     static String fingerprint(String concertId, ReservRequest reservRequest) {
+        return digest(canonicalRequest(concertId, reservRequest));
+    }
+
+    static String verifiedFingerprint(
+            String concertId,
+            ReservRequest reservRequest,
+            String paymentId
+    ) {
+        if (paymentId == null || paymentId.isBlank()) {
+            throw new InvalidPaymentException("결제 식별자가 필요합니다.");
+        }
+        String canonicalRequest = canonicalRequest(concertId, reservRequest)
+                + "|payment|" + paymentId.length() + ':' + paymentId;
+        return digest(canonicalRequest);
+    }
+
+    private static String canonicalRequest(String concertId, ReservRequest reservRequest) {
         if (concertId == null || concertId.isBlank()) {
             throw new IllegalArgumentException("공연 ID가 필요합니다.");
         }
@@ -49,10 +66,13 @@ final class ReservationRequestCanonicalizer {
                 .append('|').append(reservRequest.getConcertTimeId());
         seatNumbers.forEach(seatNumber -> canonicalRequest
                 .append('|').append(seatNumber.length()).append(':').append(seatNumber));
+        return canonicalRequest.toString();
+    }
 
+    private static String digest(String canonicalRequest) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(canonicalRequest.toString().getBytes(StandardCharsets.UTF_8));
+                    .digest(canonicalRequest.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 알고리즘을 사용할 수 없습니다.", exception);

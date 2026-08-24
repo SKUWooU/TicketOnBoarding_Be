@@ -355,3 +355,23 @@ DB와 Frontend는 기존 한글 값에 결합되어 있으므로 converter와 JS
 ### 링크
 
 - [Backend Issue #41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41)
+
+## Issue #43 — 서버 소유 가상 가격과 mock 결제 검증 경계
+
+### client 성공 callback을 서버 승인으로 보지 않기
+
+KOPIS의 가격은 자유 문자열이고 Frontend 금액도 서로 다른 고정값이다. 신규 Backend 경로는 client 금액을 받지 않고 서버 가상 단가 30,000원과 정규화된 좌석 수로 기대 금액을 계산한다. `PaymentVerificationPort`가 반환한 식별자·사용자·승인 상태·금액·시각이 전부 일치해야 예약 transaction에 진입한다.
+
+### 외부 검증과 DB 소유권을 분리하기
+
+결제 검증은 좌석 lock 전에 수행하고, 검증된 provider payment ID의 1회 소비는 DB unique 제약으로 보장한다. Payment unique insert부터 Booking·Reservation·Seat·ConcertTime 변경은 한 transaction이다. 따라서 외부 대기는 lock 보유 시간에 포함되지 않고, 예약 실패는 결제 소비 기록까지 rollback한다.
+
+### 가상 결제 검증과 한계
+
+MariaDB 10.11.8·가상 좌석 24개에서 2석 60,000원 정상 확정, 미승인·식별자·금액/사용자 불일치 무변경 거부, 성공 응답 재사용, 예약 실패 rollback을 확인했다. 동일 결제 ID를 다른 멱등 키로 동시 소비하는 시나리오는 3회 모두 1건만 확정됐다. Reviewer Blocking 후에는 실제 좌석·예약 변경 뒤 재고 감소가 실패하는 late-failure와, 동일 멱등 키의 동시 동일 payload 재사용·다른 payload 충돌을 각 3회 결정적 barrier로 추가했다. Issue 대상 30개와 기존 회귀를 포함한 전체 Backend 92개 invocation이 통과했다.
+
+실제 PG, 운영 schema, Frontend 전환, 좌석 hold·만료·환불은 검증하지 않았다. 기존 `/reservation`은 호환을 위한 미검증 legacy 경로로 남아 있다. Backend 우선 작업 후 Frontend 계약을 전환하고 legacy를 제거해야 한다. 상세 근거는 [서버 가상 가격과 mock 결제 검증 경계](verified-payment-reservation-boundary.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #43](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/43)
