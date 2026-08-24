@@ -13,6 +13,10 @@ import java.util.Optional;
 public interface SeatRepository extends JpaRepository<Seat, Long> {
     List<Seat> findByConcertTimeId(Long concertTimeId);
 
+    long countByConcertTimeId(Long concertTimeId);
+
+    long countByConcertTimeIdAndReservedTrue(Long concertTimeId);
+
     @Query("SELECT s FROM Seat s WHERE s.concertTime.id = :concertTimeId AND s.seatNumber = :seatNumber")
     Seat findByConcertTimeAndSeatNumber(@Param("concertTimeId")Long concertTimeId, @Param("seatNumber") String seatNumber);
 
