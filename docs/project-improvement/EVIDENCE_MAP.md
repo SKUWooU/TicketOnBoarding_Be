@@ -26,6 +26,7 @@
 | 사용자 취소 신청의 지연 저장이 관리자 승인 상태를 덮어씀 | Issue #33의 동일 MariaDB·가상 좌석 fixture, 관리자 승인→사용자 신청과 사용자 신청→관리자 승인 lock 순서를 각 3회 반복 | 사용자 신청을 transaction Service로 이동, 예약 `PESSIMISTIC_WRITE`, 소유자·허용 상태 검증, 신청·완료 재시도 성공 재사용 | 양방향 두 번째 lock 조회의 200ms 미반환·해제 후 완료, 최종 예약·좌석·잔여 수량, Service 통합 23개·Controller 3개·전체 45개 invocation | 매회 최종 `취소완료`·미점유·잔여 24 유지, 관리자 재시도도 무변경 성공 | [BE #35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35) |
 | 결제 증빙 없이 서버가 결제 완료 예약 생성 | 현재 4필드 `ReservRequest`의 필드 목록과 MariaDB 가상 좌석 단일 예약 | 운영 코드 변경 없음 | 예약 status·사용자·좌석, 점유·예약·잔여 수량, 대상 20개·전체 47개 invocation | payment ID·승인 token·금액 없이 `결제완료` 1건, 점유 1·잔여 23·재고 불변식 충족 | [BE #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37) |
 | 예약 성공 응답 유실 후 동일 요청 재시도 | 첫 요청 commit 후 같은 사용자·회차·좌석 payload 순차 재전송 | 운영 코드 변경 없음 | 두 번째 결과와 전후 DB snapshot, 대상 20개·전체 47개 invocation | 첫 요청 성공, 두 번째 `이미 예약된 좌석입니다.` 실패; 예약 1·점유 1·잔여 23은 유지되지만 원래 성공 결과 재사용 불가 | [BE #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37) |
+| 예약 중복 요청이 최초 성공 결과를 재사용하지 못함 | Issue #37 순차 재시도와 두 thread가 모두 기존 키 없음을 읽은 뒤 경쟁하는 MariaDB barrier fixture | 사용자·키 unique Booking, 의미 payload fingerprint, Booking·좌석·예약·잔여 수량 단일 transaction, unique 패자 결과 재조회 | 순차 동일 payload·동시 동일 키 3회·payload 충돌·실패 rollback·키 없는 호환·HTTP 400/409, Service 29개·Controller 3개·전체 59개 invocation | 동일 요청은 같은 생성 시각, 동시 요청도 Booking/예약/점유 각 1·잔여 23; 다른 payload와 잘못된 키는 무변경 거부; 실패 키는 재사용 가능 | [BE #39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39) / [상세 근거](reservation-idempotency.md) |
 
 ## 기록 규칙
 

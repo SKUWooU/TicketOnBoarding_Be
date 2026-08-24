@@ -309,3 +309,27 @@ MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture에서 �
 ### 링크
 
 - [Backend Issue #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37)
+
+## Issue #39 — 예약 중복 요청의 최초 결과 재사용
+
+### 왜 좌석 lock만으로 충분하지 않은가
+
+좌석 `PESSIMISTIC_WRITE`는 첫 예약 이후 재고 중복 차감을 막지만, 응답을 받지 못한 호출자가 같은 요청을 다시 보냈다는 사실은 알 수 없다. 그래서 두 번째 요청은 이미 점유된 좌석이라는 현재 상태만 보고 실패한다. 멱등성은 “두 번 변경하지 않는다”뿐 아니라 동일 작업의 최초 결과를 다시 제공할 식별자와 결과 저장이 필요하다.
+
+복수 좌석 예약은 현재 좌석마다 `Reservation` 한 행을 만들기 때문에 한 요청을 묶는 Booking을 추가했다. `(username, idempotency_key)` unique constraint가 동시 키 소유자를 하나로 정하고, Booking과 좌석·예약·잔여 수량 변경을 같은 transaction에 둬 중간 실패 시 키도 함께 rollback한다. 같은 키의 패자 transaction은 unique 위반 뒤 승자의 commit 결과를 다시 조회한다.
+
+### payload 의미와 호환 경계
+
+fingerprint에는 현재 Service가 실제 사용하는 공연 ID·회차 ID·정렬된 좌석 목록만 포함한다. 좌석 입력 순서가 달라도 같은 예약으로 보며, 사용하지 않는 client 공연일·공연 시간 문자열은 결과 의미에 영향을 주지 않는다. 다른 의미의 요청에 같은 키를 쓰면 HTTP 409, 공백이나 100자를 넘는 키는 HTTP 400으로 거부한다.
+
+기존 Frontend가 아직 header를 보내지 않기 때문에 `Idempotency-Key`는 선택적으로 추가했다. 키 없는 호출의 기존 `LocalDateTime` 성공 응답과 예약 경로를 유지하고, 키가 있는 호출도 응답 구조를 바꾸지 않은 채 Booking의 최초 생성 시각을 반환한다.
+
+### 검증과 한계
+
+MariaDB 10.11.8·가상 좌석 24개 fixture에서 순차 재시도, 두 요청이 모두 기존 키 없음 결과를 얻은 뒤의 동시 경쟁을 3회, 다른 payload 충돌과 실패 후 키 재사용을 검증했다. 동시 경쟁은 매회 같은 생성 시각을 반환하고 Booking 1·Reservation 1·점유 1·잔여 23으로 수렴했다. Service 29개·Controller 3개와 전체 Backend 59개 test invocation이 통과했다.
+
+이는 실제 PG 결제 멱등성이나 운영 처리량 결과가 아니다. Frontend 키 전달과 운영 schema migration이 완료되기 전에는 실제 화면 경로와 배포 DB에 적용됐다고 주장할 수 없다. 상세 계약과 fixture는 [예약 요청 멱등성과 최초 결과 재사용](reservation-idempotency.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39)

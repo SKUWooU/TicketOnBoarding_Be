@@ -6,27 +6,40 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `60787de04d2f74fc2df7994bb5995438587aa2dc` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `4030c7c329db1123ee28e218f07dd3ca2a735926` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #39 — 예약 중복 요청의 결과 재사용과 payload 충돌 방지
+
+- Issue: [#39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39)
+- PR: [#40](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/40)
+- Branch: `fix/39-reservation-idempotency`
+- 상태: 구현·로컬 검증 완료, Backend CI 대기
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 동일 payload 순차 재시도는 최초 생성 시각 재사용; 두 요청이 모두 기존 key 없음을 읽은 뒤의 동시 경쟁 3회 모두 Booking 1·예약/점유 1·잔여 23; payload 충돌·잘못된 key 무변경 거부, 실패 key rollback 후 재사용; Service 29개·Controller 3개·전체 Backend 59개 invocation 성공
+- 범위: Backend 선택적 `Idempotency-Key`, Booking과 안정적 성공 결과, 동일 payload 결과 재사용, payload 충돌 거부, 키 없는 현재 FE 호출 호환
+- 제외: 실제 PG 호출·검증, Payment/Order 전체 상태 머신, Frontend 변경, 운영 Flyway 전환, Redis·대기열·outbox·메시지 브로커, k6
+
+## 완료
+
 ### Backend Issue #37 — 결제 승인과 예약 확정 경계·중복 요청 기준선
 
 - Issue: [#37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37)
 - PR: [#38](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/38)
 - Branch: `test/37-payment-reservation-boundary-baseline`
-- 상태: 구현·로컬 검증 완료, Backend CI 대기
+- squash commit: `4030c7c329db1123ee28e218f07dd3ca2a735926`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 결제 ID·승인 token·금액이 없는 4필드 예약 DTO로 `결제완료` 예약 1건·점유 1·잔여 23 생성; 동일 요청 재시도는 `이미 예약된 좌석입니다.` 실패, 최종 DB snapshot은 첫 성공과 동일; 대상 20개·전체 Backend 47개 invocation 및 `git diff --check` 성공
-- Reviewer: PR 생성 후 별도 Agent 검토 예정
+- 검증: 결제 ID·승인 token·금액이 없는 4필드 예약 DTO로 `결제완료` 예약 1건·점유 1·잔여 23 생성; 동일 요청 재시도는 `이미 예약된 좌석입니다.` 실패하고 최초 성공 이후의 잔여 수량·점유 수·예약 row 수 집계는 유지; 대상 20개·전체 Backend 47개 invocation, Backend CI 1분 46초 성공
+- Reviewer: 최신 HEAD `3fa27f16ba48ba517b625ffa98fbd1f2dbe162a2`, Blocking 없음, `MERGE_READY: YES`
 - 범위: Backend 예약 계약·중복 재시도 결과, FE 결제 성공 callback 이후 예약 호출의 정적 경계, MariaDB Testcontainers 기준선
 - 제외: 실제 PG 호출, 운영 로직·Frontend 변경, Payment/Order·좌석 hold 상태 머신, k6·outbox·메시지 브로커
-
-## 완료
 
 ### Backend Issue #35 — 사용자 취소 신청의 잠금·상태 전이 원자성 보장
 

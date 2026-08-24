@@ -1,5 +1,6 @@
 package com.onticket.concert.domain;
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -45,6 +46,12 @@ public class Reservation {
     private Seat seat;
 
     private String seatNumber;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id")
+    @JsonIgnore
+    private Booking booking;
+
     // 예약 상태
     private String status; //결제완료, 취소신정, 취소완료
 }
