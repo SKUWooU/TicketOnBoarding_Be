@@ -22,9 +22,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -37,13 +40,19 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,7 +70,8 @@ import static org.mockito.Mockito.when;
         SeatReservationService.class,
         VerifiedReservationService.class,
         VerifiedReservationTransactionService.class,
-        VirtualTicketPricePolicy.class
+        VirtualTicketPricePolicy.class,
+        VerifiedReservationPaymentIntegrationTest.BookingRepositoryBarrierConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -71,6 +81,8 @@ class VerifiedReservationPaymentIntegrationTest {
     private static final String CONCERT_ID = "PAYMENT-CONCERT";
     private static final String USERNAME = "payment-user";
     private static final LocalDateTime APPROVED_AT = LocalDateTime.of(2030, 1, 1, 12, 0);
+    private static final AtomicReference<CyclicBarrier> BOOKING_LOOKUP_BARRIER = new AtomicReference<>();
+    private static final AtomicInteger BOOKING_LOOKUP_COUNT = new AtomicInteger();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -124,6 +136,8 @@ class VerifiedReservationPaymentIntegrationTest {
     @BeforeEach
     void setUp() {
         deleteFixture();
+        BOOKING_LOOKUP_BARRIER.set(null);
+        BOOKING_LOOKUP_COUNT.set(0);
         concertTimeId = createFixture();
     }
 
@@ -246,6 +260,88 @@ class VerifiedReservationPaymentIntegrationTest {
     }
 
     @RepeatedTest(3)
+    void concurrentSameIdempotencyKeyReturnsOriginalVerifiedResult() throws Exception {
+        String paymentId = "payment-same-key";
+        String idempotencyKey = "same-key";
+        when(paymentVerificationPort.verify(paymentId))
+                .thenReturn(approved(paymentId, USERNAME, 30_000));
+        BOOKING_LOOKUP_BARRIER.set(new CyclicBarrier(2));
+
+        try {
+            List<IdempotencyAttemptResult> results = runSameKeyRequestsConcurrently(
+                    idempotencyKey,
+                    request(paymentId, "A1"),
+                    request(paymentId, "A1")
+            );
+
+            assertThat(results).allMatch(IdempotencyAttemptResult::success);
+            assertThat(results).extracting(IdempotencyAttemptResult::createdAt)
+                    .containsOnly(results.getFirst().createdAt());
+            assertThat(BOOKING_LOOKUP_COUNT).hasValue(3);
+            assertThat(paymentRepository.count()).isEqualTo(1);
+            assertThat(bookingRepository.count()).isEqualTo(1);
+            assertInventory(23, 1, 1);
+        } finally {
+            BOOKING_LOOKUP_BARRIER.set(null);
+        }
+    }
+
+    @Test
+    void sameIdempotencyKeyWithDifferentVerifiedPayloadIsRejected() throws Exception {
+        String idempotencyKey = "verified-payload-conflict";
+        when(paymentVerificationPort.verify("payment-first"))
+                .thenReturn(approved("payment-first", USERNAME, 30_000));
+
+        verifiedReservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("payment-first", "A1"),
+                idempotencyKey
+        );
+
+        assertThatThrownBy(() -> verifiedReservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request("payment-second", "A2"),
+                idempotencyKey
+        )).isExactlyInstanceOf(IdempotencyKeyConflictException.class)
+                .hasMessage("동일한 멱등 키가 다른 예약 요청에 사용되었습니다.");
+
+        assertThat(paymentRepository.count()).isEqualTo(1);
+        assertThat(bookingRepository.count()).isEqualTo(1);
+        assertInventory(23, 1, 1);
+    }
+
+    @RepeatedTest(3)
+    void concurrentSameIdempotencyKeyWithDifferentPayloadAllowsOneAndRejectsConflict() throws Exception {
+        String idempotencyKey = "concurrent-payload-conflict";
+        when(paymentVerificationPort.verify("payment-conflict-1"))
+                .thenReturn(approved("payment-conflict-1", USERNAME, 30_000));
+        when(paymentVerificationPort.verify("payment-conflict-2"))
+                .thenReturn(approved("payment-conflict-2", USERNAME, 30_000));
+        BOOKING_LOOKUP_BARRIER.set(new CyclicBarrier(2));
+
+        try {
+            List<IdempotencyAttemptResult> results = runSameKeyRequestsConcurrently(
+                    idempotencyKey,
+                    request("payment-conflict-1", "A1"),
+                    request("payment-conflict-2", "A2")
+            );
+
+            assertThat(results).filteredOn(IdempotencyAttemptResult::success).hasSize(1);
+            assertThat(results).filteredOn(result -> !result.success()).singleElement()
+                    .extracting(IdempotencyAttemptResult::exceptionType)
+                    .isEqualTo(IdempotencyKeyConflictException.class.getSimpleName());
+            assertThat(BOOKING_LOOKUP_COUNT).hasValue(3);
+            assertThat(paymentRepository.count()).isEqualTo(1);
+            assertThat(bookingRepository.count()).isEqualTo(1);
+            assertInventory(23, 1, 1);
+        } finally {
+            BOOKING_LOOKUP_BARRIER.set(null);
+        }
+    }
+
+    @RepeatedTest(3)
     void concurrentPaymentReuseAllowsOnlyOneReservation() throws Exception {
         String paymentId = "payment-concurrent";
         when(paymentVerificationPort.verify(paymentId))
@@ -299,6 +395,78 @@ class VerifiedReservationPaymentIntegrationTest {
         assertThat(paymentRepository.count()).isZero();
         assertThat(bookingRepository.count()).isZero();
         assertInventory(24, 0, 0);
+    }
+
+    @Test
+    void lateInventoryFailureRollsBackPaymentBookingReservationsAndSeatChanges() {
+        ConcertTime concertTime = concertTimeRepository.findById(concertTimeId).orElseThrow();
+        concertTime.setSeatAmount(1);
+        concertTimeRepository.saveAndFlush(concertTime);
+        entityManager.clear();
+        String paymentId = "payment-late-failure";
+        when(paymentVerificationPort.verify(paymentId))
+                .thenReturn(approved(paymentId, USERNAME, 60_000));
+
+        assertThatThrownBy(() -> verifiedReservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request(paymentId, "A1", "A2"),
+                "late-failure-key"
+        )).isExactlyInstanceOf(Exception.class)
+                .hasMessage("잔여 좌석이 부족합니다.");
+
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(bookingRepository.count()).isZero();
+        assertInventory(1, 0, 0);
+    }
+
+    private List<IdempotencyAttemptResult> runSameKeyRequestsConcurrently(
+            String idempotencyKey,
+            VerifiedReservRequest firstRequest,
+            VerifiedReservRequest secondRequest
+    ) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<VerifiedReservRequest> requests = List.of(firstRequest, secondRequest);
+
+        try {
+            List<Future<IdempotencyAttemptResult>> futures = new ArrayList<>();
+            for (VerifiedReservRequest request : requests) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(5, TimeUnit.SECONDS)) {
+                        return IdempotencyAttemptResult.failure("Timeout", "start latch timeout");
+                    }
+                    try {
+                        LocalDateTime createdAt = verifiedReservationService.reserve(
+                                USERNAME,
+                                CONCERT_ID,
+                                request,
+                                idempotencyKey
+                        );
+                        return IdempotencyAttemptResult.succeeded(createdAt);
+                    } catch (Exception exception) {
+                        return IdempotencyAttemptResult.failure(
+                                exception.getClass().getSimpleName(),
+                                exception.getMessage()
+                        );
+                    }
+                }));
+            }
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            List<IdempotencyAttemptResult> results = new ArrayList<>();
+            for (Future<IdempotencyAttemptResult> future : futures) {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     private AttemptResult attemptReservation(
@@ -417,6 +585,62 @@ class VerifiedReservationPaymentIntegrationTest {
 
         static AttemptResult failure(String exceptionType, String message) {
             return new AttemptResult(false, exceptionType, message);
+        }
+    }
+
+    private record IdempotencyAttemptResult(
+            boolean success,
+            LocalDateTime createdAt,
+            String exceptionType,
+            String message
+    ) {
+        static IdempotencyAttemptResult succeeded(LocalDateTime createdAt) {
+            return new IdempotencyAttemptResult(true, createdAt, null, null);
+        }
+
+        static IdempotencyAttemptResult failure(String exceptionType, String message) {
+            return new IdempotencyAttemptResult(false, null, exceptionType, message);
+        }
+    }
+
+    @TestConfiguration
+    static class BookingRepositoryBarrierConfiguration {
+
+        @Bean
+        static BeanPostProcessor bookingRepositoryBarrierBeanPostProcessor() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (!(bean instanceof BookingRepository bookingRepository)) {
+                        return bean;
+                    }
+                    return Proxy.newProxyInstance(
+                            BookingRepository.class.getClassLoader(),
+                            new Class<?>[]{BookingRepository.class},
+                            (proxy, method, args) -> {
+                                Object result;
+                                try {
+                                    result = method.invoke(bookingRepository, args);
+                                } catch (InvocationTargetException exception) {
+                                    throw exception.getCause();
+                                }
+
+                                if (method.getName().equals("findByUsernameAndIdempotencyKey")) {
+                                    int lookupCount = BOOKING_LOOKUP_COUNT.incrementAndGet();
+                                    CyclicBarrier barrier = BOOKING_LOOKUP_BARRIER.get();
+                                    if (barrier != null && lookupCount <= 2) {
+                                        try {
+                                            barrier.await(5, TimeUnit.SECONDS);
+                                        } catch (TimeoutException exception) {
+                                            throw new IllegalStateException("멱등 키 조회 barrier 대기 시간을 초과했습니다.", exception);
+                                        }
+                                    }
+                                }
+                                return result;
+                            }
+                    );
+                }
+            };
         }
     }
 }

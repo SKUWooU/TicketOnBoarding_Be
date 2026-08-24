@@ -368,7 +368,7 @@ KOPIS의 가격은 자유 문자열이고 Frontend 금액도 서로 다른 고�
 
 ### 가상 결제 검증과 한계
 
-MariaDB 10.11.8·가상 좌석 24개에서 2석 60,000원 정상 확정, 미승인·식별자·금액/사용자 불일치 무변경 거부, 성공 응답 재사용, 예약 실패 rollback을 확인했다. 동일 결제 ID를 다른 멱등 키로 동시 소비하는 시나리오는 3회 모두 1건만 확정됐다. Issue 대상 22개와 기존 회귀를 포함한 전체 Backend 84개 invocation이 통과했다.
+MariaDB 10.11.8·가상 좌석 24개에서 2석 60,000원 정상 확정, 미승인·식별자·금액/사용자 불일치 무변경 거부, 성공 응답 재사용, 예약 실패 rollback을 확인했다. 동일 결제 ID를 다른 멱등 키로 동시 소비하는 시나리오는 3회 모두 1건만 확정됐다. Reviewer Blocking 후에는 실제 좌석·예약 변경 뒤 재고 감소가 실패하는 late-failure와, 동일 멱등 키의 동시 동일 payload 재사용·다른 payload 충돌을 각 3회 결정적 barrier로 추가했다. Issue 대상 30개와 기존 회귀를 포함한 전체 Backend 92개 invocation이 통과했다.
 
 실제 PG, 운영 schema, Frontend 전환, 좌석 hold·만료·환불은 검증하지 않았다. 기존 `/reservation`은 호환을 위한 미검증 legacy 경로로 남아 있다. Backend 우선 작업 후 Frontend 계약을 전환하고 legacy를 제거해야 한다. 상세 근거는 [서버 가상 가격과 mock 결제 검증 경계](verified-payment-reservation-boundary.md)에 기록한다.
 

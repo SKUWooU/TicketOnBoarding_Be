@@ -20,7 +20,7 @@
 - 상태: 구현·로컬 검증 완료, PR 준비 중
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 서버 30,000원 단가·mock 승인/미승인·식별자/금액/사용자 불일치·순차/동시 재사용·예약 실패 rollback, Issue 대상 22개·전체 Backend 84개 invocation 통과
+- 검증: 서버 30,000원 단가·mock 승인/미승인·식별자/금액/사용자 불일치·결제 재사용·late-failure rollback·동시 멱등 재사용/충돌, Issue 대상 30개·전체 Backend 92개 invocation 통과
 - 범위: Backend 가상 좌석 가격, Payment 상태·mock 검증 경계, 검증된 결제 1회 소비와 예약 transaction 연계
 - 제외: 실제 PG·KOPIS·운영 DB 호출, Frontend, 좌석 hold·만료, 취소·환불 보상, Flyway 운영 migration, k6·분산 기술
 

@@ -46,12 +46,14 @@ DB transaction 내에서는 Booking 멱등 소유권을 저장한 뒤 `provider_
 
 - 도메인·가격 정책 5개 invocation 통과
 - 신규 Controller 계약·adapter 미구성 HTTP 503을 포함한 6개 invocation 통과
-- MariaDB 10.11.8·가상 좌석 24개·mock 결제 통합 11개 invocation 통과
-- 기존 좌석·멱등성·취소 경합과 application context를 포함한 전체 Backend 84개 invocation 통과
+- MariaDB 10.11.8·가상 좌석 24개·mock 결제 통합 19개 invocation 통과
+- 기존 좌석·멱등성·취소 경합과 application context를 포함한 전체 Backend 92개 invocation 통과
 - 2석 정상 승인: 서버 기대 금액 60,000원, Payment·Booking 1건, Reservation·점유 2건, 잔여 22
 - 미승인·승인 금액 100원·다른 사용자는 DB 변경 없이 거부
 - 동일 결제 ID 동시 재사용 3회: 매회 성공 1건, Payment·Booking·Reservation·점유 각 1건, 잔여 23
 - 존재하지 않는 좌석으로 예약 실패: Payment·Booking·Reservation 0건, 점유 0, 잔여 24
+- 잔여 1에서 2석 처리 후 감소 query 실패: Payment·Booking·Reservation 0건, 점유 0, 잔여 1로 late-failure 전체 rollback
+- 동일 멱등 키를 둘 다 없음으로 읽게 한 barrier: 동일 payload 3회는 동일 시각 재사용, 다른 payload 3회는 성공 1·충돌 1로 수렴
 
 ## 한계와 후속 순서
 
