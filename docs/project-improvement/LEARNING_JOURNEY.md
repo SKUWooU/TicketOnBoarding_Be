@@ -287,3 +287,25 @@ Issue #33과 같은 MariaDB 10.11.8·가상 좌석 24개 fixture에서 관리자
 ### 링크
 
 - [Backend Issue #35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35)
+
+## Issue #37 — 결제 승인과 예약 확정 경계·중복 요청 기준선
+
+### 현재 계약에서 확인된 사실
+
+Frontend의 KakaoPay·이니시스 화면은 브라우저 PortOne SDK의 성공 callback을 받은 뒤에야 Backend 예약 API를 호출한다. Backend `ReservRequest`에는 공연일·회차 ID·공연 시간·좌석 번호 목록 네 필드만 있고 payment ID, PG 승인 token과 결제 금액은 없다. Service는 이 요청만으로 좌석을 점유하고 예약 상태를 `결제완료`로 저장한다.
+
+MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture에서 현재 네 필드 DTO로 `A1`을 예약하자 `결제완료` 예약 1건·점유 좌석 1개·잔여 23이 생성되고 재고 불변식은 유지됐다. 이는 Backend 내부 재고 transaction은 일관되지만 서버가 PG 결제 사실을 독립적으로 확인했다는 의미는 아니다.
+
+### 동일 요청 재시도
+
+첫 예약 transaction이 성공한 뒤 응답 유실을 가정해 같은 사용자·회차·좌석 payload를 다시 전송했다. 두 번째 요청은 `이미 예약된 좌석입니다.`로 실패했고 예약 1건·점유 1개·잔여 23은 첫 성공 snapshot과 동일했다. 재고 중복 차감은 없지만 호출자는 첫 요청의 성공 결과를 재사용할 수 없으므로 API 수준의 멱등성은 제공되지 않는다. 대상 20개와 전체 Backend 47개 test invocation이 통과했다.
+
+### 확인된 사실과 장애 가능성의 경계
+
+코드에서 확인된 순서는 `브라우저 결제 성공 → Backend 예약`이며 예약 실패 catch는 오류 기록만 수행한다. 따라서 결제 성공 뒤 좌석 충돌·네트워크·Backend 실패가 발생하면 결제 승인과 예약 확정이 불일치할 수 있고 자동 취소·보상 경로는 확인되지 않는다. 이 문장은 현재 두 시스템의 호출 순서에서 도출한 실패 창이며, 실제 PG 장애를 실행하거나 발생률을 측정한 결과는 아니다.
+
+후속 개선에는 서버가 소유하는 booking/payment 식별자, 결제 금액 검증, 동일 idempotency key의 결과 재사용과 payload 충돌 거부가 선행되어야 한다. 좌석 hold·만료, PG 승인과 보상 취소는 이 계약이 정해진 뒤 mock 결제 경계에서 별도로 검증한다. 이니시스 화면의 고정 결제 금액 `100`은 Frontend 별도 Issue로 분리한다.
+
+### 링크
+
+- [Backend Issue #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37)

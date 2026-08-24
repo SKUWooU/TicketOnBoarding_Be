@@ -158,6 +158,56 @@ class SeatReservationConcurrencyIntegrationTest {
     }
 
     @Test
+    void currentReservationContractCreatesPaymentCompletedStateWithoutPaymentEvidence() throws Exception {
+        ReservRequest reservRequest = request("A1");
+
+        List<String> requestFields = Arrays.stream(ReservRequest.class.getDeclaredFields())
+                .map(java.lang.reflect.Field::getName)
+                .toList();
+        assertThat(requestFields).containsExactlyInAnyOrder(
+                "concertDate",
+                "concertTimeId",
+                "concertTime",
+                "seatNumberList"
+        );
+
+        seatReservationService.reserveSeat(USERNAME, CONCERT_ID, reservRequest);
+
+        Reservation reservation = reservationRepository.findAll().getFirst();
+        InventorySnapshot snapshot = inventorySnapshot();
+
+        assertThat(reservation.getUsername()).isEqualTo(USERNAME);
+        assertThat(reservation.getStatus()).isEqualTo("결제완료");
+        assertThat(reservation.getSeatNumber()).isEqualTo("A1");
+        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(1);
+        assertThat(snapshot.reservations()).isEqualTo(1);
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void replayAfterSuccessfulReservationCannotReturnOriginalSuccess() throws Exception {
+        ReservRequest reservRequest = request("A1");
+        seatReservationService.reserveSeat(USERNAME, CONCERT_ID, reservRequest);
+        InventorySnapshot firstSuccess = inventorySnapshot();
+
+        assertThatThrownBy(() -> seatReservationService.reserveSeat(USERNAME, CONCERT_ID, reservRequest))
+                .isExactlyInstanceOf(Exception.class)
+                .hasMessage("이미 예약된 좌석입니다.");
+
+        InventorySnapshot retrySnapshot = inventorySnapshot();
+        List<Reservation> reservations = reservationRepository.findAll();
+
+        assertThat(retrySnapshot).isEqualTo(firstSuccess);
+        assertThat(retrySnapshot.successfullyReservedSeats()).isEqualTo(1);
+        assertThat(retrySnapshot.reservations()).isEqualTo(1);
+        assertThat(retrySnapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(retrySnapshot.inventoryEquationHolds()).isTrue();
+        assertThat(reservations).singleElement()
+                .satisfies(reservation -> assertThat(reservation.getStatus()).isEqualTo("결제완료"));
+    }
+
+    @Test
     void sameSeatConcurrentReservationAllowsOnlyOneSuccess() throws Exception {
         int attempts = 8;
         List<AttemptResult> results = runConcurrently(
