@@ -245,3 +245,23 @@ MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture에서 �
 ### 링크
 
 - [Backend Issue #31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)
+
+## Issue #33 — 사용자 취소 신청과 관리자 승인 경합 상태 전이 기준선
+
+### 조사한 경계
+
+사용자 취소 신청은 Controller가 `findById`로 예약을 읽고 소유자를 확인한 뒤 상태를 `취소신청`으로 바꾸어 별도로 `save`한다. 반면 관리자 승인은 Service transaction에서 같은 예약을 `PESSIMISTIC_WRITE`로 읽고 `취소신청 → 취소완료`, 좌석 해제와 잔여 수량 복구를 함께 commit한다. 사용자 경로의 조회와 저장 전체를 감싸는 transaction이나 예약 row lock은 없다.
+
+### 결정적 재현
+
+MariaDB 10.11.8의 공연 1개·회차 1개·가상 좌석 24개 fixture를 사용했다. 사용자 중복 신청 thread가 `취소신청` 예약을 읽은 직후 latch에서 대기하고, 관리자 실제 취소 Service가 먼저 `취소완료`·좌석 미점유·잔여 24를 commit한 것을 확인한 뒤 사용자 저장을 재개했다. 단순 동시 출발이 아니라 문제가 되는 commit 순서를 강제했으며 동일 조건을 3회 반복했다.
+
+세 번 모두 사용자의 늦은 저장이 예약 상태만 `취소신청`으로 되돌렸다. 좌석은 미점유, 잔여는 24로 재고 수량 불변식 자체는 유지됐지만 관리 화면에는 다시 승인 대상처럼 나타날 수 있고, 같은 관리자 승인 재시도는 이미 해제된 좌석 오류로 거부됐다. 사용자 신청 후 관리자 승인을 순차 실행한 제어군은 최종 `취소완료`를 유지했다.
+
+### 범위와 다음 판단
+
+이는 단일 MariaDB와 가상 좌석에서 현재 repository 호출 순서를 재현한 상태 정합성 기준선이며 운영 환경의 발생 빈도나 처리량을 뜻하지 않는다. 이번 Issue에서는 애플리케이션을 수정하지 않는다. 사용자 취소 신청을 transaction Service로 이동할지, 어떤 상태에서 신청·재신청을 허용할지, 관리자 승인과 같은 예약 lock 순서를 공유할지는 별도 개선 Issue에서 결정한다.
+
+### 링크
+
+- [Backend Issue #33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33)

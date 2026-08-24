@@ -6,27 +6,41 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `bcfa7e30c947975e1f7f89d5eef0e8bffe36b9a1` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `b10c10727af06cc6fe3f9c8f6813fb3e651a6d7b` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #33 — 사용자 취소 신청과 관리자 승인 경합 상태 전이 기준선
+
+- Issue: [#33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33)
+- PR: 생성 전
+- Branch: `test/33-cancellation-request-approval-race-baseline`
+- 상태: 구현·로컬 검증 완료, PR 준비
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 사용자 조회 완료 → 관리자 승인 commit → 사용자 지연 저장 순서를 latch로 제어해 3회 모두 `취소완료`가 `취소신청`으로 되돌아감을 재현; 좌석 미점유·잔여 24는 유지되고 재승인은 이미 해제된 좌석으로 거부됨; 정상 순차 제어군 포함 대상 15개·전체 Backend 34개 invocation와 `git diff --check` 성공
+- Reviewer: PR 생성 후 별도 Agent 검토 예정
+- 범위: 기존 사용자 Controller의 분리된 조회·저장 경계와 관리자 잠금 transaction 간 MariaDB Testcontainers 상태 전이 기준선
+- 제외: 운영 로직 수정, 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
+
+## 완료
+
 ### Backend Issue #31 — 취소 중복 요청의 재고 중복 복구 방지
 
 - Issue: [#31](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/31)
 - PR: [#32](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/32)
 - Branch: `fix/#31-cancellation-idempotency`
-- 상태: 첫 Reviewer Blocking 수정·Backend CI 완료, 재검토 대기
+- squash commit: `b10c10727af06cc6fe3f9c8f6813fb3e651a6d7b`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 대상 11개·전체 30개 invocation 성공, 첫 lock 보유 중 두 번째 lock 조회의 200ms 미반환과 해제 후 완료 확인, 회차 증가 0건 예외 후 예약·좌석 rollback, 없는 예약·이미 해제된 좌석 거부 검증; Blocking 수정 커밋 `47e7f254dd2310a63bdcce0e50dad8ffb1635279` Backend CI 56초 성공
-- Reviewer: HEAD `1add2ad9970b4d6e0349942ef85d12c27d0c54d6`에서 결정적 lock wait·변경 후 실패 rollback 테스트와 진행 상태 동기화 Blocking 확인, 세 항목 수정·CI 성공 후 재검토 대기
+- 검증: 대상 11개·전체 30개 invocation 성공, 첫 lock 보유 중 두 번째 lock 조회의 200ms 미반환과 해제 후 완료 확인, 회차 증가 0건 예외 후 예약·좌석 rollback, 없는 예약·이미 해제된 좌석 거부 검증
+- Reviewer: Blocking 수정 후 최신 HEAD `0edd3d39eaa58a9fdca31a087cddbf2a7b79812b`, Blocking 없음, `MERGE_READY: YES`
 - 범위: 관리자 취소 transaction, 예약 row lock, 취소 상태 정책, 원자적 재고 복구, MariaDB Testcontainers 회귀 테스트
 - 제외: 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
-
-## 완료
 
 ### Backend Issue #29 — auto-merge 연결 Issue 종료 E2E 검증
 
