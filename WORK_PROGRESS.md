@@ -6,27 +6,41 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `b10c10727af06cc6fe3f9c8f6813fb3e651a6d7b` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `87c35225877fc6f49ff597946322b462c856802c` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #35 — 사용자 취소 신청의 잠금·상태 전이 원자성 보장
+
+- Issue: [#35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35)
+- PR: 생성 전
+- Branch: `fix/35-cancellation-request-atomicity`
+- 상태: 구현·로컬 검증 완료, PR 준비
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 관리자 승인→사용자 신청과 사용자 신청→관리자 승인 양방향에서 두 번째 lock 조회의 200ms 미반환·해제 후 완료를 각 3회 확인, 최종 `취소완료`·미점유·잔여 24 유지; 정상·중복·완료 후 신청·다른 사용자·없는 예약·미지원 상태 Service 통합 23개와 Controller 위임·200·400·401 응답 3개, 전체 Backend 45개 invocation 및 `git diff --check` 성공
+- Reviewer: PR 생성 후 별도 Agent 검토 예정
+- 범위: 사용자 신청 transaction·예약 row lock·소유자 및 상태 정책, Controller Service 위임, Issue #33 회귀 테스트
+- 제외: 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
+
+## 완료
+
 ### Backend Issue #33 — 사용자 취소 신청과 관리자 승인 경합 상태 전이 기준선
 
 - Issue: [#33](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/33)
 - PR: [#34](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/34)
 - Branch: `test/33-cancellation-request-approval-race-baseline`
-- 상태: 구현·로컬 검증 완료, Backend CI 대기
+- squash commit: `87c35225877fc6f49ff597946322b462c856802c`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
-- 검증: 사용자 조회 완료 → 관리자 승인 commit → 사용자 지연 저장 순서를 latch로 제어해 3회 모두 `취소완료`가 `취소신청`으로 되돌아감을 재현; 좌석 미점유·잔여 24는 유지되고 재승인은 이미 해제된 좌석으로 거부됨; 정상 순차 제어군 포함 대상 15개·전체 Backend 34개 invocation와 `git diff --check` 성공
-- Reviewer: PR 생성 후 별도 Agent 검토 예정
+- 검증: 사용자 조회 완료 → 관리자 승인 commit → 사용자 지연 저장 순서를 latch로 제어해 3회 모두 `취소완료`가 `취소신청`으로 되돌아감을 재현; 좌석 미점유·잔여 24는 유지되고 재승인은 이미 해제된 좌석으로 거부됨; 정상 순차 제어군 포함 대상 15개·전체 Backend 34개 invocation, Backend CI 2분 5초 성공
+- Reviewer: 최신 HEAD `c7ac32d2e88e1b95712a39e6ef0ee9240bdbd8ae`, Blocking 없음, `MERGE_READY: YES`
 - 범위: 기존 사용자 Controller의 분리된 조회·저장 경계와 관리자 잠금 transaction 간 MariaDB Testcontainers 상태 전이 기준선
 - 제외: 운영 로직 수정, 실제 결제·환불·외부 API·Frontend, 전체 상태 enum 전환, k6·분산 lock·대기열·메시지 브로커
-
-## 완료
 
 ### Backend Issue #31 — 취소 중복 요청의 재고 중복 복구 방지
 

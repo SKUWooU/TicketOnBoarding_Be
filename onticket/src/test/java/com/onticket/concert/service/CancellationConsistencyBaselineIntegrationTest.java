@@ -28,7 +28,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -105,9 +104,6 @@ class CancellationConsistencyBaselineIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
-
-    @Autowired
-    private TransactionTemplate transactionTemplate;
 
     @MockBean
     private JwtUtil jwtUtil;
@@ -207,7 +203,7 @@ class CancellationConsistencyBaselineIntegrationTest {
         reservationRepository.saveAndFlush(reservation);
         entityManager.clear();
 
-        requestCancellationLikeMypageController();
+        seatReservationService.requestCancellation(USERNAME, reservationId);
         seatReservationService.cancelReservation(reservationId);
 
         CancellationSnapshot snapshot = cancellationSnapshot();
@@ -219,59 +215,143 @@ class CancellationConsistencyBaselineIntegrationTest {
     }
 
     @RepeatedTest(3)
-    void lateDuplicateCancellationRequestOverwritesCompletedCancellation() throws Exception {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        CountDownLatch userReadCompleted = new CountDownLatch(1);
-        CountDownLatch allowUserSave = new CountDownLatch(1);
+    void lateCancellationRequestWaitsForApprovalAndKeepsCompletedCancellation() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ReservationLockBarrier barrier = new ReservationLockBarrier();
+        RESERVATION_LOCK_BARRIER.set(barrier);
 
         try {
-            Future<?> userRequest = executor.submit(() -> {
-                Reservation staleReservation = transactionTemplate.execute(status ->
-                        reservationRepository.findById(reservationId).orElseThrow()
-                );
-                if (staleReservation == null) {
-                    throw new IllegalStateException("사용자 취소 신청 대상 예약을 조회하지 못했습니다.");
-                }
-                if (!"취소신청".equals(staleReservation.getStatus())) {
-                    throw new IllegalStateException("사용자 조회 시점의 예약 상태가 취소신청이 아닙니다.");
-                }
+            Future<?> adminApproval = executor.submit(this::cancelReservation);
+            assertThat(barrier.awaitFirstLock()).isTrue();
 
-                userReadCompleted.countDown();
-                awaitLatch(allowUserSave, "관리자 승인 이후 사용자 저장 허용 신호");
+            Future<?> userRequest = executor.submit(() ->
+                    seatReservationService.requestCancellation(USERNAME, reservationId)
+            );
+            assertThat(barrier.awaitSecondLockAttempt()).isTrue();
+            assertThat(barrier.awaitSecondLock(200, TimeUnit.MILLISECONDS)).isFalse();
+            assertThat(adminApproval.isDone()).isFalse();
+            assertThat(userRequest.isDone()).isFalse();
 
-                staleReservation.setStatus("취소신청");
-                transactionTemplate.executeWithoutResult(status ->
-                        reservationRepository.saveAndFlush(staleReservation)
-                );
-            });
-
-            assertThat(userReadCompleted.await(5, TimeUnit.SECONDS)).isTrue();
-
-            seatReservationService.cancelReservation(reservationId);
-
-            CancellationSnapshot approvedSnapshot = cancellationSnapshot();
-            assertThat(approvedSnapshot.reservationStatus()).isEqualTo("취소완료");
-            assertThat(approvedSnapshot.seatReserved()).isFalse();
-            assertThat(approvedSnapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
-
-            allowUserSave.countDown();
+            barrier.releaseFirstLock();
+            assertThat(barrier.awaitSecondLock(5, TimeUnit.SECONDS)).isTrue();
+            adminApproval.get(10, TimeUnit.SECONDS);
             userRequest.get(10, TimeUnit.SECONDS);
         } finally {
-            allowUserSave.countDown();
+            barrier.releaseFirstLock();
+            RESERVATION_LOCK_BARRIER.set(null);
             executor.shutdownNow();
             assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
 
         CancellationSnapshot snapshot = cancellationSnapshot();
 
-        assertThat(snapshot.reservationStatus()).isEqualTo("취소신청");
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
         assertThat(snapshot.seatReserved()).isFalse();
         assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
         assertThat(snapshot.inventoryEquationHolds()).isTrue();
 
-        assertThatThrownBy(() -> seatReservationService.cancelReservation(reservationId))
+        seatReservationService.cancelReservation(reservationId);
+
+        CancellationSnapshot retrySnapshot = cancellationSnapshot();
+        assertThat(retrySnapshot).isEqualTo(snapshot);
+    }
+
+    @RepeatedTest(3)
+    void approvalWaitsForCancellationRequestAndCompletesAfterRequestCommit() throws Exception {
+        updateReservationStatus("결제완료");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ReservationLockBarrier barrier = new ReservationLockBarrier();
+        RESERVATION_LOCK_BARRIER.set(barrier);
+
+        try {
+            Future<?> userRequest = executor.submit(() ->
+                    seatReservationService.requestCancellation(USERNAME, reservationId)
+            );
+            assertThat(barrier.awaitFirstLock()).isTrue();
+
+            Future<?> adminApproval = executor.submit(this::cancelReservation);
+            assertThat(barrier.awaitSecondLockAttempt()).isTrue();
+            assertThat(barrier.awaitSecondLock(200, TimeUnit.MILLISECONDS)).isFalse();
+            assertThat(userRequest.isDone()).isFalse();
+            assertThat(adminApproval.isDone()).isFalse();
+
+            barrier.releaseFirstLock();
+            assertThat(barrier.awaitSecondLock(5, TimeUnit.SECONDS)).isTrue();
+            userRequest.get(10, TimeUnit.SECONDS);
+            adminApproval.get(10, TimeUnit.SECONDS);
+        } finally {
+            barrier.releaseFirstLock();
+            RESERVATION_LOCK_BARRIER.set(null);
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+
+        CancellationSnapshot snapshot = cancellationSnapshot();
+
+        assertThat(snapshot.reservationStatus()).isEqualTo("취소완료");
+        assertThat(snapshot.seatReserved()).isFalse();
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void duplicateCancellationRequestIsIdempotent() {
+        updateReservationStatus("결제완료");
+
+        seatReservationService.requestCancellation(USERNAME, reservationId);
+        CancellationSnapshot firstSnapshot = cancellationSnapshot();
+        seatReservationService.requestCancellation(USERNAME, reservationId);
+        CancellationSnapshot retrySnapshot = cancellationSnapshot();
+
+        assertThat(firstSnapshot.reservationStatus()).isEqualTo("취소신청");
+        assertThat(firstSnapshot.seatReserved()).isTrue();
+        assertThat(firstSnapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 1);
+        assertThat(retrySnapshot).isEqualTo(firstSnapshot);
+    }
+
+    @Test
+    void completedCancellationRequestIsIdempotent() throws Exception {
+        seatReservationService.cancelReservation(reservationId);
+        CancellationSnapshot completedSnapshot = cancellationSnapshot();
+
+        seatReservationService.requestCancellation(USERNAME, reservationId);
+
+        assertThat(cancellationSnapshot()).isEqualTo(completedSnapshot);
+    }
+
+    @Test
+    void cancellationRequestByAnotherUserIsRejectedWithoutChange() {
+        updateReservationStatus("결제완료");
+        CancellationSnapshot beforeRequest = cancellationSnapshot();
+
+        assertThatThrownBy(() -> seatReservationService.requestCancellation("another-user", reservationId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("예약정보와 다른 사용자입니다.");
+
+        assertThat(cancellationSnapshot()).isEqualTo(beforeRequest);
+    }
+
+    @Test
+    void missingCancellationRequestIsRejectedWithoutChange() {
+        CancellationSnapshot beforeRequest = cancellationSnapshot();
+
+        assertThatThrownBy(() -> seatReservationService.requestCancellation(USERNAME, Long.MAX_VALUE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("해당하는 예약이 없습니다.");
+
+        assertThat(cancellationSnapshot()).isEqualTo(beforeRequest);
+    }
+
+    @Test
+    void unsupportedCancellationRequestStateIsRejectedWithoutChange() {
+        updateReservationStatus("알수없음");
+        CancellationSnapshot beforeRequest = cancellationSnapshot();
+
+        assertThatThrownBy(() -> seatReservationService.requestCancellation(USERNAME, reservationId))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("예약 좌석 상태가 올바르지 않습니다.");
+                .hasMessage("취소 신청할 수 없는 예약 상태입니다.");
+
+        assertThat(cancellationSnapshot()).isEqualTo(beforeRequest);
     }
 
     @Test
@@ -352,26 +432,11 @@ class CancellationConsistencyBaselineIntegrationTest {
         }
     }
 
-    private void requestCancellationLikeMypageController() {
-        Reservation reservation = transactionTemplate.execute(status ->
-                reservationRepository.findById(reservationId).orElseThrow()
-        );
-        if (reservation == null) {
-            throw new IllegalStateException("사용자 취소 신청 대상 예약을 조회하지 못했습니다.");
-        }
-        reservation.setStatus("취소신청");
-        transactionTemplate.executeWithoutResult(status -> reservationRepository.saveAndFlush(reservation));
-    }
-
-    private void awaitLatch(CountDownLatch latch, String description) {
-        try {
-            if (!latch.await(10, TimeUnit.SECONDS)) {
-                throw new IllegalStateException(description + "를 기다리지 못했습니다.");
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(description + " 대기 중 interrupt가 발생했습니다.", exception);
-        }
+    private void updateReservationStatus(String status) {
+        Reservation reservation = reservationRepository.findById(reservationId).orElseThrow();
+        reservation.setStatus(status);
+        reservationRepository.saveAndFlush(reservation);
+        entityManager.clear();
     }
 
     private CancellationFixture createFixture(String reservationStatus) {
