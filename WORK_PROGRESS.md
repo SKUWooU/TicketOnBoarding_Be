@@ -6,26 +6,39 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `4030c7c329db1123ee28e218f07dd3ca2a735926` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `38b54fe1b7916d426a7dcde294036b172d7bd9f0` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #41 — 예약 상태 문자열을 명시적 전이 정책으로 전환
+
+- Issue: [#41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41)
+- Branch: `refactor/41-reservation-status-transition`
+- 상태: 구현·로컬 검증 완료, PR 준비
+- 계획 승인: 완료
+- 구현: 완료
+- 검증: 상태·converter·JSON·허용/거부/멱등 전이 단위 6개, 예약·취소 MariaDB 통합 52개와 전체 Backend 65개 invocation 통과; DB·JSON 한글 값과 기존 취소 lock·rollback·재고 불변식 유지
+- 범위: Backend ReservationStatus enum·JPA/JSON 호환·도메인 전이, 기존 예약·취소 동시성·rollback 회귀
+- 제외: 실제 PG·Frontend, 별도 Payment/Order 전체 모델, 좌석 hold·만료·환불, 운영 migration, k6
+
+## 완료
+
 ### Backend Issue #39 — 예약 중복 요청의 결과 재사용과 payload 충돌 방지
 
 - Issue: [#39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39)
 - PR: [#40](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/40)
 - Branch: `fix/39-reservation-idempotency`
-- 상태: 구현·로컬 검증 완료, Backend CI 대기
+- squash commit: `38b54fe1b7916d426a7dcde294036b172d7bd9f0`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 동일 payload 순차 재시도는 최초 생성 시각 재사용; 두 요청이 모두 기존 key 없음을 읽은 뒤의 동시 경쟁 3회 모두 Booking 1·예약/점유 1·잔여 23; payload 충돌·잘못된 key 무변경 거부, 실패 key rollback 후 재사용; Service 29개·Controller 3개·전체 Backend 59개 invocation 성공
+- Reviewer: 최신 HEAD `9b737f8aedbeedeecbfef51f492064e2bf1892e9`, Blocking 없음, `MERGE_READY: YES`; Backend CI 1분 35초 성공
 - 범위: Backend 선택적 `Idempotency-Key`, Booking과 안정적 성공 결과, 동일 payload 결과 재사용, payload 충돌 거부, 키 없는 현재 FE 호출 호환
 - 제외: 실제 PG 호출·검증, Payment/Order 전체 상태 머신, Frontend 변경, 운영 Flyway 전환, Redis·대기열·outbox·메시지 브로커, k6
-
-## 완료
 
 ### Backend Issue #37 — 결제 승인과 예약 확정 경계·중복 요청 기준선
 

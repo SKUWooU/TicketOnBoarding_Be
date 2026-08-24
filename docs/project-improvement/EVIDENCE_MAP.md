@@ -27,6 +27,7 @@
 | 결제 증빙 없이 서버가 결제 완료 예약 생성 | 현재 4필드 `ReservRequest`의 필드 목록과 MariaDB 가상 좌석 단일 예약 | 운영 코드 변경 없음 | 예약 status·사용자·좌석, 점유·예약·잔여 수량, 대상 20개·전체 47개 invocation | payment ID·승인 token·금액 없이 `결제완료` 1건, 점유 1·잔여 23·재고 불변식 충족 | [BE #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37) |
 | 예약 성공 응답 유실 후 동일 요청 재시도 | 첫 요청 commit 후 같은 사용자·회차·좌석 payload 순차 재전송 | 운영 코드 변경 없음 | 두 번째 결과와 전후 DB snapshot, 대상 20개·전체 47개 invocation | 첫 요청 성공, 두 번째 `이미 예약된 좌석입니다.` 실패; 예약 1·점유 1·잔여 23은 유지되지만 원래 성공 결과 재사용 불가 | [BE #37](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/37) |
 | 예약 중복 요청이 최초 성공 결과를 재사용하지 못함 | Issue #37 순차 재시도와 두 thread가 모두 기존 키 없음을 읽은 뒤 경쟁하는 MariaDB barrier fixture | 사용자·키 unique Booking, 의미 payload fingerprint, Booking·좌석·예약·잔여 수량 단일 transaction, unique 패자 결과 재조회 | 순차 동일 payload·동시 동일 키 3회·payload 충돌·실패 rollback·키 없는 호환·HTTP 400/409, Service 29개·Controller 3개·전체 59개 invocation | 동일 요청은 같은 생성 시각, 동시 요청도 Booking/예약/점유 각 1·잔여 23; 다른 payload와 잘못된 키는 무변경 거부; 실패 키는 재사용 가능 | [BE #39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39) / [상세 근거](reservation-idempotency.md) |
+| 예약 상태가 자유 문자열이고 전이 규칙이 Service에 분산됨 | 생성·사용자 신청·관리자 완료의 문자열 비교·직접 setter와 기존 한글 DB/JSON 계약 확인 | `ReservationStatus`, JPA converter, Entity 전이 메서드, status setter 제거 | 상태 단위 6개, MariaDB 예약·취소 통합 52개, 전체 Backend 65개 invocation | 알 수 없는 상태 거부, 직접 완료 전이 거부, 중복 전이 무변경; DB·JSON 한글 값과 취소 경합·rollback 불변식 유지 | [BE #41](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/41) / [상세 근거](reservation-status-transition.md) |
 
 ## 기록 규칙
 
