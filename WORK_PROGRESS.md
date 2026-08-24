@@ -16,8 +16,9 @@
 ### Backend Issue #39 — 예약 중복 요청의 결과 재사용과 payload 충돌 방지
 
 - Issue: [#39](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/39)
+- PR: [#40](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/40)
 - Branch: `fix/39-reservation-idempotency`
-- 상태: 구현·로컬 검증 완료, PR 준비
+- 상태: 구현·로컬 검증 완료, Backend CI 대기
 - 계획 승인: 완료
 - 구현: 완료
 - 검증: 동일 payload 순차 재시도는 최초 생성 시각 재사용; 두 요청이 모두 기존 key 없음을 읽은 뒤의 동시 경쟁 3회 모두 Booking 1·예약/점유 1·잔여 23; payload 충돌·잘못된 key 무변경 거부, 실패 key rollback 후 재사용; Service 29개·Controller 3개·전체 Backend 59개 invocation 성공
