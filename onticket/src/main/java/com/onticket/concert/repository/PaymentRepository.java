@@ -7,5 +7,5 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByProviderPaymentId(String providerPaymentId);
 
-    long countByUsernameStartingWith(String usernamePrefix);
+    long countByProviderPaymentIdStartingWith(String providerPaymentIdPrefix);
 }

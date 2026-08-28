@@ -57,9 +57,9 @@ class LoadTestFixtureIntegrationTest {
 
     @Test
     void createsTwoThousandSeatsAndKeepsInitializationIdempotent() {
-        LoadTestFixtureService.FixtureMetadata first = fixtureService.initialize();
-        LoadTestFixtureService.FixtureMetadata second = fixtureService.initialize();
-        LoadTestFixtureService.InventorySnapshot snapshot = fixtureService.snapshot();
+        LoadTestFixtureService.FixtureMetadata first = fixtureService.initialize("run-a");
+        LoadTestFixtureService.FixtureMetadata second = fixtureService.initialize("run-a");
+        LoadTestFixtureService.InventorySnapshot snapshot = fixtureService.snapshot("run-a");
 
         assertThat(first).isEqualTo(second);
         assertThat(first.totalSeats()).isEqualTo(2_000);
@@ -73,31 +73,44 @@ class LoadTestFixtureIntegrationTest {
     }
 
     @Test
+    void createsIndependentConcertTimeAndInventoryForEachRun() {
+        LoadTestFixtureService.FixtureMetadata first = fixtureService.initialize("run-one");
+        LoadTestFixtureService.FixtureMetadata second = fixtureService.initialize("run-two");
+
+        assertThat(first.concertId()).isNotEqualTo(second.concertId());
+        assertThat(first.concertTimeId()).isNotEqualTo(second.concertTimeId());
+        assertThat(fixtureService.snapshot("run-one").actualSeatCount()).isEqualTo(2_000);
+        assertThat(fixtureService.snapshot("run-two").actualSeatCount()).isEqualTo(2_000);
+        assertThat(fixtureService.snapshot("run-one").invariantSatisfied()).isTrue();
+        assertThat(fixtureService.snapshot("run-two").invariantSatisfied()).isTrue();
+    }
+
+    @Test
     void usesFixedWidthCanonicalSeatNumbers() {
         assertThat(LoadTestFixtureService.seatNumber(1, 1)).isEqualTo("R001-S001");
         assertThat(LoadTestFixtureService.seatNumber(50, 40)).isEqualTo("R050-S040");
     }
 
     @Test
-    void excludesUnrelatedBookingAndPaymentRowsFromSnapshot() {
+    void excludesAnotherLoadtestRunBookingAndPaymentFromSnapshot() {
         Booking unrelatedBooking = new Booking();
-        unrelatedBooking.setUsername("existing-user");
-        unrelatedBooking.setIdempotencyKey("existing-request");
+        unrelatedBooking.setUsername("load-user-run-a-extra.001");
+        unrelatedBooking.setIdempotencyKey("lt-run-a-extra.distributed-1");
         unrelatedBooking.setRequestFingerprint("0".repeat(64));
         unrelatedBooking.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
         unrelatedBooking = bookingRepository.saveAndFlush(unrelatedBooking);
 
         Payment unrelatedPayment = Payment.approved(
-                "existing-payment",
-                "existing-user",
+                "LT:load-user-run-a-extra.001:30000:distributed-1",
+                "load-user-run-a-extra.001",
                 30_000,
                 LocalDateTime.of(2026, 1, 1, 0, 0),
                 unrelatedBooking
         );
         paymentRepository.saveAndFlush(unrelatedPayment);
 
-        fixtureService.initialize();
-        LoadTestFixtureService.InventorySnapshot snapshot = fixtureService.snapshot();
+        fixtureService.initialize("run-a");
+        LoadTestFixtureService.InventorySnapshot snapshot = fixtureService.snapshot("run-a");
 
         assertThat(snapshot.bookings()).isZero();
         assertThat(snapshot.payments()).isZero();

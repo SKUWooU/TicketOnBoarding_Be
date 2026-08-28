@@ -17,12 +17,14 @@
 
 - Issue: [#47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)
 - Branch: `test/47-high-contention-loadtest-harness`
-- 상태: 구현·로컬 검증 완료, PR 준비 중
+- PR: [#48](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/48)
+- 상태: Reviewer Blocking 수정·재검증 완료, 재리뷰 준비
 - 계획 승인: 완료
 - 구현: `loadtest` profile·2,000석 fixture·mock 결제 adapter·k6 4종 시나리오·Actuator 지표·상세 근거 문서 구성
-- 검증: 신규 loadtest 대상과 기존 동시성 회귀를 포함한 전체 Backend 98개 test 통과(실패·오류·skip 0), k6 inspect 통과, distributed 5 RPS·10초 smoke에서 예약 51건·p95 188.32ms·비-2xx 0·종료 불변식 충족
+- 검증: Blocking 수정 후 전체 Backend 99개 test 통과(실패·오류·skip 0), k6 inspect 통과, 독립 run 연속 distributed 5 RPS·10초에서 예약 50·51건 모두 종료 불변식 충족; 최종 로그 정규화 실행 예약 51건·p95 68.21ms·비-2xx 0·불변식 충족
 - 범위: 로컬 가상 좌석 고경합 재현·측정 기반과 지표·정합성 결과 형식
 - 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 운영 SLA·성능 개선 주장, 대기열·Redis 분산 lock·outbox·브로커, 전체 Prometheus/Grafana stack
+- Reviewer: HEAD `2cc9e78dee571d65d05102605ccec7a73b802f9e`에서 실행 간 fixture 재사용, run 밖 Booking/Payment 집계, teardown 정합성 미실패, idempotent 좌석 충돌 Blocking 4건; run 단위 격리로 수정 중
 
 ## 완료
 

@@ -9,5 +9,5 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Optional<Booking> findByUsernameAndIdempotencyKey(String username, String idempotencyKey);
 
-    long countByUsernameStartingWith(String usernamePrefix);
+    long countByIdempotencyKeyStartingWith(String idempotencyKeyPrefix);
 }

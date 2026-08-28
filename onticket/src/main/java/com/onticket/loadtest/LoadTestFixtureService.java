@@ -19,13 +19,16 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @Profile("loadtest")
 public class LoadTestFixtureService {
 
-    public static final String CONCERT_ID = "LOAD-TEST-CONCERT";
+    private static final Pattern RUN_ID_PATTERN = Pattern.compile("[A-Za-z0-9-]{1,32}");
+    private static final String CONCERT_ID_PREFIX = "LOAD-TEST-";
     public static final String USERNAME_PREFIX = "load-user-";
+    public static final String IDEMPOTENCY_KEY_PREFIX = "lt-";
 
     private final ConcertRepository concertRepository;
     private final ConcertTimeRepository concertTimeRepository;
@@ -60,21 +63,23 @@ public class LoadTestFixtureService {
     }
 
     @Transactional
-    public FixtureMetadata initialize() {
-        List<Long> existingTimeIds = concertTimeRepository.findConcertTimeIdsByConcertId(CONCERT_ID);
+    public FixtureMetadata initialize(String runId) {
+        String normalizedRunId = validateRunId(runId);
+        String concertId = concertId(normalizedRunId);
+        List<Long> existingTimeIds = concertTimeRepository.findConcertTimeIdsByConcertId(concertId);
         if (!existingTimeIds.isEmpty()) {
-            return metadata(existingTimeIds.get(0));
+            return metadata(normalizedRunId, existingTimeIds.get(0));
         }
 
         Concert concert = new Concert();
-        concert.setConcertId(CONCERT_ID);
-        concert.setConcertName("가상 고경합 부하 공연");
+        concert.setConcertId(concertId);
+        concert.setConcertName("가상 고경합 부하 공연 " + normalizedRunId);
         concert.setPosterUrl("https://example.invalid/loadtest-poster.jpg");
         concert.setStartDate(LocalDate.of(2030, 1, 1));
         concert.setEndDate(LocalDate.of(2030, 1, 31));
 
         ConcertDetail detail = new ConcertDetail();
-        detail.setConcertId(CONCERT_ID);
+        detail.setConcertId(concertId);
         detail.setConcert(concert);
         detail.setPlace("가상 부하 공연장");
         detail.setPrice("가상 좌석 30,000원");
@@ -100,29 +105,30 @@ public class LoadTestFixtureService {
             }
         }
         seatRepository.saveAllAndFlush(seats);
-        return metadata(concertTime.getId());
+        return metadata(normalizedRunId, concertTime.getId());
     }
 
     @Transactional(readOnly = true)
-    public FixtureMetadata metadata() {
-        List<Long> timeIds = concertTimeRepository.findConcertTimeIdsByConcertId(CONCERT_ID);
+    public FixtureMetadata metadata(String runId) {
+        String normalizedRunId = validateRunId(runId);
+        List<Long> timeIds = concertTimeRepository.findConcertTimeIdsByConcertId(concertId(normalizedRunId));
         if (timeIds.size() != 1) {
             throw new IllegalStateException("loadtest fixture가 초기화되지 않았습니다.");
         }
-        return metadata(timeIds.get(0));
+        return metadata(normalizedRunId, timeIds.get(0));
     }
 
     @Transactional(readOnly = true)
-    public InventorySnapshot snapshot() {
-        FixtureMetadata fixture = metadata();
+    public InventorySnapshot snapshot(String runId) {
+        FixtureMetadata fixture = metadata(runId);
         long seatCount = seatRepository.countByConcertTimeId(fixture.concertTimeId());
         long reservedSeats = seatRepository.countByConcertTimeIdAndReservedTrue(fixture.concertTimeId());
         int remainingSeats = concertTimeRepository.findById(fixture.concertTimeId())
                 .orElseThrow()
                 .getSeatAmount();
         long reservations = reservationRepository.countByConcertTimeId(fixture.concertTimeId());
-        long bookings = bookingRepository.countByUsernameStartingWith(USERNAME_PREFIX);
-        long payments = paymentRepository.countByUsernameStartingWith(USERNAME_PREFIX);
+        long bookings = bookingRepository.countByIdempotencyKeyStartingWith(idempotencyKeyPrefix(fixture.runId()));
+        long payments = paymentRepository.countByProviderPaymentIdStartingWith(paymentIdPrefix(fixture.runId()));
         return new InventorySnapshot(
                 fixture.totalSeats(),
                 seatCount,
@@ -141,15 +147,39 @@ public class LoadTestFixtureService {
         return "R%03d-S%03d".formatted(row, number);
     }
 
-    private FixtureMetadata metadata(Long concertTimeId) {
-        return new FixtureMetadata(CONCERT_ID, concertTimeId, rows, seatsPerRow, totalSeats());
+    static String usernamePrefix(String runId) {
+        return USERNAME_PREFIX + validateRunId(runId) + ".";
+    }
+
+    static String idempotencyKeyPrefix(String runId) {
+        return IDEMPOTENCY_KEY_PREFIX + validateRunId(runId) + ".";
+    }
+
+    static String paymentIdPrefix(String runId) {
+        return "LT:" + usernamePrefix(runId);
+    }
+
+    private FixtureMetadata metadata(String runId, Long concertTimeId) {
+        return new FixtureMetadata(runId, concertId(runId), concertTimeId, rows, seatsPerRow, totalSeats());
     }
 
     private int totalSeats() {
         return Math.multiplyExact(rows, seatsPerRow);
     }
 
+    private static String concertId(String runId) {
+        return CONCERT_ID_PREFIX + validateRunId(runId);
+    }
+
+    private static String validateRunId(String runId) {
+        if (runId == null || !RUN_ID_PATTERN.matcher(runId).matches()) {
+            throw new IllegalArgumentException("loadtest runId는 영문·숫자·하이픈 1~32자여야 합니다.");
+        }
+        return runId;
+    }
+
     public record FixtureMetadata(
+            String runId,
             String concertId,
             Long concertTimeId,
             int rows,

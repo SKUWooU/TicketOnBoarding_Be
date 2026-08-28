@@ -98,7 +98,6 @@ public class SeatReservationService {
 
 
             Seat seat = seatOptional.get();
-            System.out.println(seat);
 
             if (seat.isReserved()) {
                 throw new Exception("이미 예약된 좌석입니다.");
