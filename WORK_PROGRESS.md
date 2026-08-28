@@ -17,7 +17,8 @@
 
 - Issue: [#49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)
 - Branch: `fix/49-seat-contention-http-contract`
-- 상태: 구현·로컬 검증 완료, PR 준비 중
+- PR: [#50](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/50)
+- 상태: 구현·로컬 검증 완료, Reviewer 검토 준비
 - 계획 승인: 완료
 - 확인된 문제: 동일 좌석 후발 요청과 잔여 재고 부족이 checked `Exception`으로 전파되어 예상된 재고 경합도 HTTP 500으로 응답하며, k6에서 실제 서버 장애와 구분되지 않음
 - 구현: 좌석 선점·잔여 재고 실패 전용 HTTP 409 예외, 일반·검증 예약 Controller 계약, k6 hot 시나리오 예상 경합·예상 밖 오류 분리와 전체 시나리오 sanity threshold
