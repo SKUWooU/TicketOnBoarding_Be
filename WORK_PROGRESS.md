@@ -6,19 +6,37 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `13a18d3d36c2d2b4e9b6084beb30bf6c643fa969` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `eba2e77ed209fb88128a8baaf4c951866bafc080` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #53 — 가상 좌석 고경합의 단계별 성능 기준선 측정
+
+- Issue: [#53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
+- Branch: `test/53-staged-contention-baseline`
+- PR: [#54](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/54)
+- 상태: 구현·단계별 로컬 측정·전체 회귀 검증 완료, PR CI·Reviewer 검토 대기
+- 계획 승인: 완료
+- 확인된 문제: k6 콘솔 처리율이 setup 시간을 포함하고 무거운 fixture 생성이 Hikari·DB 표본에 섞이며, 무경합 성공 처리량과 정상 409 경합 응답을 같은 TPS로 해석할 수 있음
+- 계획: fixture 사전 준비, 민감 정보 없는 구조화 k6 결과, 시나리오별 단계·3회 반복 runner, 중앙값·범위와 중단 조건, 로컬 기준선 문서화
+- 구현: fixture 준비 시간창 분리, `handleSummary()` 구조화 결과, k6/재고 parser, 28-run plan·반복 중단·중앙값/범위 runner, PowerShell fixture CI
+- 측정: 최종 `preAllocatedVUs=maxVUs=200` batch에서 warmup 제외 유효 run 24회·distributed 150 RPS 3회 자동 생략; distributed 50 RPS p95 37.42ms·pending 0·도달률 100%에서 100 RPS p95 2,523.26ms·pending 189·도달률 94.91%·DB lock time +93,346ms로 변곡; 모든 유효 run 예상 밖 실패·deadlock 0·불변식 충족
+- 검증: 수집기 42개·baseline runner 19개 PowerShell assertion, k6 inspect, Backend 전체 102개 test 통과(실패·오류·skip 0), `git diff --check` 통과
+- 범위: Backend 로컬 `loadtest` profile·mock 결제·2,000석 fixture, distributed/hot-section/hot-seat 단계별 측정, ignored 원본 결과와 근거 문서
+- 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 운영 SLA, Prometheus/Grafana 전체 stack, 성능 개선·분산 기술 선제 도입
+
+## 완료
+
 ### Backend Issue #51 — 고경합 부하의 Hikari·MariaDB 지표 수집 경계 구성
 
 - Issue: [#51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
 - Branch: `test/51-lightweight-contention-observability`
 - PR: [#52](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/52)
-- 상태: 구현·로컬 검증 완료, PR CI·Reviewer 검토 중
+- squash commit: `eba2e77ed209fb88128a8baaf4c951866bafc080`
+- 상태: 완료
 - 계획 승인: 완료
 - 확인된 문제: 종료 후 단일 Hikari 값과 여러 실행이 누적된 MariaDB counter만으로는 부하 중 connection·lock peak와 해당 run의 증가분을 분리할 수 없음
 - 조사: Hikari active/pending/idle/max Prometheus gauge 확인; MariaDB row lock wait/time/deadlock global counter와 current waits·threads gauge 확인; 반복 CLI 표본이 `Connections`와 thread 값에 관측자 영향을 주는 사실 확인
@@ -26,8 +44,7 @@
 - 검증: PowerShell 23개 assertion·k6 inspect·전체 Backend 102개 강제 재실행 통과; distributed 5 RPS·5초 active peak 1·pending 0·lock delta 0; hot-seat 100 RPS·10초 1,001회 중 성공 1·예상 409 1,000·p95 39.68ms·active peak 2·pending 0·lock waits +77·time +142ms·deadlock 0·종료 불변식 충족
 - 범위: 로컬 PowerShell 측정 wrapper, Hikari 시계열·MariaDB counter delta/현재 gauge, fixture 검사·CI, ignored 결과와 근거 문서
 - 제외: 단계별 최대 처리량·성능 개선, Prometheus/Grafana 전체 stack, 운영 배포·장기 보관·알림, Frontend, 실제 외부 연동, 분산 기술
-
-## 완료
+- Reviewer: 최종 HEAD `459719c48d389d49a569339c9586e6057e59c403`, 중간 DB counter reset Blocking 수정 후 `MERGE_READY: YES`; Backend CI 성공 후 자동 squash merge
 
 ### Backend Issue #49 — 좌석 경합 실패를 명시적 HTTP 409 계약으로 분류
 

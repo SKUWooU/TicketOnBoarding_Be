@@ -97,7 +97,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 
 ## 6. 자동 검증
 
-`Test-ContentionMetrics.ps1`의 23개 assertion은 다음을 외부 서비스 없이 검증한다.
+Issue #51 당시 `Test-ContentionMetrics.ps1`의 23개 assertion은 다음을 외부 서비스 없이 검증했다. Issue #53에서 구조화 k6 결과·실행 조건 일치·최종 snapshot·요청 달성률 검사를 추가해 현재 전체는 42개다.
 
 - 복수 Hikari pool의 active·pending·idle·max 합산
 - 필수 Prometheus metric 누락 거부
@@ -107,7 +107,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 - 첫·마지막 사이에서 복구된 경우를 포함한 인접 표본 DB counter 감소와 잘못된 run ID 거부
 - DB CLI·Compose healthcheck의 관측자 효과와 `Connections` 제외 표시
 
-Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사를 먼저 실행한 뒤 기존 Java 21 Backend 테스트를 수행한다. 로컬에서는 PowerShell 5.1로 23개 assertion, 전체 Backend 102개 test 강제 재실행, `k6 inspect`가 통과했다. 로컬에 `actionlint`는 설치되어 있지 않아 workflow step의 Ubuntu 실행 결과는 PR CI에서 최종 확인한다.
+Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사와 Issue #53의 baseline runner fixture 검사를 먼저 실행한 뒤 기존 Java 21 Backend 테스트를 수행한다. Issue #53 최종 로컬 검증에서는 PowerShell 5.1로 수집기 42개·runner 19개 assertion, 전체 Backend 102개 test 강제 재실행, `k6 inspect`가 통과했다. 로컬에 `actionlint`는 설치되어 있지 않아 workflow step의 Ubuntu 실행 결과는 PR CI에서 최종 확인한다.
 
 ## 7. 최종 로컬 smoke
 
@@ -155,12 +155,13 @@ Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사를 먼저 실행한 뒤 기
 1. 약 1초 polling은 매우 짧은 connection·lock spike를 놓칠 수 있다. 실제 간격 max도 summary와 함께 해석한다.
 2. MariaDB CLI와 Compose healthcheck가 DB thread gauge에 영향을 준다. 이를 숨기지 않고 결과에 표시하며 connection 포화는 Hikari를 주 근거로 본다.
 3. 로컬 결과는 process·OS·Docker가 자원을 공유하므로 실제 예매처나 다중 instance 성능을 나타내지 않는다.
-4. 다음 Issue는 동일 collector 버전에서 warmup 후 distributed·hot-section·hot-seat를 단계별 RPS와 반복 실행해 최초 p95·pending·lock wait·오류율 변곡점을 찾는다.
-5. 병목이 확인되기 전에는 Hikari 크기 조정, 대기열, Redis 분산 lock, outbox, 메시지 브로커를 도입하지 않는다.
+4. Issue #53에서 fixture 준비를 표본 밖으로 분리하고 단계별 3회 반복했다. distributed 50→100 RPS 사이에서 p95·Hikari pending·lock wait·dropped iteration 변곡점이 함께 재현됐다.
+5. 다음 Issue는 회차 잔여 수량 단일 행 갱신과 좌석 잠금의 대기 기여도를 분리한다. 원인이 확인되기 전에는 Hikari 크기 조정, 대기열, Redis 분산 lock, outbox, 메시지 브로커를 도입하지 않는다.
 
 ## 9. 연결
 
 - [Backend Issue #51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
+- [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)
 - [가상 좌석 2,000석 고경합 부하 측정 기반](high-contention-load-test-harness.md)
 - [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)

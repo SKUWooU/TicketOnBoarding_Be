@@ -441,3 +441,27 @@ DB CLI 표본 시간이 추가되므로 단순히 매 조회 후 1초를 기다�
 ### 링크
 
 - [Backend Issue #51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
+
+## Issue #53 — 무경합 성공 처리량과 정상 경합 거부 비용의 변곡점 분리
+
+### 콘솔 처리율 대신 부하 구간의 완료·dropped iteration 보기
+
+기존 k6 콘솔 rate는 setup 시간이 포함돼 목표 100 RPS·10초에 1,001 iterations를 완료한 smoke도 약 77 RPS로 보였다. `handleSummary()`에서 예약 전용 p95와 iterations·dropped iterations를 구조화하고, 완료 iterations를 10초로 나눈 처리율과 요청 도달률을 계산했다. JWT·cookie·setup data는 결과에서 제외했다.
+
+### fixture 생성과 측정 시간창 분리
+
+run마다 2,000석을 삽입하는 약 2초 이상의 준비 transaction이 Hikari·DB 표본에 섞이면 실제 예약 부하의 peak로 오해할 수 있었다. fixture를 첫 표본 전에 준비하고 준비 시간과 제외 여부를 summary에 별도 기록했다. k6 setup의 조회와 teardown snapshot은 시간창에 남는다는 한계도 함께 기록했다.
+
+### 반복 측정에서 처음 드러난 공유 행 직렬화 후보
+
+VU 상한 또는 동적 할당 지연이 서버 병목과 섞인 탐색 batch 둘은 폐기하고, `preAllocatedVUs=maxVUs=200`인 최종 batch만 공개 근거로 사용했다. warmup 제외 단계별 3회에서 distributed 50 RPS는 완료/설정초 50.1·도달률 100%·p95 37.42ms·Hikari pending 0이었다. 100 RPS는 완료/설정초 95.0·도달률 94.91%·p95 2,523.26ms, Hikari active 10·pending 189, row lock wait 949회·93,346ms가 중앙값으로 반복됐다. 예상 밖 실패와 deadlock은 0이었다. 완료/설정초는 graceful stop을 포함한 wall-clock TPS가 아니다.
+
+distributed는 서로 다른 좌석을 선택하지만 모든 예약 transaction이 동일 `concert_time.seat_amount` 행을 조건부 감소시킨다. 이 공유 행이 connection을 점유한 transaction을 직렬화한다는 강한 가설이 생겼다. 아직 원인 격리 전이므로 개선 결론으로 단정하지 않고 다음 Issue의 A/B 검증 대상으로 남긴다.
+
+hot-section·hot-seat은 100 RPS에서 dropped 없이 예상 409를 처리했지만 150 RPS에서는 Hikari active 10·pending 최대 189와 row lock wait 중앙값 1,400회 이상이 반복됐다. 이 완료율은 성공 예약 TPS가 아니라 충돌 판정과 409 거부 처리율이므로 distributed와 분리해 해석한다.
+
+상세 조건과 전체 중앙값·범위는 [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)

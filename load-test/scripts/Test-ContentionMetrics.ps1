@@ -131,4 +131,35 @@ $issue51MiddleResetSamples = @(
 )
 Assert-Issue51Throws { New-ContentionMetricsSummary -Samples $issue51MiddleResetSamples } 'A counter reset between the first and last samples must invalidate the measurement.'
 
+$issue53K6Fixture = @'
+LOADTEST_RESULT {"schemaVersion":1,"scenario":"distributed","targetRatePerSecond":100,"duration":"10s","thresholdsEnforced":false,"iterations":991,"droppedIterations":9,"reservationSuccess":990,"expectedContention":0,"unexpectedNonSuccessful":1,"unexpectedFailureRate":0.001009,"reservationDurationMs":{"average":31.2,"median":30.1,"p95":45.6,"maximum":88.9},"maxObservedVus":12,"maxAllocatedVus":20,"preAllocatedVus":20,"configuredMaxVus":100}
+'@
+$issue53K6Result = ConvertFrom-K6ContentionResult -Text $issue53K6Fixture
+$issue53K6Summary = New-K6ContentionRunSummary -Result $issue53K6Result -DurationSeconds 10
+Assert-Issue51Equal $issue53K6Summary.Iterations 991 'Completed k6 iterations must be parsed.'
+Assert-Issue51Equal $issue53K6Summary.DroppedIterations 9 'Dropped k6 iterations must be parsed.'
+Assert-Issue51Equal $issue53K6Summary.CompletedIterationsPerScheduledSecond 99.1 'Completed iterations per scheduled second must exclude setup time.'
+Assert-Issue51Equal $issue53K6Summary.ScheduledIterationAttainmentRate 0.991 'Scheduled iteration attainment must include dropped iterations.'
+Assert-Issue51Equal $issue53K6Summary.ReservationDurationMs.P95 45.6 'Reservation p95 must be parsed from the custom trend.'
+Assert-Issue51Equal $issue53K6Summary.ThresholdsEnforced $false 'Baseline runs must record disabled performance thresholds.'
+Assert-Issue51Equal $issue53K6Summary.MaxAllocatedVus 20 'The allocated VU gauge must remain distinct from the configured cap.'
+Assert-Issue51Equal $issue53K6Summary.ConfiguredMaxVus 100 'The configured VU cap must come from the scenario option.'
+Assert-Issue51Equal (Assert-K6ContentionRunIdentity -Result $issue53K6Result -Scenario 'distributed' -Rate 100 -DurationSeconds 10 -ThresholdsEnforced $false) $true 'Matching structured k6 run identity must pass.'
+Assert-Issue51Throws { Assert-K6ContentionRunIdentity -Result $issue53K6Result -Scenario 'hot-seat' -Rate 100 -DurationSeconds 10 -ThresholdsEnforced $false } 'A mismatched scenario must fail.'
+Assert-Issue51Throws { Assert-K6ContentionRunIdentity -Result $issue53K6Result -Scenario 'distributed' -Rate 99 -DurationSeconds 10 -ThresholdsEnforced $false } 'A mismatched target rate must fail.'
+Assert-Issue51Throws { Assert-K6ContentionRunIdentity -Result $issue53K6Result -Scenario 'distributed' -Rate 100 -DurationSeconds 9 -ThresholdsEnforced $false } 'A mismatched duration must fail.'
+Assert-Issue51Throws { Assert-K6ContentionRunIdentity -Result $issue53K6Result -Scenario 'distributed' -Rate 100 -DurationSeconds 10 -ThresholdsEnforced $true } 'A mismatched threshold mode must fail.'
+Assert-Issue51Throws { ConvertFrom-K6ContentionResult -Text 'missing marker' } 'Missing structured k6 results must fail.'
+Assert-Issue51Throws { ConvertFrom-K6ContentionResult -Text "$issue53K6Fixture`n$issue53K6Fixture" } 'Duplicate structured k6 results must fail.'
+
+$issue53InvalidCounters = $issue53K6Result.PSObject.Copy()
+$issue53InvalidCounters.reservationSuccess = 989
+Assert-Issue51Throws { New-K6ContentionRunSummary -Result $issue53InvalidCounters -DurationSeconds 10 } 'Reservation result counters must match completed iterations.'
+
+$issue53SnapshotFixture = 'LOADTEST_FINAL_SNAPSHOT {"expectedTotalSeats":2000,"actualSeatCount":2000,"remainingSeats":1010,"reservedSeats":990,"reservations":990,"bookings":990,"payments":990,"invariantSatisfied":true}'
+$issue53Snapshot = ConvertFrom-K6FinalSnapshot -Text $issue53SnapshotFixture
+Assert-Issue51Equal $issue53Snapshot.remainingSeats 1010 'Final snapshot inventory must be parsed.'
+Assert-Issue51Equal $issue53Snapshot.invariantSatisfied $true 'Final snapshot invariant must be parsed.'
+Assert-Issue51Throws { ConvertFrom-K6FinalSnapshot -Text 'missing snapshot' } 'Missing final snapshots must fail.'
+
 Write-Output "ContentionMetrics checks passed: $issue51Assertions assertions."

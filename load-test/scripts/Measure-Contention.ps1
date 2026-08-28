@@ -12,12 +12,19 @@ param(
     [ValidateRange(250, 10000)]
     [int]$SampleIntervalMilliseconds = 1000,
 
+    [ValidateRange(1, 500)]
+    [int]$PreAllocatedVus = 20,
+
+    [ValidateRange(1, 500)]
+    [int]$MaxVus = 100,
+
     [string]$RunId = '',
     [string]$BaseUrl = 'http://127.0.0.1:18080',
     [string]$ManagementBaseUrl = 'http://127.0.0.1:18081',
     [string]$OutputDirectory = '',
     [string]$DatabaseUser = 'onticket',
-    [string]$DatabasePassword = 'onticket'
+    [string]$DatabasePassword = 'onticket',
+    [switch]$DisablePerformanceThresholds
 )
 
 Set-StrictMode -Version Latest
@@ -29,6 +36,10 @@ $issue51ModulePath = Join-Path $issue51ScriptDirectory 'ContentionMetrics.psm1'
 $issue51K6Script = Join-Path $issue51RepositoryRoot 'load-test\k6\reservation-contention.js'
 $issue51ComposeFile = Join-Path $issue51RepositoryRoot 'compose.yml'
 Import-Module $issue51ModulePath -Force
+
+if ($PreAllocatedVus -gt $MaxVus) {
+    throw 'PreAllocatedVus must not exceed MaxVus.'
+}
 
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = 'obs-' + (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss')
@@ -102,6 +113,14 @@ function Get-Issue51MetricSample {
     }
 }
 
+$issue53FixturePreparationStartedAt = (Get-Date).ToUniversalTime()
+$issue53FixturePreparationStopwatch = [Diagnostics.Stopwatch]::StartNew()
+$issue53Fixture = Invoke-RestMethod -Uri "$BaseUrl/loadtest/runs?runId=$RunId" -Method Post
+$issue53FixturePreparationStopwatch.Stop()
+if ([int]$issue53Fixture.totalSeats -le 0) {
+    throw 'Prepared load-test fixture must contain at least one seat.'
+}
+
 $issue51StartedAt = (Get-Date).ToUniversalTime()
 $issue51Stopwatch = [Diagnostics.Stopwatch]::StartNew()
 $issue51Samples = New-Object 'Collections.Generic.List[object]'
@@ -123,6 +142,10 @@ try {
         '-e', "DURATION=$($DurationSeconds)s",
         '-e', "RUN_ID=$RunId",
         '-e', "BASE_URL=$BaseUrl",
+        '-e', "PRE_ALLOCATED_VUS=$PreAllocatedVus",
+        '-e', "MAX_VUS=$MaxVus",
+        '-e', 'FIXTURE_PREPARED=true',
+        '-e', "ENFORCE_THRESHOLDS=$((-not $DisablePerformanceThresholds.IsPresent).ToString().ToLowerInvariant())",
         $issue51K6Script
     )
     $issue51QuotedArguments = $issue51K6Arguments | ForEach-Object {
@@ -169,10 +192,20 @@ try {
 
     $issue51CombinedK6Output = $issue51K6Output + "`n" + $issue51K6ErrorOutput
     $issue51NormalizedK6Output = $issue51CombinedK6Output.Replace('\"', '"')
-    $issue51InvariantSatisfied = $issue51NormalizedK6Output -match 'LOADTEST_FINAL_SNAPSHOT .*"invariantSatisfied":true'
     if ($issue51K6ExitCode -ne 0) {
         throw "k6 failed with exit code $issue51K6ExitCode."
     }
+    $issue53K6Result = ConvertFrom-K6ContentionResult -Text $issue51NormalizedK6Output
+    $issue53ExpectedThresholdsEnforced = -not $DisablePerformanceThresholds.IsPresent
+    Assert-K6ContentionRunIdentity `
+        -Result $issue53K6Result `
+        -Scenario $Scenario `
+        -Rate $Rate `
+        -DurationSeconds $DurationSeconds `
+        -ThresholdsEnforced $issue53ExpectedThresholdsEnforced | Out-Null
+    $issue53K6Summary = New-K6ContentionRunSummary -Result $issue53K6Result -DurationSeconds $DurationSeconds
+    $issue53FinalSnapshot = ConvertFrom-K6FinalSnapshot -Text $issue51NormalizedK6Output
+    $issue51InvariantSatisfied = [bool]$issue53FinalSnapshot.invariantSatisfied
     if (-not $issue51InvariantSatisfied) {
         throw 'k6 output does not contain a successful final inventory invariant.'
     }
@@ -192,9 +225,17 @@ try {
             StartedAtUtc = $issue51StartedAt.ToString('o')
             EndedAtUtc = $issue51EndedAt.ToString('o')
         }
+        FixturePreparation = [ordered]@{
+            StartedAtUtc = $issue53FixturePreparationStartedAt.ToString('o')
+            DurationMilliseconds = $issue53FixturePreparationStopwatch.ElapsedMilliseconds
+            ExcludedFromMetricSamples = $true
+            TotalSeats = [int]$issue53Fixture.totalSeats
+        }
         K6 = [ordered]@{
             ExitCode = $issue51K6ExitCode
             InventoryInvariantSatisfied = $issue51InvariantSatisfied
+            Result = $issue53K6Summary
+            FinalSnapshot = $issue53FinalSnapshot
             StdoutFile = [IO.Path]::GetFileName($issue51StdoutPath)
             StderrFile = [IO.Path]::GetFileName($issue51StderrPath)
         }

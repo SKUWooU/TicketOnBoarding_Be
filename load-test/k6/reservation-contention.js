@@ -10,6 +10,8 @@ const DURATION = __ENV.DURATION || '10s';
 const PRE_ALLOCATED_VUS = Number(__ENV.PRE_ALLOCATED_VUS || 20);
 const MAX_VUS = Number(__ENV.MAX_VUS || 100);
 const TOKEN_COUNT = Number(__ENV.TOKEN_COUNT || Math.min(MAX_VUS, 100));
+const FIXTURE_PREPARED = (__ENV.FIXTURE_PREPARED || 'false').toLowerCase() === 'true';
+const ENFORCE_THRESHOLDS = (__ENV.ENFORCE_THRESHOLDS || 'true').toLowerCase() === 'true';
 const UNIT_PRICE = 30000;
 
 const reservationSuccess = new Counter('reservation_success');
@@ -39,10 +41,12 @@ export const options = {
       maxVUs: MAX_VUS,
     },
   },
-  thresholds: {
-    reservation_duration: ['p(95)<2000'],
-    reservation_unexpected_failure: ['rate<0.05'],
-  },
+  thresholds: ENFORCE_THRESHOLDS
+    ? {
+      reservation_duration: ['p(95)<2000'],
+      reservation_unexpected_failure: ['rate<0.05'],
+    }
+    : {},
 };
 
 export function setup() {
@@ -51,10 +55,12 @@ export function setup() {
     throw new Error('RUN_ID must contain 1-32 letters, numbers, or hyphens.');
   }
 
-  const fixtureResponse = http.post(
-    `${BASE_URL}/loadtest/runs?runId=${encodeURIComponent(runId)}`,
-    null,
-  );
+  const fixtureUrl = FIXTURE_PREPARED
+    ? `${BASE_URL}/loadtest/fixture?runId=${encodeURIComponent(runId)}`
+    : `${BASE_URL}/loadtest/runs?runId=${encodeURIComponent(runId)}`;
+  const fixtureResponse = FIXTURE_PREPARED
+    ? http.get(fixtureUrl)
+    : http.post(fixtureUrl, null);
   const tokenResponse = http.get(
     `${BASE_URL}/loadtest/tokens?runId=${encodeURIComponent(runId)}&count=${TOKEN_COUNT}`,
   );
@@ -135,6 +141,31 @@ export function teardown(data) {
   }
 }
 
+export function handleSummary(data) {
+  const result = {
+    schemaVersion: 1,
+    scenario: TEST_SCENARIO,
+    targetRatePerSecond: RATE,
+    duration: DURATION,
+    thresholdsEnforced: ENFORCE_THRESHOLDS,
+    iterations: counterValue(data, 'iterations'),
+    droppedIterations: counterValue(data, 'dropped_iterations'),
+    reservationSuccess: counterValue(data, 'reservation_success'),
+    expectedContention: counterValue(data, 'reservation_expected_contention'),
+    unexpectedNonSuccessful: counterValue(data, 'reservation_unexpected_non_2xx'),
+    unexpectedFailureRate: rateValue(data, 'reservation_unexpected_failure'),
+    reservationDurationMs: trendValues(data, 'reservation_duration'),
+    maxObservedVus: gaugeMaximum(data, 'vus'),
+    maxAllocatedVus: gaugeMaximum(data, 'vus_max'),
+    preAllocatedVus: PRE_ALLOCATED_VUS,
+    configuredMaxVus: MAX_VUS,
+  };
+
+  return {
+    stdout: `LOADTEST_RESULT ${JSON.stringify(result)}\n`,
+  };
+}
+
 function selectSeat(fixture, iteration) {
   if (TEST_SCENARIO === 'hot-seat') {
     return 'R001-S001';
@@ -157,4 +188,30 @@ function selectSeat(fixture, iteration) {
 
 function seatNumber(row, number) {
   return `R${String(row).padStart(3, '0')}-S${String(number).padStart(3, '0')}`;
+}
+
+function metricValues(data, name) {
+  return data.metrics[name] ? data.metrics[name].values : {};
+}
+
+function counterValue(data, name) {
+  return Number(metricValues(data, name).count || 0);
+}
+
+function rateValue(data, name) {
+  return Number(metricValues(data, name).rate || 0);
+}
+
+function gaugeMaximum(data, name) {
+  return Number(metricValues(data, name).max || 0);
+}
+
+function trendValues(data, name) {
+  const values = metricValues(data, name);
+  return {
+    average: Number(values.avg || 0),
+    median: Number(values.med || 0),
+    p95: Number(values['p(95)'] || 0),
+    maximum: Number(values.max || 0),
+  };
 }

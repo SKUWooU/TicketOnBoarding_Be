@@ -36,7 +36,9 @@ jobs:
       - name: Validate contention metrics collector
         shell: pwsh
         working-directory: ${{ github.workspace }}
-        run: ./load-test/scripts/Test-ContentionMetrics.ps1
+        run: |
+          ./load-test/scripts/Test-ContentionMetrics.ps1
+          ./load-test/scripts/Test-ContentionBaseline.ps1
 
       - name: Run Backend tests
         run: |
