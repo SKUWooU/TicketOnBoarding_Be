@@ -6,27 +6,41 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `76315805130d57c6e764d840fb6cdf60395014ed` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `174283b1b33936730a1e9dfbf5e0d0b521644fe1` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #49 — 좌석 경합 실패를 명시적 HTTP 409 계약으로 분류
+
+- Issue: [#49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)
+- Branch: `fix/49-seat-contention-http-contract`
+- PR: [#50](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/50)
+- 상태: 구현·로컬 검증 완료, Reviewer 검토 준비
+- 계획 승인: 완료
+- 확인된 문제: 동일 좌석 후발 요청과 잔여 재고 부족이 checked `Exception`으로 전파되어 예상된 재고 경합도 HTTP 500으로 응답하며, k6에서 실제 서버 장애와 구분되지 않음
+- 구현: 좌석 선점·잔여 재고 실패 전용 HTTP 409 예외, 일반·검증 예약 Controller 계약, k6 hot 시나리오 예상 경합·예상 밖 오류 분리와 전체 시나리오 sanity threshold
+- 검증: 전체 Backend 102개 test 통과(실패·오류·skip 0), k6 inspect 통과, hot-seat 20 RPS·10초에서 201회 중 성공 1·예상 409 경합 200·예상 밖 비-2xx/5xx 0·p95 36.69ms·종료 불변식 충족
+- 범위: Backend 좌석 경합 예외·HTTP 409 계약, Controller·MariaDB 동시성 회귀, k6 예상 경합/예상 밖 오류 분리, 근거 문서
+- 제외: 단계별 RPS 기준선·성능 개선, Prometheus/Grafana 전체 구성, Frontend, 실제 KOPIS·PG·SMS·운영 DB, 대기열·Redis 분산 lock·outbox·브로커
+
+## 완료
+
 ### Backend Issue #47 — 2,000석 가상 공연장 고경합 부하 측정 기반 구성
 
 - Issue: [#47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)
 - Branch: `test/47-high-contention-loadtest-harness`
 - PR: [#48](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/48)
-- 상태: Reviewer Blocking 수정·재검증 완료, 재리뷰 준비
+- squash commit: `174283b1b33936730a1e9dfbf5e0d0b521644fe1`
+- 상태: 완료
 - 계획 승인: 완료
 - 구현: `loadtest` profile·2,000석 fixture·mock 결제 adapter·k6 4종 시나리오·Actuator 지표·상세 근거 문서 구성
 - 검증: Blocking 수정 후 경계 테스트를 포함한 전체 Backend 100개 test 통과(실패·오류·skip 0), k6 inspect 통과, 독립 run 연속 distributed 5 RPS·10초에서 예약 50·51건 모두 종료 불변식 충족; 최종 distributed 예약 51건·p95 68.21ms; 32자 run ID idempotent-retry 51호출→20결과 재사용·p95 58.81ms·비-2xx 0·불변식 충족
 - 범위: 로컬 가상 좌석 고경합 재현·측정 기반과 지표·정합성 결과 형식
 - 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 운영 SLA·성능 개선 주장, 대기열·Redis 분산 lock·outbox·브로커, 전체 Prometheus/Grafana stack
-- Reviewer: HEAD `2cc9e78dee571d65d05102605ccec7a73b802f9e`의 Blocking 4건은 HEAD `0e8968179efd9f88b3b6175a710cfc9038670910`에서 해소; HEAD `7731a02cf60ef6053a54b25665c2895661f050ab`에서 결제 ID 길이 Blocking 해소 확인 후 문서 테스트 수 99→100 정정 Blocking 반영
-
-## 완료
+- Reviewer: 최종 HEAD `1ab21f8d0c2fcd7fbd571fac3aa60d0dbc8b83d7`, Blocking 없음, `MERGE_READY: YES`; Backend CI 성공 후 자동 squash merge
 
 ### Backend Issue #43 — 서버 소유 가상 가격과 mock 결제 검증 경계 구성
 

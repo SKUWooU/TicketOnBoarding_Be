@@ -401,3 +401,23 @@ run 격리 보완 후 distributed 5 RPS·10초를 연속 실행했을 때 각 ru
 ### 링크
 
 - [Backend Issue #47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)
+
+## Issue #49 — 정상적인 좌석 경합과 서버 장애를 분리
+
+### DB 정합성과 HTTP 의미는 별도 계약이다
+
+동일 좌석 동시 예약은 비관적 잠금으로 한 요청만 성공했고 DB 불변식도 유지됐다. 그러나 잠금 이후 점유를 발견한 후발 요청은 일반 checked `Exception`으로 끝나 HTTP 500이 됐다. 데이터가 깨지지 않았다는 사실만으로 API 계약까지 올바른 것은 아니다. 예측 가능한 재고 경쟁을 서버 내부 장애와 분리해야 부하 결과의 오류율을 해석할 수 있다.
+
+### 예상 경합을 모든 시나리오에서 성공으로 숨기지 않기
+
+좌석 선점 실패와 잔여 수량 감소 실패만 전용 409 예외로 바꾸고 성공·인증·멱등성·결제 검증 계약은 그대로 유지했다. k6도 hot-seat·hot-section의 409만 예상 경합으로 집계한다. distributed·idempotent-retry의 409는 시나리오상 예상하지 않은 결과이므로 실패율에 남긴다. 같은 상태 코드라도 부하 모델의 의도에 따라 해석이 달라져야 한다.
+
+### 기본 지표와 사용자 정의 지표의 의미 맞추기
+
+첫 hot-seat smoke는 성공 1·409 경합 200·예상 밖 오류 0이었지만 k6 기본 `http_req_failed`는 409를 모두 실패로 세어 98.03%를 표시했다. hot 시나리오에서만 409를 expected status로 등록한 뒤 독립 run을 다시 실행해 기본 실패율과 커스텀 실패율을 모두 0%로 맞췄다. 지표 이름만 추가하는 것으로는 충분하지 않고 도구의 기본 성공 판정도 도메인 계약과 일치해야 한다.
+
+최종 로컬 smoke는 20 RPS·10초의 201회 요청에서 성공 1·예상 409 경합 200·예상 밖 비-2xx/5xx 0, 예약 p95 36.69ms, 종료 불변식 충족으로 끝났다. 이는 오류 분류 계약 확인값이며 안정 처리량이나 성능 개선 수치가 아니다. 전체 Backend 102개 test도 실패·오류·skip 없이 통과했다. 상세 내용은 [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)

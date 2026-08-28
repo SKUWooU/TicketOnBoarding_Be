@@ -6,6 +6,7 @@ import com.onticket.concert.service.IdempotencyKeyConflictException;
 import com.onticket.concert.service.InvalidIdempotencyKeyException;
 import com.onticket.concert.service.PaymentVerificationUnavailableException;
 import com.onticket.concert.service.ReservationIdempotencyService;
+import com.onticket.concert.service.SeatReservationConflictException;
 import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.user.jwt.JwtUtil;
 import jakarta.servlet.http.Cookie;
@@ -120,6 +121,23 @@ class ReservationControllerTest {
     }
 
     @Test
+    void seatContentionReturnsHttp409() throws Exception {
+        when(reservationIdempotencyService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(ReservRequest.class),
+                eq("contention-key")
+        )).thenThrow(new SeatReservationConflictException("이미 예약된 좌석입니다."));
+
+        mockMvc.perform(post("/main/detail/{concertId}/reservation", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .header("Idempotency-Key", "contention-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void verifiedReservationForwardsPaymentAndRequiredIdempotencyContract() throws Exception {
         String requestBody = """
                 {
@@ -170,6 +188,29 @@ class ReservationControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifiedSeatContentionReturnsHttp409() throws Exception {
+        when(verifiedReservationService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq("verified-contention-key")
+        )).thenThrow(new SeatReservationConflictException("잔여 좌석이 부족합니다."));
+
+        mockMvc.perform(post("/main/detail/{concertId}/verified-reservation", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .header("Idempotency-Key", "verified-contention-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "concertTimeId": 1,
+                                  "seatNumberList": ["A1"],
+                                  "paymentId": "payment-1"
+                                }
+                                """))
+                .andExpect(status().isConflict());
     }
 
     @Test

@@ -208,7 +208,7 @@ class SeatReservationConcurrencyIntegrationTest {
         InventorySnapshot firstSuccess = inventorySnapshot();
 
         assertThatThrownBy(() -> seatReservationService.reserveSeat(USERNAME, CONCERT_ID, reservRequest))
-                .isExactlyInstanceOf(Exception.class)
+                .isExactlyInstanceOf(SeatReservationConflictException.class)
                 .hasMessage("이미 예약된 좌석입니다.");
 
         InventorySnapshot retrySnapshot = inventorySnapshot();
@@ -379,7 +379,7 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(results).filteredOn(result -> !result.success())
                 .hasSize(attempts - 1)
                 .allSatisfy(result -> {
-                    assertThat(result.exceptionType()).isEqualTo("Exception");
+                    assertThat(result.exceptionType()).isEqualTo("SeatReservationConflictException");
                     assertThat(result.message()).isEqualTo("이미 예약된 좌석입니다.");
                 });
         assertThat(snapshot.successfullyReservedSeats()).isEqualTo(1);
@@ -463,7 +463,7 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(results).filteredOn(result -> !result.success())
                 .hasSize(1)
                 .allSatisfy(result -> {
-                    assertThat(result.exceptionType()).isEqualTo("Exception");
+                    assertThat(result.exceptionType()).isEqualTo("SeatReservationConflictException");
                     assertThat(result.message()).isEqualTo("이미 예약된 좌석입니다.");
                     assertThat(result.sqlState()).isNull();
                     assertThat(result.errorCode()).isNull();
@@ -512,7 +512,7 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(results).filteredOn(result -> !result.success())
                 .hasSize(1)
                 .allSatisfy(result -> {
-                    assertThat(result.exceptionType()).isEqualTo("Exception");
+                    assertThat(result.exceptionType()).isEqualTo("SeatReservationConflictException");
                     assertThat(result.message()).isEqualTo("이미 예약된 좌석입니다.");
                     assertThat(result.sqlState()).isNull();
                     assertThat(result.errorCode()).isNull();
@@ -594,7 +594,7 @@ class SeatReservationConcurrencyIntegrationTest {
                 CONCERT_ID,
                 request("A1", "A2")
         ))
-                .isExactlyInstanceOf(Exception.class)
+                .isExactlyInstanceOf(SeatReservationConflictException.class)
                 .hasMessage("잔여 좌석이 부족합니다.");
 
         InventorySnapshot snapshot = inventorySnapshot();
