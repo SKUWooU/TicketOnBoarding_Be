@@ -45,4 +45,15 @@ class LoadTestPaymentVerificationAdapterTest {
             assertThat(loadtestContext.getBeansOfType(LoadTestPaymentVerificationAdapter.class)).hasSize(1);
         }
     }
+
+    @Test
+    void acceptsLongestRunAndIdempotentRetryPaymentIdentifierWithinServerLimit() {
+        String runId = "r".repeat(32);
+        String username = LoadTestFixtureService.usernamePrefix(runId) + "500";
+        String paymentId = "LT:%s:30000:idempotent-retry-vu-2000".formatted(username);
+
+        assertThat(paymentId).hasSizeLessThanOrEqualTo(100);
+        assertThat(adapter.verify(paymentId).approved()).isTrue();
+        assertThat(adapter.verify(paymentId).username()).isEqualTo(username);
+    }
 }

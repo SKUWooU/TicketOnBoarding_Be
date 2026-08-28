@@ -82,7 +82,7 @@ export default function (data) {
   const stableRetry = TEST_SCENARIO === 'idempotent-retry';
   const requestIdentity = stableRetry ? `vu-${__VU}` : `${__VU}-${iteration}`;
   const idempotencyKey = `lt-${data.runId}.${TEST_SCENARIO}-${requestIdentity}`;
-  const paymentId = `LT:${token.username}:${UNIT_PRICE}:${data.runId}-${TEST_SCENARIO}-${requestIdentity}`;
+  const paymentId = `LT:${token.username}:${UNIT_PRICE}:${TEST_SCENARIO}-${requestIdentity}`;
 
   const response = http.post(
     `${BASE_URL}/main/detail/${data.fixture.concertId}/verified-reservation`,

@@ -29,7 +29,7 @@
 | 결제 검증 | `LT:<username>:<amount>:<nonce>` 형식의 로컬 mock 승인 |
 | 안전 상한 | 설정으로 늘리더라도 최대 10,000석 |
 
-기본 k6 실행은 시작 시각으로 고유한 run ID를 만들고 별도 공연·회차·좌석·사용자·멱등 key·결제 ID를 사용한다. 같은 DB에서 연속 실행해도 이전 좌석 점유나 최초 결과 재사용이 다음 측정에 섞이지 않는다. 명시적으로 같은 `RUN_ID`를 재사용하면 기존 run을 이어가므로 독립 측정에는 매번 다른 값을 사용해야 한다.
+기본 k6 실행은 시작 시각으로 고유한 run ID를 만들고 별도 공연·회차·좌석·사용자·멱등 key·결제 ID를 사용한다. 결제 ID는 이미 run별 username을 포함하므로 nonce에는 run ID를 중복하지 않는다. 최대 32자 run ID와 `idempotent-retry-vu-2000` 조합도 서버의 결제 ID 100자 제한 안에 있음을 테스트한다. 같은 DB에서 연속 실행해도 이전 좌석 점유나 최초 결과 재사용이 다음 측정에 섞이지 않는다. 명시적으로 같은 `RUN_ID`를 재사용하면 기존 run을 이어가므로 독립 측정에는 매번 다른 값을 사용해야 한다.
 
 실행 전용 API는 `POST /loadtest/runs`, `/loadtest/fixture`, `/loadtest/tokens`, `/loadtest/snapshot`이며 모두 run ID를 요구한다. `loadtest` profile 밖에서는 Bean 자체가 등록되지 않는다. 애플리케이션과 관리 포트는 각각 `127.0.0.1:18080`, `127.0.0.1:18081`에만 bind한다. 로컬 profile의 DEBUG 설정이 JWT 응답을 기록하지 않도록 loadtest에서는 root·web 로그를 INFO로 제한하고, 예약마다 좌석 객체를 표준 출력하던 레거시 디버그 출력은 측정 노이즈로 제거했다.
 
@@ -139,12 +139,14 @@ k6 run load-test/k6/reservation-contention.js
 
 고유 run ID를 자동 생성해 연속 실행한 smoke는 각각 별도 공연·회차에 저장되어 50건과 51건 모두 종료 불변식을 충족했다. run 경계 문자와 로그 조건까지 최종 보완한 뒤 다시 실행한 smoke도 예약 51건·비-2xx 0건·불변식 충족으로 종료했다. 위 지연값은 이 최종 실행의 예약 API 전용 Trend다. 서로 다른 로그 조건의 앞선 실행과 성능 개선 수치로 직접 비교하지 않는다.
 
+최대 길이 경계는 32자 `RUN_ID`와 `idempotent-retry`로 별도 실행했다. 51회 API 호출이 VU별 최초 결과 20건으로 재사용되어 좌석·예약·Booking·Payment가 각각 20건, 잔여 1,980석으로 수렴했고 비-2xx 0·p95 58.81ms·불변식 충족으로 종료했다. 이 결과는 결제 ID 100자 계약과 멱등 재사용 실행 여부를 확인한 smoke이며 처리량 개선 수치가 아니다.
+
 종료 후 순간값은 Hikari active 0·pending 0·max 10이었다. 같은 로컬 MariaDB의 누적 상태는 `Innodb_deadlocks=0`, `Innodb_row_lock_waits=4`, `Innodb_row_lock_time=683ms`, `Threads_connected=11`, `Threads_running=1`이었다. 이 값들은 여러 로컬 실행이 누적된 DB의 종료 뒤 값으로 이번 smoke의 peak connection·lock wait나 단독 원인을 의미하지 않는다. 이후 Prometheus 시계열 수집과 실행 전후 DB counter 차분을 추가해야 부하 중 최고점과 시간 상관관계를 비교할 수 있다.
 
 ## 8. 검증과 해석 범위
 
 - `LoadTestFixtureIntegrationTest`: MariaDB 10.11.8에서 run별 정확히 2,000석 생성, 좌석 이름 경계, 같은 run 중복 초기화 방지, 서로 다른 run의 회차·재고 분리, 다른 loadtest run의 Booking·Payment 배제를 검증한다.
-- `LoadTestPaymentVerificationAdapterTest`: 정상 로컬 결제와 잘못된 형식·금액을 외부 호출 없이 검증하고, 일반 context에는 adapter가 없으며 `loadtest` profile에서만 등록되는지도 확인한다.
+- `LoadTestPaymentVerificationAdapterTest`: 정상 로컬 결제와 잘못된 형식·금액을 외부 호출 없이 검증하고, 일반 context에는 adapter가 없으며 `loadtest` profile에서만 등록되는지와 최대 run ID 조합이 결제 ID 100자 이내인지 확인한다.
 - 전체 Backend 99개 test는 기존 24석 동시성·예약·취소·결제 회귀와 신규 fixture가 충돌하지 않는지 확인했으며 실패·오류·skip은 모두 0이었다.
 - `k6 inspect`는 스크립트 문법과 시나리오 구성을 확인한다.
 
