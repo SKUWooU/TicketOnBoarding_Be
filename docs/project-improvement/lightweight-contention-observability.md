@@ -97,17 +97,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 
 ## 6. 자동 검증
 
-`Test-ContentionMetrics.ps1`의 22개 assertion은 다음을 외부 서비스 없이 검증한다.
+`Test-ContentionMetrics.ps1`의 23개 assertion은 다음을 외부 서비스 없이 검증한다.
 
 - 복수 Hikari pool의 active·pending·idle·max 합산
 - 필수 Prometheus metric 누락 거부
 - MariaDB tab·공백 status parsing과 필수 값 누락 거부
 - Hikari·DB gauge peak와 global counter delta
 - 실제 표본 간격 min·avg·max
-- DB counter 감소와 잘못된 run ID 거부
+- 첫·마지막 사이에서 복구된 경우를 포함한 인접 표본 DB counter 감소와 잘못된 run ID 거부
 - DB CLI·Compose healthcheck의 관측자 효과와 `Connections` 제외 표시
 
-Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사를 먼저 실행한 뒤 기존 Java 21 Backend 테스트를 수행한다. 로컬에서는 PowerShell 5.1로 22개 assertion, 전체 Backend 102개 test 강제 재실행, `k6 inspect`가 통과했다. 로컬에 `actionlint`는 설치되어 있지 않아 workflow step의 Ubuntu 실행 결과는 PR CI에서 최종 확인한다.
+Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사를 먼저 실행한 뒤 기존 Java 21 Backend 테스트를 수행한다. 로컬에서는 PowerShell 5.1로 23개 assertion, 전체 Backend 102개 test 강제 재실행, `k6 inspect`가 통과했다. 로컬에 `actionlint`는 설치되어 있지 않아 workflow step의 Ubuntu 실행 결과는 PR CI에서 최종 확인한다.
 
 ## 7. 최종 로컬 smoke
 

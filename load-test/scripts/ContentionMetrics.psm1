@@ -112,14 +112,17 @@ function New-ContentionMetricsSummary {
 
     $issue51First = $Samples[0]
     $issue51Last = $Samples[$Samples.Count - 1]
-    foreach ($issue51CounterName in @('DbRowLockWaits', 'DbRowLockTimeMs', 'DbDeadlocks')) {
-        if ([long]$issue51Last.$issue51CounterName -lt [long]$issue51First.$issue51CounterName) {
-            throw "MariaDB counter decreased during measurement: $issue51CounterName"
-        }
-    }
 
     $issue51Intervals = New-Object 'Collections.Generic.List[long]'
     for ($issue51Index = 1; $issue51Index -lt $Samples.Count; $issue51Index += 1) {
+        foreach ($issue51CounterName in @('DbRowLockWaits', 'DbRowLockTimeMs', 'DbDeadlocks')) {
+            $issue51PreviousCounter = [long]$Samples[$issue51Index - 1].$issue51CounterName
+            $issue51CurrentCounter = [long]$Samples[$issue51Index].$issue51CounterName
+            if ($issue51CurrentCounter -lt $issue51PreviousCounter) {
+                throw "MariaDB counter decreased between metric samples: $issue51CounterName"
+            }
+        }
+
         $issue51Interval = [long]$Samples[$issue51Index].ElapsedMilliseconds - [long]$Samples[$issue51Index - 1].ElapsedMilliseconds
         if ($issue51Interval -le 0) {
             throw 'Metric sample timestamps must increase.'

@@ -114,4 +114,21 @@ Assert-Issue51Throws { Assert-ContentionRunId -RunId 'invalid run id' } 'Invalid
 $issue51CounterResetSamples = @($issue51Samples[2], $issue51Samples[0])
 Assert-Issue51Throws { New-ContentionMetricsSummary -Samples $issue51CounterResetSamples } 'Counter resets must invalidate the measurement.'
 
+$issue51MiddleResetSamples = @(
+    $issue51Samples[0],
+    [pscustomobject]@{
+        ElapsedMilliseconds = 1000
+        HikariActive = 1; HikariPending = 0; HikariIdle = 9; HikariMax = 10
+        DbRowLockCurrentWaits = 0; DbRowLockWaits = 0; DbRowLockTimeMs = 0
+        DbDeadlocks = 0; DbThreadsConnected = 11; DbThreadsRunning = 1
+    },
+    [pscustomobject]@{
+        ElapsedMilliseconds = 2000
+        HikariActive = 1; HikariPending = 0; HikariIdle = 9; HikariMax = 10
+        DbRowLockCurrentWaits = 0; DbRowLockWaits = 10; DbRowLockTimeMs = 400
+        DbDeadlocks = 3; DbThreadsConnected = 11; DbThreadsRunning = 1
+    }
+)
+Assert-Issue51Throws { New-ContentionMetricsSummary -Samples $issue51MiddleResetSamples } 'A counter reset between the first and last samples must invalidate the measurement.'
+
 Write-Output "ContentionMetrics checks passed: $issue51Assertions assertions."

@@ -23,7 +23,7 @@
 - 확인된 문제: 종료 후 단일 Hikari 값과 여러 실행이 누적된 MariaDB counter만으로는 부하 중 connection·lock peak와 해당 run의 증가분을 분리할 수 없음
 - 조사: Hikari active/pending/idle/max Prometheus gauge 확인; MariaDB row lock wait/time/deadlock global counter와 current waits·threads gauge 확인; 반복 CLI 표본이 `Connections`와 thread 값에 관측자 영향을 주는 사실 확인
 - 구현: 고유 run·결과 경로·필수 metric 검증, k6 비동기 process와 고정 cadence 표본, Hikari/DB peak·counter delta·실제 표본 간격·관측자 효과 summary, 실패 JSON·민감 정보 제외, PowerShell fixture CI
-- 검증: PowerShell 22개 assertion·k6 inspect·전체 Backend 102개 강제 재실행 통과; distributed 5 RPS·5초 active peak 1·pending 0·lock delta 0; hot-seat 100 RPS·10초 1,001회 중 성공 1·예상 409 1,000·p95 39.68ms·active peak 2·pending 0·lock waits +77·time +142ms·deadlock 0·종료 불변식 충족
+- 검증: PowerShell 23개 assertion·k6 inspect·전체 Backend 102개 강제 재실행 통과; distributed 5 RPS·5초 active peak 1·pending 0·lock delta 0; hot-seat 100 RPS·10초 1,001회 중 성공 1·예상 409 1,000·p95 39.68ms·active peak 2·pending 0·lock waits +77·time +142ms·deadlock 0·종료 불변식 충족
 - 범위: 로컬 PowerShell 측정 wrapper, Hikari 시계열·MariaDB counter delta/현재 gauge, fixture 검사·CI, ignored 결과와 근거 문서
 - 제외: 단계별 최대 처리량·성능 개선, Prometheus/Grafana 전체 stack, 운영 배포·장기 보관·알림, Frontend, 실제 외부 연동, 분산 기술
 
