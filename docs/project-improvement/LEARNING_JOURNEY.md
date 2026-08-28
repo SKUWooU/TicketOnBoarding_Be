@@ -375,3 +375,29 @@ MariaDB 10.11.8·가상 좌석 24개에서 2석 60,000원 정상 확정, 미승�
 ### 링크
 
 - [Backend Issue #43](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/43)
+
+## Issue #47 — 정확성 fixture에서 고경합 측정 기반으로 확장
+
+### 좌석 수와 트래픽을 구분하기
+
+기존 24석 Testcontainers fixture는 barrier와 lock 대기를 이용해 동시성 오류를 결정적으로 재현한다. 이 fixture를 단순히 2,000석으로 늘리는 것은 처리 능력의 증거가 아니며 테스트 실행 비용만 키울 수 있다. 그래서 정확성 회귀는 24석으로 유지하고, HTTP 요청률·p95·커넥션·DB lock을 관찰하는 실행 전용 fixture만 50행 × 40석으로 분리했다.
+
+2,000석은 실제 KOPIS 공연장 좌석을 모사한 데이터가 아니라 hot seat·hot section·분산 좌석이라는 서로 다른 경합 분포를 만들기 위한 가상 재고 공간이다. 성능 수치는 좌석 수보다 요청 도착률, 경합 분포, DB connection 설정, 실행 장비와 함께 기록해야 비교할 수 있다.
+
+### 측정 경로를 운영 연동과 분리하기
+
+검증된 예약 경로에는 Payment 검증이 필요하므로 `loadtest` profile 전용 adapter가 로컬 형식의 결제 ID만 승인하도록 했다. fixture·JWT endpoint·adapter는 profile 밖에서 등록되지 않고 서버와 관리 포트도 loopback에 bind한다. 따라서 KOPIS·PG·SMS 없이 예약의 실제 transaction·lock·멱등성 코드는 그대로 통과한다.
+
+첫 구현은 고정 공연·회차를 재사용해 두 번째 k6부터 이전 좌석과 멱등 결과가 섞였다. Reviewer Blocking을 통해 실행마다 run ID로 공연·회차·사용자·멱등 key·결제 ID를 분리했다. snapshot도 회차와 run별 식별자만 세며, 정합성 false를 단순 출력하지 않고 k6 실패로 연결한다. 재리뷰에서는 최대 run ID가 결제 ID에 두 번 들어가 100자 계약을 넘는 경계값을 찾아, run별 username만 소유권 경계로 남기고 nonce 중복을 제거했다. 반복 가능한 측정에서는 입력·집계 격리뿐 아니라 식별자 조합의 최대 길이도 실제 API 계약으로 검증해야 한다.
+
+k6는 동일 한 좌석, 40석 구간, 2,000석 분산, 동일 멱등 요청의 네 모델을 제공한다. 처리량과 지연만 보지 않고 종료 snapshot에서 `전체 = 잔여 + 점유`, `점유 = 예약`, `Booking = Payment`도 검사한다. 성능과 정합성 중 하나라도 실패하면 개선으로 판단하지 않는다.
+
+### smoke와 기준선의 차이
+
+run 격리 보완 후 distributed 5 RPS·10초를 연속 실행했을 때 각 run은 예약 50건과 51건을 별도 재고에 저장하고 모두 불변식을 충족했다. run 경계·로그 조건까지 최종 보완한 실행은 예약 API 전용 p95 68.21ms·비-2xx 0건·예약 51건으로 종료됐다. 이는 스크립트·fixture·관측 경로와 재실행 격리가 함께 동작한다는 증거이지 안정 처리량이나 개선 전후 수치가 아니다. 로그 조건이 다른 앞선 실행과 직접 비교하지 않으며, 종료 뒤 Hikari와 MariaDB 상태도 peak가 아니므로 시계열 관측 없이는 병목 위치를 단정할 수 없다.
+
+다음 학습 순서는 경합 실패를 409와 5xx로 구분하는 HTTP 계약, 부하 중 시계열 수집, 단계별 도착률 측정이다. 대기열·분산 lock·outbox·브로커는 이 측정에서 필요 조건이 확인된 뒤 선택한다. 상세 조건과 명령은 [가상 좌석 2,000석 고경합 부하 측정 기반](high-contention-load-test-harness.md)에 기록했다.
+
+### 링크
+
+- [Backend Issue #47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)

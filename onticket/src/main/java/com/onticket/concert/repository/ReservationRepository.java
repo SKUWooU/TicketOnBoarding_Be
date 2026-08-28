@@ -17,6 +17,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     //상태값으로 조회
     List<Reservation> findByStatus(ReservationStatus status);
 
+    long countByConcertTimeId(Long concertTimeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM Reservation r WHERE r.id = :reservationId")
     Optional<Reservation> findByIdWithLock(@Param("reservationId") Long reservationId);

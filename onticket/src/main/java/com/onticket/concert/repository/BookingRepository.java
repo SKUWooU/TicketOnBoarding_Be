@@ -8,4 +8,6 @@ import java.util.Optional;
 public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Optional<Booking> findByUsernameAndIdempotencyKey(String username, String idempotencyKey);
+
+    long countByIdempotencyKeyStartingWith(String idempotencyKeyPrefix);
 }

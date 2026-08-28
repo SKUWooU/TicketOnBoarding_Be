@@ -1,0 +1,3 @@
+# Load-test output can contain ephemeral JWTs from k6 setup data.
+.work-k6-*.json
+load-test/results/

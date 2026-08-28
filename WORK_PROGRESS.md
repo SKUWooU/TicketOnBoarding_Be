@@ -6,26 +6,40 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `06244189a9335f1bd3dd2283e21bf6d87ae4dc8e` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `76315805130d57c6e764d840fb6cdf60395014ed` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #47 — 2,000석 가상 공연장 고경합 부하 측정 기반 구성
+
+- Issue: [#47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)
+- Branch: `test/47-high-contention-loadtest-harness`
+- PR: [#48](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/48)
+- 상태: Reviewer Blocking 수정·재검증 완료, 재리뷰 준비
+- 계획 승인: 완료
+- 구현: `loadtest` profile·2,000석 fixture·mock 결제 adapter·k6 4종 시나리오·Actuator 지표·상세 근거 문서 구성
+- 검증: Blocking 수정 후 경계 테스트를 포함한 전체 Backend 100개 test 통과(실패·오류·skip 0), k6 inspect 통과, 독립 run 연속 distributed 5 RPS·10초에서 예약 50·51건 모두 종료 불변식 충족; 최종 distributed 예약 51건·p95 68.21ms; 32자 run ID idempotent-retry 51호출→20결과 재사용·p95 58.81ms·비-2xx 0·불변식 충족
+- 범위: 로컬 가상 좌석 고경합 재현·측정 기반과 지표·정합성 결과 형식
+- 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 운영 SLA·성능 개선 주장, 대기열·Redis 분산 lock·outbox·브로커, 전체 Prometheus/Grafana stack
+- Reviewer: HEAD `2cc9e78dee571d65d05102605ccec7a73b802f9e`의 Blocking 4건은 HEAD `0e8968179efd9f88b3b6175a710cfc9038670910`에서 해소; HEAD `7731a02cf60ef6053a54b25665c2895661f050ab`에서 결제 ID 길이 Blocking 해소 확인 후 문서 테스트 수 99→100 정정 Blocking 반영
+
+## 완료
+
 ### Backend Issue #43 — 서버 소유 가상 가격과 mock 결제 검증 경계 구성
 
 - Issue: [#43](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/43)
 - PR: [#44](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/44)
 - Branch: `feat/43-payment-verification-boundary`
-- 상태: 구현·검증 완료
+- squash commit: `76315805130d57c6e764d840fb6cdf60395014ed`
+- 상태: 완료
 - 계획 승인: 완료
-- 구현: 완료
-- 검증: 서버 30,000원 단가·mock 승인/미승인·식별자/금액/사용자 불일치·결제 재사용·late-failure rollback·동시 멱등 재사용/충돌, Issue 대상 30개·전체 Backend 92개 invocation 통과
-- 범위: Backend 가상 좌석 가격, Payment 상태·mock 검증 경계, 검증된 결제 1회 소비와 예약 transaction 연계
+- 구현: 서버 30,000원 가상 단가, Payment 상태·mock 검증 경계, 검증된 결제 1회 소비와 예약 transaction 연계
+- 검증: mock 승인/미승인·식별자/금액/사용자 불일치·결제 재사용·late-failure rollback·동시 멱등 재사용/충돌, Issue 대상 30개·전체 Backend 92개 invocation 통과
+- Reviewer: 최신 HEAD `8147c0cf`, Blocking 없음, `MERGE_READY: YES`
 - 제외: 실제 PG·KOPIS·운영 DB 호출, Frontend, 좌석 hold·만료, 취소·환불 보상, Flyway 운영 migration, k6·분산 기술
-
-## 완료
 
 ### Backend Issue #45 — Reviewer 자동 병합 알림과 줄바꿈 정규화
 
