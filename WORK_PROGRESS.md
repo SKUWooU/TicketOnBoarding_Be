@@ -17,7 +17,8 @@
 
 - Issue: [#51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
 - Branch: `test/51-lightweight-contention-observability`
-- 상태: 구현·로컬 검증 완료, PR 준비 중
+- PR: [#52](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/52)
+- 상태: 구현·로컬 검증 완료, PR CI·Reviewer 검토 중
 - 계획 승인: 완료
 - 확인된 문제: 종료 후 단일 Hikari 값과 여러 실행이 누적된 MariaDB counter만으로는 부하 중 connection·lock peak와 해당 run의 증가분을 분리할 수 없음
 - 조사: Hikari active/pending/idle/max Prometheus gauge 확인; MariaDB row lock wait/time/deadlock global counter와 current waits·threads gauge 확인; 반복 CLI 표본이 `Connections`와 thread 값에 관측자 영향을 주는 사실 확인
