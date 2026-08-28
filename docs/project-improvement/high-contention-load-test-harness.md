@@ -147,7 +147,7 @@ k6 run load-test/k6/reservation-contention.js
 
 - `LoadTestFixtureIntegrationTest`: MariaDB 10.11.8에서 run별 정확히 2,000석 생성, 좌석 이름 경계, 같은 run 중복 초기화 방지, 서로 다른 run의 회차·재고 분리, 다른 loadtest run의 Booking·Payment 배제를 검증한다.
 - `LoadTestPaymentVerificationAdapterTest`: 정상 로컬 결제와 잘못된 형식·금액을 외부 호출 없이 검증하고, 일반 context에는 adapter가 없으며 `loadtest` profile에서만 등록되는지와 최대 run ID 조합이 결제 ID 100자 이내인지 확인한다.
-- 전체 Backend 99개 test는 기존 24석 동시성·예약·취소·결제 회귀와 신규 fixture가 충돌하지 않는지 확인했으며 실패·오류·skip은 모두 0이었다.
+- 전체 Backend 100개 test는 기존 24석 동시성·예약·취소·결제 회귀와 신규 fixture·최대 식별자 경계가 충돌하지 않는지 확인했으며 실패·오류·skip은 모두 0이었다.
 - `k6 inspect`는 스크립트 문법과 시나리오 구성을 확인한다.
 
 이 수치는 실제 공연장 좌석 데이터, 실제 예매처, 다중 서버, 인터넷 구간, 운영 PG 성능을 나타내지 않는다. 단일 로컬 환경에서 가상 좌석 재고 쓰기 경로가 실행되고 종료 정합성을 유지하는지 확인한 smoke 결과다. 개선 전후 성능 비교도 아니므로 “성능 향상” 수치로 사용하지 않는다.
