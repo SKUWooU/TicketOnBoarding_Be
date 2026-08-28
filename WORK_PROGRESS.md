@@ -17,7 +17,8 @@
 
 - Issue: [#53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
 - Branch: `test/53-staged-contention-baseline`
-- 상태: 구현·단계별 로컬 측정·전체 회귀 검증 완료, PR 준비 중
+- PR: [#54](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/54)
+- 상태: 구현·단계별 로컬 측정·전체 회귀 검증 완료, PR CI·Reviewer 검토 대기
 - 계획 승인: 완료
 - 확인된 문제: k6 콘솔 처리율이 setup 시간을 포함하고 무거운 fixture 생성이 Hikari·DB 표본에 섞이며, 무경합 성공 처리량과 정상 409 경합 응답을 같은 TPS로 해석할 수 있음
 - 계획: fixture 사전 준비, 민감 정보 없는 구조화 k6 결과, 시나리오별 단계·3회 반복 runner, 중앙값·범위와 중단 조건, 로컬 기준선 문서화
