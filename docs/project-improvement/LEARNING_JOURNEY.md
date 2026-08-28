@@ -421,3 +421,23 @@ run 격리 보완 후 distributed 5 RPS·10초를 연속 실행했을 때 각 ru
 ### 링크
 
 - [Backend Issue #49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)
+
+## Issue #51 — 부하 결과와 connection·lock 상태를 같은 시간축에 연결
+
+### 종료 순간값과 global 누적값을 특정 run의 원인으로 보지 않기
+
+Issue #47 smoke가 끝난 뒤 Hikari active 0과 MariaDB row lock wait 누적값은 확인할 수 있었지만, 부하 중 peak인지 해당 run에서 증가했는지는 알 수 없었다. Hikari gauge는 반복 표본의 peak로, MariaDB global counter는 첫 값과 마지막 값의 delta로 나눠야 의미가 생긴다. 실제 표본에서 DB CLI와 Compose healthcheck도 connection을 만들었으므로 `Connections` 증가는 application 병목 근거에서 제외했다.
+
+### 관측 도구의 실패를 측정 성공과 분리하기
+
+경량 PowerShell wrapper는 k6 child process와 Hikari·MariaDB 표본을 같은 run ID로 실행한다. 필수 metric 누락, counter 감소, 결과 파일 충돌, 수집 실패, k6 실패, 종료 재고 불변식 실패 중 하나라도 있으면 `ValidMeasurement=true` summary를 만들지 않는다. 개발 중 Docker config 접근 실패와 process exit/snapshot parser false negative도 성공으로 우회하지 않고 실패 결과로 남긴 뒤 새 run에서 수정 사항을 검증했다.
+
+### 목표 sampling interval과 실제 interval을 함께 기록하기
+
+DB CLI 표본 시간이 추가되므로 단순히 매 조회 후 1초를 기다리면 실제 간격이 1.5~2초로 늘어났다. 고정 cadence로 바꾸고 summary에 실제 min·avg·max를 추가했다. 최종 hot-seat smoke의 목표는 1,000ms였고 실제 평균은 1,009.36ms, 최대는 1,692ms였다. polling이 놓칠 수 있는 짧은 spike를 숨기지 않고 수치 해석의 한계로 남긴다.
+
+최종 로컬 smoke에서 distributed 5 RPS·5초는 Hikari active peak 1·pending 0·lock wait delta 0이었다. hot-seat 100 RPS·10초는 1,001회 중 성공 1·예상 409 1,000·예상 밖 오류 0, p95 39.68ms, Hikari active peak 2·pending 0, row lock wait +77회·+142ms, deadlock 0과 종료 불변식을 기록했다. 이는 서로 다른 조건의 collector 기능 확인값이며 성능 전후 비교가 아니다. 상세 내용은 [고경합 부하의 경량 Hikari·MariaDB 관측 경계](lightweight-contention-observability.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)

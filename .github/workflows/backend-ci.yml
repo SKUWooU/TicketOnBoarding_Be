@@ -33,6 +33,11 @@ jobs:
           cache: gradle
           cache-dependency-path: onticket/**/*.gradle*
 
+      - name: Validate contention metrics collector
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: ./load-test/scripts/Test-ContentionMetrics.ps1
+
       - name: Run Backend tests
         run: |
           chmod +x gradlew

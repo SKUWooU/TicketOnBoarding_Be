@@ -6,27 +6,43 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `174283b1b33936730a1e9dfbf5e0d0b521644fe1` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `13a18d3d36c2d2b4e9b6084beb30bf6c643fa969` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #51 — 고경합 부하의 Hikari·MariaDB 지표 수집 경계 구성
+
+- Issue: [#51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
+- Branch: `test/51-lightweight-contention-observability`
+- PR: [#52](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/52)
+- 상태: 구현·로컬 검증 완료, PR CI·Reviewer 검토 중
+- 계획 승인: 완료
+- 확인된 문제: 종료 후 단일 Hikari 값과 여러 실행이 누적된 MariaDB counter만으로는 부하 중 connection·lock peak와 해당 run의 증가분을 분리할 수 없음
+- 조사: Hikari active/pending/idle/max Prometheus gauge 확인; MariaDB row lock wait/time/deadlock global counter와 current waits·threads gauge 확인; 반복 CLI 표본이 `Connections`와 thread 값에 관측자 영향을 주는 사실 확인
+- 구현: 고유 run·결과 경로·필수 metric 검증, k6 비동기 process와 고정 cadence 표본, Hikari/DB peak·counter delta·실제 표본 간격·관측자 효과 summary, 실패 JSON·민감 정보 제외, PowerShell fixture CI
+- 검증: PowerShell 23개 assertion·k6 inspect·전체 Backend 102개 강제 재실행 통과; distributed 5 RPS·5초 active peak 1·pending 0·lock delta 0; hot-seat 100 RPS·10초 1,001회 중 성공 1·예상 409 1,000·p95 39.68ms·active peak 2·pending 0·lock waits +77·time +142ms·deadlock 0·종료 불변식 충족
+- 범위: 로컬 PowerShell 측정 wrapper, Hikari 시계열·MariaDB counter delta/현재 gauge, fixture 검사·CI, ignored 결과와 근거 문서
+- 제외: 단계별 최대 처리량·성능 개선, Prometheus/Grafana 전체 stack, 운영 배포·장기 보관·알림, Frontend, 실제 외부 연동, 분산 기술
+
+## 완료
+
 ### Backend Issue #49 — 좌석 경합 실패를 명시적 HTTP 409 계약으로 분류
 
 - Issue: [#49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)
 - Branch: `fix/49-seat-contention-http-contract`
 - PR: [#50](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/50)
-- 상태: 구현·로컬 검증 완료, Reviewer 검토 준비
+- squash commit: `13a18d3d36c2d2b4e9b6084beb30bf6c643fa969`
+- 상태: 완료
 - 계획 승인: 완료
 - 확인된 문제: 동일 좌석 후발 요청과 잔여 재고 부족이 checked `Exception`으로 전파되어 예상된 재고 경합도 HTTP 500으로 응답하며, k6에서 실제 서버 장애와 구분되지 않음
 - 구현: 좌석 선점·잔여 재고 실패 전용 HTTP 409 예외, 일반·검증 예약 Controller 계약, k6 hot 시나리오 예상 경합·예상 밖 오류 분리와 전체 시나리오 sanity threshold
 - 검증: 전체 Backend 102개 test 통과(실패·오류·skip 0), k6 inspect 통과, hot-seat 20 RPS·10초에서 201회 중 성공 1·예상 409 경합 200·예상 밖 비-2xx/5xx 0·p95 36.69ms·종료 불변식 충족
 - 범위: Backend 좌석 경합 예외·HTTP 409 계약, Controller·MariaDB 동시성 회귀, k6 예상 경합/예상 밖 오류 분리, 근거 문서
 - 제외: 단계별 RPS 기준선·성능 개선, Prometheus/Grafana 전체 구성, Frontend, 실제 KOPIS·PG·SMS·운영 DB, 대기열·Redis 분산 lock·outbox·브로커
-
-## 완료
+- Reviewer: 최종 HEAD `2d62796e73d3f127dfad91946dcfe3deda5971f9`, Blocking 없음, `MERGE_READY: YES`; Backend CI 성공 후 자동 squash merge
 
 ### Backend Issue #47 — 2,000석 가상 공연장 고경합 부하 측정 기반 구성
 

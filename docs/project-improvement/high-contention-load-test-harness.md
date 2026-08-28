@@ -104,6 +104,14 @@ $env:DURATION='30s'
 k6 run load-test/k6/reservation-contention.js
 ```
 
+Hikari·MariaDB lock 지표를 같은 run에서 함께 수집하려면 저장소 root에서 Issue #51의 경량 wrapper를 사용한다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  .\load-test\scripts\Measure-Contention.ps1 `
+  -Scenario hot-seat -Rate 100 -DurationSeconds 10 -RunId example-hot-01
+```
+
 기본 실행은 고유 run ID를 자동 생성한다. 재현을 위해 `RUN_ID`를 직접 지정할 수 있지만, 같은 ID를 다시 쓰면 신규 기준선이 아니라 기존 실행을 이어간다.
 
 `--summary-export`의 원본 JSON에는 k6 `setup_data`의 임시 JWT가 포함될 수 있으므로 공개 산출물로 저장하지 않는다. 원본 결과가 필요하면 ignored `load-test/results/`에만 보관하고 토큰을 제거한 집계 수치만 문서에 옮긴다.
@@ -156,16 +164,18 @@ k6 run load-test/k6/reservation-contention.js
 
 1. 기존 `SecurityConfig`가 `/**`를 security ignore하는 경고가 있어 loadtest endpoint 격리는 profile·loopback bind에 의존한다. 인증 정책 정비는 Frontend 계약 영향이 있어 별도 Issue로 다룬다.
 2. 좌석 경합 오류의 HTTP 409 계약과 k6 분리 집계는 Issue #49에서 완료했다. 다만 Frontend의 사용자 메시지 계약은 Backend 우선 작업 이후 별도로 연동해야 한다.
-3. 종료 후 단일 조회만으로는 부하 중 Hikari·lock wait peak를 알 수 없다. Prometheus/Grafana 또는 동등한 시계열 수집이 필요하다.
+3. Issue #51의 경량 wrapper가 Hikari peak와 MariaDB lock counter delta를 약 1초 cadence로 연결한다. 짧은 spike와 관측자 DB connection 영향은 남으므로 실제 표본 간격·관측자 표시와 함께 해석하고, 장기 보관·dashboard가 필요해질 때만 Prometheus/Grafana 전체 stack을 검토한다.
 4. 2,000석은 병목을 재현하기 위한 명시적 가상 fixture 규모이며, 좌석 수를 크게 만드는 것 자체가 대규모 트래픽 처리 능력의 증거는 아니다.
 5. 대기열·Redis 분산 lock·outbox·메시지 브로커는 아직 도입하지 않는다. 단계별 RPS에서 확인된 병목과 실패 양상이 해당 기술의 필요 조건을 충족할 때 별도 ADR로 판단한다.
 
-경합 오류 HTTP 계약을 완료했으므로 권장 다음 순서는 `시계열 관측 → distributed/hot-section/hot-seat 단계별 측정 → 병목별 최소 개선 → 같은 조건 재측정`이다.
+경합 오류 HTTP 계약과 경량 관측 경계를 완료했으므로 권장 다음 순서는 `동일 조건 warmup·반복 → distributed/hot-section/hot-seat 단계별 측정 → 병목별 최소 개선 → 같은 조건 재측정`이다.
 
 ## 10. 연결
 
 - [Backend Issue #47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)
 - [Backend Issue #49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)
 - [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)
+- [Backend Issue #51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
+- [고경합 부하의 경량 Hikari·MariaDB 관측 경계](lightweight-contention-observability.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
 - [학습·개선 여정](LEARNING_JOURNEY.md)
