@@ -14,11 +14,19 @@ const UNIT_PRICE = 30000;
 
 const reservationSuccess = new Counter('reservation_success');
 const nonSuccessfulReservation = new Counter('reservation_non_2xx');
+const expectedContention = new Counter('reservation_expected_contention');
+const unexpectedNonSuccessfulReservation = new Counter('reservation_unexpected_non_2xx');
 const unexpectedFailure = new Rate('reservation_unexpected_failure');
 const reservationDuration = new Trend('reservation_duration', true);
 
-const strictSuccessScenario = TEST_SCENARIO === 'distributed'
-  || TEST_SCENARIO === 'idempotent-retry';
+const expectedContentionScenario = TEST_SCENARIO === 'hot-seat'
+  || TEST_SCENARIO === 'hot-section';
+
+http.setResponseCallback(
+  expectedContentionScenario
+    ? http.expectedStatuses(200, 409)
+    : http.expectedStatuses(200),
+);
 
 export const options = {
   scenarios: {
@@ -33,9 +41,7 @@ export const options = {
   },
   thresholds: {
     reservation_duration: ['p(95)<2000'],
-    ...(strictSuccessScenario
-      ? { reservation_unexpected_failure: ['rate<0.05'] }
-      : {}),
+    reservation_unexpected_failure: ['rate<0.05'],
   },
 };
 
@@ -109,6 +115,13 @@ export default function (data) {
   }
 
   nonSuccessfulReservation.add(1);
+  if (response.status === 409 && expectedContentionScenario) {
+    expectedContention.add(1);
+    unexpectedFailure.add(false);
+    return;
+  }
+
+  unexpectedNonSuccessfulReservation.add(1);
   unexpectedFailure.add(true);
 }
 

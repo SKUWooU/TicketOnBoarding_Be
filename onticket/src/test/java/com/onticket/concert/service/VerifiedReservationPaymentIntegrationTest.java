@@ -412,7 +412,7 @@ class VerifiedReservationPaymentIntegrationTest {
                 CONCERT_ID,
                 request(paymentId, "A1", "A2"),
                 "late-failure-key"
-        )).isExactlyInstanceOf(Exception.class)
+        )).isExactlyInstanceOf(SeatReservationConflictException.class)
                 .hasMessage("잔여 좌석이 부족합니다.");
 
         assertThat(paymentRepository.count()).isZero();

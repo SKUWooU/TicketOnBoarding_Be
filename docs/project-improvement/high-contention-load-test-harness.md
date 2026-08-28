@@ -12,7 +12,7 @@
 - Actuator·Micrometer가 없어 HTTP 지연과 HikariCP 상태를 같은 실행에서 확인할 수 없었다.
 - 통합 테스트의 24석 fixture는 정확성 회귀에 초점을 두며, 수백~수천 좌석에 요청을 분산하는 부하 모델은 없었다.
 - 검증된 예약 API는 `PaymentVerificationPort` 구현 없이는 실행되지 않아 실제 PG를 호출하지 않는 측정 adapter가 필요했다.
-- 고경합 실패 응답을 명시적인 HTTP 409 계약으로 분류하는 전역 예외 처리는 아직 확인되지 않았다. 따라서 좌석 충돌을 모두 정상 결과로 간주하면 실제 5xx를 가릴 수 있다.
+- 기반 구성 당시 고경합 실패 응답은 일반 checked `Exception`으로 전파되어 예상 가능한 좌석 충돌도 HTTP 500이 됐다. Issue #49에서 좌석 선점 실패·잔여 재고 부족을 HTTP 409 계약으로 분리하고 k6의 예상 경합과 실제 오류 지표를 나눴다.
 
 ## 3. fixture와 실행 격리
 
@@ -62,14 +62,14 @@ k6
 
 | `TEST_SCENARIO` | 좌석 선택 | 확인 목적 | 결과 해석 |
 | --- | --- | --- | --- |
-| `hot-seat` | 모든 요청이 한 좌석 | 동일 좌석 최고 경합 | 비-2xx를 기록하되 현재는 정상 충돌과 5xx를 구분해 성공률로 단정하지 않음 |
-| `hot-section` | 첫 행 40석 순환 | 좁은 구간 lock 경합 | 비-2xx와 지연을 기록하고 DB lock 지표와 함께 해석 |
+| `hot-seat` | 모든 요청이 한 좌석 | 동일 좌석 최고 경합 | 성공 1건 이후의 409를 예상 경합으로 분류하고 그 밖의 비-2xx와 분리 |
+| `hot-section` | 첫 행 40석 순환 | 좁은 구간 lock 경합 | 409 예상 경합과 예상 밖 오류·지연을 DB lock 지표와 함께 해석 |
 | `distributed` | 2,000석 순환 | 경합이 낮은 쓰기 기준선 | 비-2xx 5% 미만 sanity threshold 적용 |
 | `idempotent-retry` | 2,000석 범위의 VU별 고정 좌석·key·payment ID | 좌석 간 충돌 없이 동일 요청 결과 재사용 | 비-2xx 5% 미만 sanity threshold와 DB 행 수 확인 |
 
 `constant-arrival-rate`를 사용하므로 애플리케이션 응답이 느려져도 목표 도착률을 유지하려고 시도한다. fixture 생성·token·snapshot HTTP 시간과 예약 API 지연을 섞지 않도록 예약 응답만 `reservation_duration` Trend에 기록한다. 기본값은 5 RPS·10초이며, 이는 실행 확인용 smoke일 뿐 부하 기준선이 아니다. 예약 p95 2초 threshold도 환경 오류를 빠르게 찾는 guardrail이지 목표 SLA가 아니다.
 
-고경합 시나리오는 현재 모든 비-2xx를 `reservation_non_2xx`에 기록한다. 좌석 충돌의 명시적 409 응답 계약을 마련하기 전에는 이를 예상 성공으로 재분류하지 않는다.
+모든 비-2xx는 `reservation_non_2xx`에 남기되 hot-seat·hot-section의 409만 `reservation_expected_contention`으로 별도 집계한다. 그 밖의 상태는 `reservation_unexpected_non_2xx`와 실패율에 반영한다. distributed·idempotent-retry에서 발생한 409도 예상 경합으로 숨기지 않는다. 상세 계약과 smoke는 [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)에 기록한다.
 
 ## 6. 로컬 실행 방법
 
@@ -155,15 +155,17 @@ k6 run load-test/k6/reservation-contention.js
 ## 9. 확인된 한계와 후속 조건
 
 1. 기존 `SecurityConfig`가 `/**`를 security ignore하는 경고가 있어 loadtest endpoint 격리는 profile·loopback bind에 의존한다. 인증 정책 정비는 Frontend 계약 영향이 있어 별도 Issue로 다룬다.
-2. 좌석 경합 오류의 명시적 HTTP 409 계약이 없어 hot 시나리오의 비-2xx를 정상 충돌과 서버 오류로 분리할 수 없다.
+2. 좌석 경합 오류의 HTTP 409 계약과 k6 분리 집계는 Issue #49에서 완료했다. 다만 Frontend의 사용자 메시지 계약은 Backend 우선 작업 이후 별도로 연동해야 한다.
 3. 종료 후 단일 조회만으로는 부하 중 Hikari·lock wait peak를 알 수 없다. Prometheus/Grafana 또는 동등한 시계열 수집이 필요하다.
 4. 2,000석은 병목을 재현하기 위한 명시적 가상 fixture 규모이며, 좌석 수를 크게 만드는 것 자체가 대규모 트래픽 처리 능력의 증거는 아니다.
 5. 대기열·Redis 분산 lock·outbox·메시지 브로커는 아직 도입하지 않는다. 단계별 RPS에서 확인된 병목과 실패 양상이 해당 기술의 필요 조건을 충족할 때 별도 ADR로 판단한다.
 
-권장 다음 순서는 `경합 오류 HTTP 계약 → 시계열 관측 → distributed/hot-section/hot-seat 단계별 측정 → 병목별 최소 개선 → 같은 조건 재측정`이다.
+경합 오류 HTTP 계약을 완료했으므로 권장 다음 순서는 `시계열 관측 → distributed/hot-section/hot-seat 단계별 측정 → 병목별 최소 개선 → 같은 조건 재측정`이다.
 
 ## 10. 연결
 
 - [Backend Issue #47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47)
+- [Backend Issue #49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49)
+- [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
 - [학습·개선 여정](LEARNING_JOURNEY.md)

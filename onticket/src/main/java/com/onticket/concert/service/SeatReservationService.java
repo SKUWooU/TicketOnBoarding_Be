@@ -100,7 +100,7 @@ public class SeatReservationService {
             Seat seat = seatOptional.get();
 
             if (seat.isReserved()) {
-                throw new Exception("이미 예약된 좌석입니다.");
+                throw new SeatReservationConflictException("이미 예약된 좌석입니다.");
             }
 
             //해당좌석 예약처리
@@ -134,7 +134,7 @@ public class SeatReservationService {
                 seatNumberList.size()
         );
         if (updatedConcertTimes != 1) {
-            throw new Exception("잔여 좌석이 부족합니다.");
+            throw new SeatReservationConflictException("잔여 좌석이 부족합니다.");
         }
     }
 
