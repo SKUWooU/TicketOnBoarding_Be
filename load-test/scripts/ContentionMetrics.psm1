@@ -159,9 +159,204 @@ function New-ContentionMetricsSummary {
     }
 }
 
+function ConvertFrom-K6ContentionResult {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Text
+    )
+
+    $issue53Prefix = 'LOADTEST_RESULT '
+    $issue53ResultLines = @(
+        ($Text -split "`r?`n") |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_.StartsWith($issue53Prefix, [StringComparison]::Ordinal) }
+    )
+    if ($issue53ResultLines.Count -ne 1) {
+        throw "Expected exactly one structured k6 result, found $($issue53ResultLines.Count)."
+    }
+
+    try {
+        $issue53Result = $issue53ResultLines[0].Substring($issue53Prefix.Length) | ConvertFrom-Json
+    } catch {
+        throw "Structured k6 result is not valid JSON: $($_.Exception.Message)"
+    }
+
+    foreach ($issue53RequiredProperty in @(
+        'schemaVersion',
+        'scenario',
+        'targetRatePerSecond',
+        'duration',
+        'thresholdsEnforced',
+        'iterations',
+        'droppedIterations',
+        'reservationSuccess',
+        'expectedContention',
+        'unexpectedNonSuccessful',
+        'unexpectedFailureRate',
+        'reservationDurationMs',
+        'maxObservedVus',
+        'maxAllocatedVus',
+        'preAllocatedVus',
+        'configuredMaxVus'
+    )) {
+        if ($issue53RequiredProperty -notin $issue53Result.PSObject.Properties.Name) {
+            throw "Structured k6 result is missing: $issue53RequiredProperty"
+        }
+    }
+    foreach ($issue53DurationProperty in @('average', 'median', 'p95', 'maximum')) {
+        if ($issue53DurationProperty -notin $issue53Result.reservationDurationMs.PSObject.Properties.Name) {
+            throw "Structured k6 duration is missing: $issue53DurationProperty"
+        }
+    }
+    if ([int]$issue53Result.schemaVersion -ne 1) {
+        throw "Unsupported structured k6 result schema: $($issue53Result.schemaVersion)"
+    }
+
+    $issue53Result
+}
+
+function ConvertFrom-K6FinalSnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Text
+    )
+
+    $issue53SnapshotMatches = [regex]::Matches(
+        $Text,
+        'LOADTEST_FINAL_SNAPSHOT\s+(\{[^{}]*\})'
+    )
+    if ($issue53SnapshotMatches.Count -ne 1) {
+        throw "Expected exactly one final inventory snapshot, found $($issue53SnapshotMatches.Count)."
+    }
+    try {
+        $issue53Snapshot = $issue53SnapshotMatches[0].Groups[1].Value | ConvertFrom-Json
+    } catch {
+        throw "Final inventory snapshot is not valid JSON: $($_.Exception.Message)"
+    }
+    foreach ($issue53RequiredProperty in @(
+        'expectedTotalSeats',
+        'actualSeatCount',
+        'remainingSeats',
+        'reservedSeats',
+        'reservations',
+        'bookings',
+        'payments',
+        'invariantSatisfied'
+    )) {
+        if ($issue53RequiredProperty -notin $issue53Snapshot.PSObject.Properties.Name) {
+            throw "Final inventory snapshot is missing: $issue53RequiredProperty"
+        }
+    }
+
+    $issue53Snapshot
+}
+
+function New-K6ContentionRunSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Result,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateRange(1, 3600)]
+        [int]$DurationSeconds
+    )
+
+    $issue53Iterations = [long]$Result.iterations
+    $issue53Dropped = [long]$Result.droppedIterations
+    $issue53Success = [long]$Result.reservationSuccess
+    $issue53ExpectedContention = [long]$Result.expectedContention
+    $issue53Unexpected = [long]$Result.unexpectedNonSuccessful
+    foreach ($issue53NonNegative in @(
+        $issue53Iterations,
+        $issue53Dropped,
+        $issue53Success,
+        $issue53ExpectedContention,
+        $issue53Unexpected
+    )) {
+        if ($issue53NonNegative -lt 0) {
+            throw 'Structured k6 counters must not be negative.'
+        }
+    }
+    if ($issue53Iterations -le 0) {
+        throw 'Structured k6 result must contain at least one completed iteration.'
+    }
+    if ($issue53Iterations -ne ($issue53Success + $issue53ExpectedContention + $issue53Unexpected)) {
+        throw 'Structured k6 reservation counters do not match completed iterations.'
+    }
+
+    $issue53Scheduled = $issue53Iterations + $issue53Dropped
+    [pscustomobject]@{
+        Scenario = [string]$Result.scenario
+        TargetRatePerSecond = [int]$Result.targetRatePerSecond
+        DurationSeconds = $DurationSeconds
+        ThresholdsEnforced = [bool]$Result.thresholdsEnforced
+        Iterations = $issue53Iterations
+        DroppedIterations = $issue53Dropped
+        ScheduledIterationAttainmentRate = if ($issue53Scheduled -eq 0) { 0.0 } else { [double]$issue53Iterations / $issue53Scheduled }
+        CompletedIterationsPerScheduledSecond = [double]$issue53Iterations / $DurationSeconds
+        ReservationSuccess = $issue53Success
+        ExpectedContention = $issue53ExpectedContention
+        UnexpectedNonSuccessful = $issue53Unexpected
+        UnexpectedFailureRate = [double]$Result.unexpectedFailureRate
+        ReservationDurationMs = [pscustomobject]@{
+            Average = [double]$Result.reservationDurationMs.average
+            Median = [double]$Result.reservationDurationMs.median
+            P95 = [double]$Result.reservationDurationMs.p95
+            Maximum = [double]$Result.reservationDurationMs.maximum
+        }
+        MaxObservedVus = [int]$Result.maxObservedVus
+        MaxAllocatedVus = [int]$Result.maxAllocatedVus
+        PreAllocatedVus = [int]$Result.preAllocatedVus
+        ConfiguredMaxVus = [int]$Result.configuredMaxVus
+    }
+}
+
+function Assert-K6ContentionRunIdentity {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Result,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Scenario,
+
+        [Parameter(Mandatory = $true)]
+        [int]$Rate,
+
+        [Parameter(Mandatory = $true)]
+        [int]$DurationSeconds,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$ThresholdsEnforced
+    )
+
+    $issue53ExpectedDuration = "$($DurationSeconds)s"
+    if ([string]$Result.scenario -ne $Scenario) {
+        throw "Structured k6 scenario does not match the requested scenario: expected=$Scenario actual=$($Result.scenario)"
+    }
+    if ([int]$Result.targetRatePerSecond -ne $Rate) {
+        throw "Structured k6 target rate does not match the requested rate: expected=$Rate actual=$($Result.targetRatePerSecond)"
+    }
+    if ([string]$Result.duration -ne $issue53ExpectedDuration) {
+        throw "Structured k6 duration does not match the requested duration: expected=$issue53ExpectedDuration actual=$($Result.duration)"
+    }
+    if ([bool]$Result.thresholdsEnforced -ne $ThresholdsEnforced) {
+        throw "Structured k6 threshold mode does not match the requested mode: expected=$ThresholdsEnforced actual=$($Result.thresholdsEnforced)"
+    }
+
+    $true
+}
+
 Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusHikari',
     'ConvertFrom-MariaDbStatus',
     'Assert-ContentionRunId',
-    'New-ContentionMetricsSummary'
+    'New-ContentionMetricsSummary',
+    'ConvertFrom-K6ContentionResult',
+    'ConvertFrom-K6FinalSnapshot',
+    'New-K6ContentionRunSummary',
+    'Assert-K6ContentionRunIdentity'
 )
