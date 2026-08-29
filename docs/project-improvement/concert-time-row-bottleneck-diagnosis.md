@@ -150,7 +150,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 3. statement 누적시간은 여러 connection에서 겹쳐 실행된 시간을 합한 값이므로 wall-clock 시간과 같지 않다.
 4. 10초 로컬 run은 장기 안정성·GC·운영 환경을 증명하지 않는다.
 5. 현재 local profile은 Hibernate `ddl-auto=create`이며 Flyway 운영 baseline이 없다. 다음 index 적용은 Entity 생성 schema와 향후 운영 migration 경계를 분리해 설계해야 한다.
-6. 후속 Issue #57의 같은 조건 A/B에서 복합 unique index가 100 RPS p95를 3,252.76ms에서 91.33ms로 낮추고 Hikari pending을 189에서 0으로 줄였다. 상세 결과는 [좌석 잠금 복합 unique index의 고경합 A/B 검증](seat-composite-index-high-contention-ab.md)에 기록한다.
+6. 후속 Issue #57의 물리 좌석 2,000행 고정 A/B에서 복합 unique index가 100 RPS p95를 3,064.39ms에서 143.41ms로 낮추고 Hikari pending을 189에서 0으로 줄였다. 상세 결과는 [좌석 잠금 복합 unique index의 고경합 A/B 검증](seat-composite-index-high-contention-ab.md)에 기록한다.
 
 ## 10. 연결
 

@@ -121,6 +121,71 @@ FROM (
 '@)
 }
 
+function Clear-Issue57LoadTestFixtures {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][scriptblock]$QueryExecutor)
+
+    Invoke-Issue57Query -QueryExecutor $QueryExecutor -Query @'
+DELETE FROM reservation_payment
+WHERE provider_payment_id LIKE 'LT:load-user-%';
+DELETE FROM reservation
+WHERE concert_id LIKE 'LOAD-TEST-%';
+DELETE FROM reservation_booking
+WHERE idempotency_key LIKE 'lt-%';
+DELETE FROM review
+WHERE concert_id LIKE 'LOAD-TEST-%';
+DELETE seat
+FROM seat
+JOIN concert_time ON concert_time.id = seat.concert_time_id
+WHERE concert_time.concert_id LIKE 'LOAD-TEST-%';
+DELETE FROM concert_time
+WHERE concert_id LIKE 'LOAD-TEST-%';
+DELETE FROM concert_detail
+WHERE concert_id LIKE 'LOAD-TEST-%';
+DELETE FROM concert
+WHERE concert_id LIKE 'LOAD-TEST-%';
+'@ | Out-Null
+
+    $issue57RemainingSeatRows = ConvertFrom-Issue57Scalar `
+        -Name 'Seat table row count after load-test cleanup' `
+        -Lines @(Invoke-Issue57Query -QueryExecutor $QueryExecutor -Query 'SELECT COUNT(*) FROM seat;')
+    if ($issue57RemainingSeatRows -ne 0) {
+        throw "Seat index A/B requires an exclusive diagnostic database with zero seat rows before fixture creation: actual=$issue57RemainingSeatRows"
+    }
+    [pscustomobject]@{
+        LoadTestFixturesRemoved = $true
+        SeatRowsAfterCleanup = $issue57RemainingSeatRows
+    }
+}
+
+function Get-Issue57PhysicalSeatRowCount {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][scriptblock]$QueryExecutor)
+
+    ConvertFrom-Issue57Scalar `
+        -Name 'Physical seat table row count' `
+        -Lines @(Invoke-Issue57Query -QueryExecutor $QueryExecutor -Query 'SELECT COUNT(*) FROM seat;')
+}
+
+function Assert-Issue57MeasurementHealth {
+    [CmdletBinding()]
+    param(
+        [ValidateRange(0, 9223372036854775807)]
+        [long]$UnexpectedNonSuccessful,
+
+        [ValidateRange(0, 9223372036854775807)]
+        [long]$DeadlocksDelta
+    )
+
+    if ($UnexpectedNonSuccessful -ne 0) {
+        throw "Seat index A/B requires zero unexpected non-successful responses: actual=$UnexpectedNonSuccessful"
+    }
+    if ($DeadlocksDelta -ne 0) {
+        throw "Seat index A/B requires zero database deadlocks: actual=$DeadlocksDelta"
+    }
+    $true
+}
+
 function Set-Issue57SeatIndexVariant {
     [CmdletBinding()]
     param(
@@ -248,6 +313,9 @@ Export-ModuleMember -Function @(
     'ConvertFrom-Issue57Scalar',
     'ConvertFrom-Issue57IndexRows',
     'ConvertFrom-Issue57ExplainRow',
+    'Clear-Issue57LoadTestFixtures',
+    'Get-Issue57PhysicalSeatRowCount',
+    'Assert-Issue57MeasurementHealth',
     'Set-Issue57SeatIndexVariant',
     'Get-Issue57SeatIndexEvidence'
 )

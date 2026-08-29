@@ -79,6 +79,30 @@ function New-Issue57MetricComparison {
     }
 }
 
+function Test-SeatIndexContentionBatchComplete {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Records,
+        [Parameter(Mandatory = $true)][object[]]$Plan
+    )
+
+    if ($Records.Count -ne $Plan.Count -or @($Records.RunId | Sort-Object -Unique).Count -ne $Records.Count) {
+        return $false
+    }
+    for ($issue57Index = 0; $issue57Index -lt $Plan.Count; $issue57Index += 1) {
+        $issue57Record = $Records[$issue57Index]
+        $issue57Stage = $Plan[$issue57Index]
+        if ([int]$issue57Record.Sequence -ne [int]$issue57Stage.Sequence -or
+            [int]$issue57Record.Rate -ne [int]$issue57Stage.Rate -or
+            [int]$issue57Record.Repeat -ne [int]$issue57Stage.Repeat -or
+            [bool]$issue57Record.Warmup -ne [bool]$issue57Stage.Warmup -or
+            [string]$issue57Record.Variant -ne [string]$issue57Stage.Variant) {
+            return $false
+        }
+    }
+    $true
+}
+
 function New-SeatIndexContentionComparisonAggregate {
     [CmdletBinding()]
     param(
@@ -97,6 +121,19 @@ function New-SeatIndexContentionComparisonAggregate {
         if ($null -eq $issue57Record.Summary.SeatIndexExperiment -or
             $issue57Record.Summary.SeatIndexExperiment.Variant -ne $issue57Record.Variant) {
             throw 'A/B record is missing matching seat index evidence.'
+        }
+        if ($null -eq $issue57Record.FixtureIsolation -or
+            -not [bool]$issue57Record.FixtureIsolation.LoadTestFixturesRemoved -or
+            [long]$issue57Record.FixtureIsolation.SeatRowsAfterCleanup -ne 0 -or
+            [long]$issue57Record.Summary.SeatIndexExperiment.PhysicalSeatRows -ne [long]$issue57Record.Summary.FixturePreparation.TotalSeats) {
+            throw 'A/B record does not prove an exclusive fixed-size seat fixture.'
+        }
+        if (-not [bool]$issue57Record.Summary.SeatIndexExperiment.StatisticsAnalyzed) {
+            throw 'A/B record does not prove that seat optimizer statistics were refreshed.'
+        }
+        if ([long]$issue57Record.Summary.K6.Result.UnexpectedNonSuccessful -ne 0 -or
+            [long]$issue57Record.Summary.Metrics.Deltas.DbDeadlocks -ne 0) {
+            throw 'A/B record contains an unexpected response or database deadlock.'
         }
         $issue57Digests = $issue57Record.Summary.DatabaseStatementDigests
         if ($null -eq $issue57Digests.Coverage -or $null -eq $issue57Digests.InstrumentationHealth) {
@@ -162,5 +199,6 @@ function New-SeatIndexContentionComparisonAggregate {
 
 Export-ModuleMember -Function @(
     'New-SeatIndexContentionComparisonPlan',
+    'Test-SeatIndexContentionBatchComplete',
     'New-SeatIndexContentionComparisonAggregate'
 )

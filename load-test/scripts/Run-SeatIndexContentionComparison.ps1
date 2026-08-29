@@ -60,6 +60,10 @@ New-Item -ItemType Directory -Path $issue57OutputDirectory -Force | Out-Null
 $issue57Plan = @(New-SeatIndexContentionComparisonPlan -DurationSeconds $DurationSeconds -Repeats $Repeats -TotalSeats 2000)
 $issue57Records = New-Object 'Collections.Generic.List[object]'
 $issue57SchemaRestored = $false
+$issue57FinalCleanupCompleted = $false
+$issue57AllRunsCompleted = $false
+$issue57BatchCompleted = $false
+$issue57ValidBatch = $false
 
 function Invoke-Issue57RunnerRootQuery {
     param([Parameter(Mandatory = $true)][string]$Query)
@@ -109,11 +113,15 @@ function Write-Issue57ComparisonFiles {
         PerformanceSchemaRequired = $true
         WarmupExcluded = $true
         VariantOrderAlternated = $true
+        ExpectedRecordCount = $issue57Plan.Count
+        BatchCompleted = $issue57BatchCompleted
+        ValidBatch = $issue57ValidBatch
         CurrentSchemaRestored = $issue57SchemaRestored
+        FinalCleanupCompleted = $issue57FinalCleanupCompleted
         Records = $issue57Records.ToArray()
     }
     $issue57Manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $issue57ManifestPath -Encoding UTF8
-    if (Test-Issue57BalancedRecords) {
+    if ($issue57ValidBatch -and (Test-Issue57BalancedRecords)) {
         New-SeatIndexContentionComparisonAggregate -Records $issue57Records.ToArray() |
             ConvertTo-Json -Depth 16 |
             Set-Content -LiteralPath $issue57AggregatePath -Encoding UTF8
@@ -126,6 +134,12 @@ try {
         $issue57VariantLabel = if ($issue57Stage.Variant -eq 'current') { 'cur' } else { 'idx' }
         $issue57RunId = "$BatchId-$issue57VariantLabel-$($issue57Stage.Rate)-$issue57RepeatLabel"
         Write-Output "SEAT_INDEX_AB_RUN_START sequence=$($issue57Stage.Sequence) runId=$issue57RunId variant=$($issue57Stage.Variant) rate=$($issue57Stage.Rate) warmup=$($issue57Stage.Warmup)"
+
+        $issue57CleanupStopwatch = [Diagnostics.Stopwatch]::StartNew()
+        $issue57Cleanup = Clear-Issue57LoadTestFixtures -QueryExecutor $issue57RootQueryExecutor
+        $issue57CleanupStopwatch.Stop()
+        $issue57Cleanup | Add-Member -NotePropertyName DurationMilliseconds -NotePropertyValue $issue57CleanupStopwatch.ElapsedMilliseconds
+        $issue57Cleanup | Add-Member -NotePropertyName ExcludedFromMetricSamples -NotePropertyValue $true
 
         & $issue57MeasureScript `
             -Scenario distributed `
@@ -157,24 +171,37 @@ try {
             throw "Seat index A/B run is not valid: $issue57RunId"
         }
         $issue57Records.Add([pscustomobject]@{
+            Sequence = $issue57Stage.Sequence
             RunId = $issue57RunId
             Rate = $issue57Stage.Rate
             Repeat = $issue57Stage.Repeat
             Warmup = $issue57Stage.Warmup
             Variant = $issue57Stage.Variant
+            FixtureIsolation = $issue57Cleanup
             SummaryFile = [IO.Path]::GetFileName($issue57SummaryPath)
             Summary = $issue57Summary
         })
         Write-Issue57ComparisonFiles
         Write-Output "SEAT_INDEX_AB_RUN_COMPLETE runId=$issue57RunId variant=$($issue57Stage.Variant) p95=$($issue57Summary.K6.Result.ReservationDurationMs.P95) seatAvgMs=$($issue57Summary.DatabaseStatementDigests.SeatLockSelect.AverageMilliseconds)"
     }
+    $issue57AllRunsCompleted = $true
 } finally {
-    Set-Issue57SeatIndexVariant `
-        -Variant current `
-        -DatabaseName $DatabaseName `
-        -QueryExecutor $issue57RootQueryExecutor | Out-Null
-    $issue57SchemaRestored = $true
-    Write-Issue57ComparisonFiles
+    try {
+        Set-Issue57SeatIndexVariant `
+            -Variant current `
+            -DatabaseName $DatabaseName `
+            -QueryExecutor $issue57RootQueryExecutor | Out-Null
+        $issue57SchemaRestored = $true
+    } finally {
+        try {
+            Clear-Issue57LoadTestFixtures -QueryExecutor $issue57RootQueryExecutor | Out-Null
+            $issue57FinalCleanupCompleted = $true
+        } finally {
+            $issue57BatchCompleted = $issue57AllRunsCompleted -and (Test-SeatIndexContentionBatchComplete -Records $issue57Records.ToArray() -Plan $issue57Plan)
+            $issue57ValidBatch = $issue57BatchCompleted -and $issue57SchemaRestored -and $issue57FinalCleanupCompleted
+            Write-Issue57ComparisonFiles
+        }
+    }
 }
 
 Write-Output "SEAT_INDEX_AB_BATCH_COMPLETE batchId=$BatchId records=$($issue57Records.Count)"

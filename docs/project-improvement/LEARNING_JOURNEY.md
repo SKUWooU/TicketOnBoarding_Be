@@ -496,15 +496,15 @@ Issue #55에서 좌석 잠금 SELECT의 대기와 약 2,000행 탐색을 확인�
 
 ### 순서 효과·정합성·관측 누락을 A/B gate에 포함하기
 
-각 variant를 한 번씩 warmup하고 반복 1·3과 반복 2의 적용 순서를 뒤집었다. run마다 새 회차·가상 좌석 2,000개를 사용하고 종료 시 좌석·예약·Booking·Payment·잔여 수량을 교차 검증했다. 초기 batch에서 고동시성 Performance Schema digest가 성공 statement 일부를 누락 관측한 것을 발견해 해당 batch를 폐기하고, 최소 coverage 95%와 digest lost·NULL digest health를 명시적으로 기록하는 gate를 추가했다. 최종 batch의 본 측정 최소 coverage는 99.5%였다.
+각 variant를 한 번씩 warmup하고 반복 1·3과 반복 2의 적용 순서를 뒤집었다. 최초 완료 batch는 run마다 새 2,000석을 누적해 물리 table 크기가 달라지는 교란이 있어 폐기했다. 최종 runner는 이전 load-test data를 삭제하고 물리 좌석 0→2,000행을 강제한 뒤 optimizer 통계를 갱신한다. 일반 좌석이 있으면 삭제하지 않고 중단한다. 종료 시 좌석·예약·Booking·Payment·잔여 수량과 예상 밖 응답·deadlock을 교차 검증한다. Performance Schema의 이번 관측 누락을 계기로 최소 coverage 95%와 digest lost·NULL digest health를 추가했으며 최종 batch 최소 coverage는 99%였다.
 
 ### 100 RPS 변곡의 원인을 수치로 확인하기
 
-복합 index는 잠금 조회의 예상 행을 2,000에서 1로 바꿨다. 100 RPS 3회 중앙값에서 완료/설정초는 81.6→100, p95는 3,252.76→91.33ms, dropped는 185→0, Hikari pending peak는 189→0, DB lock time은 97,970→1,264ms, 좌석 잠금 SELECT 평균은 125.888→0.377ms로 바뀌었다. 본 측정 12회 모두 예상 밖 실패·deadlock 0과 재고 불변식을 유지했다.
+복합 index는 잠금 조회의 예상 행을 2,000에서 1로 바꿨다. 최종 `i57-fixed-02`의 100 RPS 3회 중앙값에서 완료/설정초는 83.1→100.1, p95는 3,064.39→143.41ms, dropped는 169→0, Hikari pending peak는 189→0, DB lock time은 91,935→4,565ms, 좌석 잠금 SELECT 평균은 114.168→0.525ms로 바뀌었다. 본 측정 12회 모두 예상 밖 실패·deadlock 0과 재고 불변식을 유지했다.
 
 ### 병목이 사라진 것이 아니라 이동할 수 있음을 보기
 
-좌석 조회가 빨라지자 100 RPS 회차 감소 UPDATE 평균은 0.305→1.679ms로 늘었다. 더 많은 transaction이 같은 회차 counter에 빨리 도달한 결과로 해석할 수 있지만 composite 조건은 여전히 목표 100 RPS·pending 0을 유지했다. 따라서 지금 counter 분리·대기열·Redis lock을 도입하지 않고, 복합 unique index를 Entity·기존 DB migration 경계에 영구 반영한 뒤 더 높은 부하나 burst에서 다음 변곡을 다시 측정한다.
+좌석 조회가 빨라지자 100 RPS 회차 감소 UPDATE 평균은 0.381→5.287ms로 늘었고 composite에서도 row lock wait 중앙값 412회가 남았다. 더 많은 transaction이 같은 회차 counter에 빨리 도달한 결과로 해석할 수 있지만 composite 조건은 여전히 목표 100 RPS·pending 0을 유지했다. 따라서 지금 counter 분리·대기열·Redis lock을 도입하지 않고, 복합 unique index를 Entity·기존 DB migration 경계에 영구 반영한 뒤 더 높은 부하나 burst에서 다음 변곡을 다시 측정한다.
 
 상세 설계·전체 범위·폐기 batch와 한계는 [좌석 잠금 복합 unique index의 고경합 A/B 검증](seat-composite-index-high-contention-ab.md)에 기록한다.
 

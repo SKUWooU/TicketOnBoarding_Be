@@ -42,6 +42,14 @@ Assert-Issue57Equal (@($issue57Plan | Where-Object { -not $_.Warmup -and $_.Rate
 Assert-Issue57Equal (@($issue57Plan | Where-Object { -not $_.Warmup -and $_.Rate -eq 50 -and $_.Variant -eq 'composite' }).Count) 3 '50 RPS composite must repeat three times.'
 Assert-Issue57Equal ($issue57Plan[4].Variant + ',' + $issue57Plan[5].Variant) 'composite,current' 'The second pair must reverse variant order.'
 Assert-Issue57Throws { New-SeatIndexContentionComparisonPlan -DurationSeconds 20 } 'A plan that can exhaust inventory must fail.'
+$issue57CompleteBatch = @($issue57Plan | ForEach-Object {
+    [pscustomobject]@{ Sequence=$_.Sequence; RunId="batch-$($_.Sequence)"; Rate=$_.Rate; Repeat=$_.Repeat; Warmup=$_.Warmup; Variant=$_.Variant }
+})
+Assert-Issue57Equal (Test-SeatIndexContentionBatchComplete -Records $issue57CompleteBatch -Plan $issue57Plan) $true 'A complete ordered batch must be recognized.'
+Assert-Issue57Equal (Test-SeatIndexContentionBatchComplete -Records @($issue57CompleteBatch | Select-Object -First 13) -Plan $issue57Plan) $false 'A partial batch must never be complete.'
+$issue57WrongOrderBatch = @($issue57CompleteBatch | ForEach-Object { $_.PSObject.Copy() })
+$issue57WrongOrderBatch[2].Variant = 'composite'
+Assert-Issue57Equal (Test-SeatIndexContentionBatchComplete -Records $issue57WrongOrderBatch -Plan $issue57Plan) $false 'A batch that does not match the planned variant order must be invalid.'
 
 function New-Issue57ComparisonSummary {
     param(
@@ -56,7 +64,8 @@ function New-Issue57ComparisonSummary {
     )
 
     [pscustomobject]@{
-        SeatIndexExperiment = [pscustomobject]@{ Variant = $Variant }
+        FixturePreparation = [pscustomobject]@{ TotalSeats = 2000 }
+        SeatIndexExperiment = [pscustomobject]@{ Variant = $Variant; PhysicalSeatRows = 2000; StatisticsAnalyzed = $true }
         K6 = [pscustomobject]@{
             Result = [pscustomobject]@{
                 Iterations = ($Completed * 10)
@@ -64,6 +73,7 @@ function New-Issue57ComparisonSummary {
                 CompletedIterationsPerScheduledSecond = $Completed
                 ScheduledIterationAttainmentRate = $Attainment
                 ReservationDurationMs = [pscustomobject]@{ P95 = $P95 }
+                UnexpectedNonSuccessful = 0
             }
         }
         Metrics = [pscustomobject]@{
@@ -86,6 +96,7 @@ foreach ($issue57Repeat in 1..3) {
         Repeat = $issue57Repeat
         Warmup = $false
         Variant = 'current'
+        FixtureIsolation = [pscustomobject]@{ LoadTestFixturesRemoved = $true; SeatRowsAfterCleanup = 0 }
         Summary = New-Issue57ComparisonSummary -Variant current -Completed (70 + $issue57Repeat) -Attainment 0.72 -Dropped 280 -P95 (3900 + ($issue57Repeat * 100)) -Pending 189 -LockTime 100000 -SeatAverage 150
     })
     $issue57Records.Add([pscustomobject]@{
@@ -93,6 +104,7 @@ foreach ($issue57Repeat in 1..3) {
         Repeat = $issue57Repeat
         Warmup = $false
         Variant = 'composite'
+        FixtureIsolation = [pscustomobject]@{ LoadTestFixturesRemoved = $true; SeatRowsAfterCleanup = 0 }
         Summary = New-Issue57ComparisonSummary -Variant composite -Completed (98 + $issue57Repeat) -Attainment 1 -Dropped 0 -P95 (180 + ($issue57Repeat * 10)) -Pending 0 -LockTime 2000 -SeatAverage 2
     })
 }
@@ -125,5 +137,28 @@ $issue57LowCoverage.Summary.DatabaseStatementDigests.Coverage = [pscustomobject]
 Assert-Issue57Throws {
     New-SeatIndexContentionComparisonAggregate -Records @($issue57LowCoverage)
 } 'Digest coverage below the declared minimum must fail aggregation.'
+
+$issue57Unexpected = $issue57Records[0].PSObject.Copy()
+$issue57Unexpected.Summary = $issue57Records[0].Summary.PSObject.Copy()
+$issue57Unexpected.Summary.K6 = $issue57Records[0].Summary.K6.PSObject.Copy()
+$issue57Unexpected.Summary.K6.Result = $issue57Records[0].Summary.K6.Result.PSObject.Copy()
+$issue57Unexpected.Summary.K6.Result.UnexpectedNonSuccessful = 1
+Assert-Issue57Throws {
+    New-SeatIndexContentionComparisonAggregate -Records @($issue57Unexpected)
+} 'An aggregate must reject an unexpected response even if other evidence is valid.'
+
+$issue57NonExclusive = $issue57Records[0].PSObject.Copy()
+$issue57NonExclusive.FixtureIsolation = [pscustomobject]@{ LoadTestFixturesRemoved = $true; SeatRowsAfterCleanup = 2000 }
+Assert-Issue57Throws {
+    New-SeatIndexContentionComparisonAggregate -Records @($issue57NonExclusive)
+} 'An aggregate must reject a run without an exclusive fixed-size fixture.'
+
+$issue57StaleStatistics = $issue57Records[0].PSObject.Copy()
+$issue57StaleStatistics.Summary = $issue57Records[0].Summary.PSObject.Copy()
+$issue57StaleStatistics.Summary.SeatIndexExperiment = $issue57Records[0].Summary.SeatIndexExperiment.PSObject.Copy()
+$issue57StaleStatistics.Summary.SeatIndexExperiment.StatisticsAnalyzed = $false
+Assert-Issue57Throws {
+    New-SeatIndexContentionComparisonAggregate -Records @($issue57StaleStatistics)
+} 'An aggregate must reject a run without refreshed optimizer statistics.'
 
 Write-Output "SeatIndexContentionComparison checks passed: $issue57Assertions assertions."

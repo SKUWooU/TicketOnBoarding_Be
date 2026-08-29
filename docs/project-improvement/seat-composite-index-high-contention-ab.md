@@ -25,6 +25,8 @@ Issue #55는 서로 다른 가상 좌석을 예약하는 `distributed` 100 RPS�
 | composite | `UNIQUE (concert_time_id, seat_number)` 진단용 적용 |
 | 집계 | 단일 최고값이 아니라 3회 중앙값과 최소~최대 범위 |
 
+매 run은 이전 load-test fixture를 삭제하고 `seat` 물리 행이 0인지 확인한 뒤 정확히 2,000석만 생성한다. fixture와 index 전환 뒤 `ANALYZE TABLE seat`를 측정 시간창 밖에서 실행해 반복 삭제·재삽입으로 인한 optimizer 통계 차이도 제거한다. 일반 좌석 row가 하나라도 있으면 삭제하지 않고 A/B를 중단한다.
+
 runner는 다음 조건 중 하나라도 어기면 유효 결과로 집계하지 않는다.
 
 - index 적용 전 중복 좌석 조합이 0개가 아니다.
@@ -34,7 +36,7 @@ runner는 다음 조건 중 하나라도 어기면 유효 결과로 집계하지
 - 좌석 잠금·회차 감소 statement digest 관측률이 성공 수의 95% 미만이다.
 - `Performance_schema_digest_lost` 또는 NULL digest event가 발생한다.
 
-고동시성에서 Performance Schema digest가 성공 statement의 일부를 누락 관측할 수 있어 A/B gate는 최소 95%로 두되, 실제 관측률과 instrumentation health를 함께 저장한다. 최종 batch의 최소 관측률은 99.5%였고 최대는 100%였다.
+초기 고동시성 batch에서 Performance Schema digest의 일부 관측 누락을 확인했다. 이 실행 환경의 관측 한계로 취급해 A/B gate는 최소 95%로 두되 실제 관측률과 instrumentation health를 함께 저장한다. 최종 batch의 최소 관측률은 99%였고 최대는 100%였다.
 
 ## 3. index lifecycle과 실행계획
 
@@ -56,30 +58,30 @@ SQL 원문과 parameter는 결과 JSON에 저장하지 않고 index metadata·ac
 
 ## 4. 최종 측정 결과
 
-최종 공개 근거는 `issue57-ab-02` batch 하나다. warmup 2회를 포함해 14회가 완료됐고, 본 측정 12회가 모두 `ValidMeasurement=true`와 종료 재고 불변식을 충족했다.
+최종 공개 근거는 물리 fixture와 optimizer 통계를 고정한 `i57-fixed-02` batch 하나다. warmup 2회를 포함해 14회가 완료됐고 manifest의 `BatchCompleted=true`, `ValidBatch=true`, `CurrentSchemaRestored=true`, `FinalCleanupCompleted=true`를 확인했다. 본 측정 12회가 모두 `ValidMeasurement=true`와 종료 재고 불변식을 충족했다.
 
 | variant | 목표 RPS | 완료/설정초 중앙값 (범위) | 도달률 중앙값 (범위) | dropped 중앙값 (범위) | 예약 p95 ms 중앙값 (범위) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| current | 50 | 50.1 (50.1~50.1) | 100.00% | 0 | 65.86 (59.87~744.74) |
-| composite | 50 | 50.0 (50.0~50.0) | 100.00% | 0 | 55.36 (52.24~87.08) |
-| current | 100 | 81.6 (71.1~85.1) | 81.52% (71.03~85.10) | 185 (149~290) | 3,252.76 (2,920.66~4,476.85) |
-| composite | 100 | 100.0 (100.0~100.0) | 100.00% | 0 | 91.33 (64.66~144.16) |
+| current | 50 | 50.1 (50.1~50.1) | 100.00% | 0 | 54.21 (53.26~69.99) |
+| composite | 50 | 50.0 (50.0~50.1) | 100.00% | 0 | 54.40 (50.90~58.30) |
+| current | 100 | 83.1 (82.6~83.7) | 83.10% (82.52~83.70) | 169 (163~175) | 3,064.39 (2,993.27~3,074.65) |
+| composite | 100 | 100.1 (100.0~100.1) | 100.00% | 0 | 143.41 (117.85~145.21) |
 
 | variant | 목표 RPS | Hikari pending peak 중앙값 | DB lock wait 횟수 중앙값 | DB lock time ms 중앙값 | 좌석 잠금 SELECT 평균 ms 중앙값 | 회차 감소 UPDATE 평균 ms 중앙값 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| current | 50 | 0 | 103 | 704 | 6.578 | 0.329 |
-| composite | 50 | 0 | 4 | 21 | 0.407 | 0.377 |
-| current | 100 | 189 | 815 | 97,970 | 125.888 | 0.305 |
-| composite | 100 | 0 | 97 | 1,264 | 0.377 | 1.679 |
+| current | 50 | 0 | 8 | 20 | 2.038 | 0.353 |
+| composite | 50 | 0 | 0 | 0 | 0.424 | 0.347 |
+| current | 100 | 189 | 830 | 91,935 | 114.168 | 0.381 |
+| composite | 100 | 0 | 412 | 4,565 | 0.525 | 5.287 |
 
 100 RPS 중앙값 비교에서 복합 index는 다음 변화를 보였다.
 
-- 완료/설정초: 81.6 → 100.0, 22.55% 증가
-- 목표 요청 도달률: 81.52% → 100%, dropped 185 → 0
-- 예약 p95: 3,252.76ms → 91.33ms, 97.19% 감소
+- 완료/설정초: 83.1 → 100.1, 20.46% 증가
+- 목표 요청 도달률: 83.10% → 100%, dropped 169 → 0
+- 예약 p95: 3,064.39ms → 143.41ms, 95.32% 감소
 - Hikari pending peak: 189 → 0
-- DB row lock time: 97,970ms → 1,264ms, 98.71% 감소
-- 좌석 잠금 SELECT 평균: 125.888ms → 0.377ms, 99.70% 감소
+- DB row lock time: 91,935ms → 4,565ms, 95.03% 감소
+- 좌석 잠금 SELECT 평균: 114.168ms → 0.525ms, 99.54% 감소
 
 본 측정 12회 모두 예상 밖 비성공 응답 0건, deadlock 0건, 좌석·예약·Booking·Payment·잔여 수량 불변식 충족이었다. 완료/설정초는 설정한 10초 구간의 완료 iteration을 나눈 값이며 graceful stop까지 포함한 wall-clock TPS가 아니다.
 
@@ -87,7 +89,7 @@ SQL 원문과 parameter는 결과 JSON에 저장하지 않고 index metadata·ac
 
 실행계획이 약 2,000행 탐색에서 1행 식별로 바뀐 뒤 좌석 잠금 SQL 시간, DB lock time, Hikari pending, HTTP p95가 같은 방향으로 개선됐다. 따라서 이 fixture의 100 RPS 변곡은 단순히 connection pool이 작아서가 아니라 복합 index가 없는 넓은 좌석 잠금 조회가 주원인이었다고 판단할 수 있다. Hikari pool 확대나 Redis 분산 lock 없이 DB 접근 경로를 먼저 고친 이유도 수치로 설명된다.
 
-동시에 다음 병목 후보도 드러났다. 100 RPS에서 회차 감소 UPDATE 평균은 current 0.305ms에서 composite 1.679ms로 늘었다. 좌석 조회가 빨라지면서 더 많은 transaction이 같은 회차 잔여 수량 행에 도달해 공유 counter 경합 비중이 커진 것으로 해석할 수 있다. 다만 composite 조건에서도 목표 100 RPS·pending 0·p95 91.33ms를 유지했으므로, 현재 근거만으로 counter 분리·비동기 재고·대기열을 도입하는 것은 과하다. 더 높은 단계 또는 burst에서 다시 변곡이 관측될 때 별도 Issue로 검증한다.
+동시에 다음 병목 후보도 드러났다. 100 RPS에서 회차 감소 UPDATE 평균은 current 0.381ms에서 composite 5.287ms로 늘었고 composite DB row lock wait 중앙값도 412회 남았다. 좌석 조회가 빨라지면서 더 많은 transaction이 같은 회차 잔여 수량 행에 도달해 공유 counter 경합 비중이 커진 것으로 해석할 수 있다. 다만 composite 조건에서도 목표 100 RPS·pending 0·p95 143.41ms를 유지했으므로, 현재 근거만으로 counter 분리·비동기 재고·대기열을 도입하는 것은 과하다. 더 높은 단계 또는 burst에서 다시 변곡이 관측될 때 별도 Issue로 검증한다.
 
 ## 6. 폐기한 측정과 재현성
 
@@ -101,7 +103,13 @@ SQL 원문과 parameter는 결과 JSON에 저장하지 않고 index metadata·ac
 - SQL error 0 확인
 - `Performance_schema_digest_lost=0`, NULL digest event 0 확인
 
-`issue57-ab-01`과 단일 smoke 수치는 최종 비교값에 포함하지 않는다. Git에서 제외되는 로컬 원본은 `load-test/results/issue57-ab-02/`에 있으며, 공개 문서에는 재현 조건과 중앙값·범위만 남긴다.
+다음 batch는 최종 비교값에 포함하지 않는다.
+
+- `issue57-ab-01`: digest 관측 coverage gate에서 중단
+- `issue57-ab-02`: 14회는 완료됐지만 run마다 2,000석이 누적되어 current `EXPLAIN rows`가 2,000·6,000·10,806 등으로 달라짐
+- `i57-fixed-01`: fixture 정리는 적용했지만 반복 삭제·재삽입 후 optimizer 통계가 stale해 12번째 단계에서 실행계획 gate 중단; 11/14 record, `ValidBatch=false`, aggregate 없음
+
+Git에서 제외되는 최종 로컬 원본은 `load-test/results/i57-fixed-02/`에 있으며, 공개 문서에는 재현 조건과 중앙값·범위만 남긴다.
 
 실행 명령은 다음과 같다.
 
@@ -135,8 +143,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 
 - 기존 수집기 42개·baseline runner 19개 assertion
 - statement digest 20개·SQL별 진단 runner 15개 assertion
-- 신규 index lifecycle 21개·A/B runner 20개 assertion
-- PowerShell 합계 137개 assertion
+- 신규 index lifecycle 27개·A/B runner 26개 assertion
+- PowerShell 합계 149개 assertion
 - `k6 inspect load-test/k6/reservation-contention.js`
 - `docker compose -f compose.yml -f compose.statement-diagnostics.yml config --quiet`
 - MariaDB Testcontainers 포함 Backend 전체 102개 test 강제 재실행, 실패·오류·skip 0

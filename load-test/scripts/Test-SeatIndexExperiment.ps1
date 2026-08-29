@@ -34,11 +34,19 @@ function Join-Issue57Tsv {
 $script:issue57FakeComposite = $false
 $script:issue57FakeSupport = $true
 $script:issue57FakeDuplicateGroups = 0
+$script:issue57FakePhysicalSeatRows = 2000
 $issue57FakeExecutor = {
     param([string]$Query)
 
     if ($Query -match 'duplicate_seats') {
         return [string]$script:issue57FakeDuplicateGroups
+    }
+    if ($Query -match '^\s*DELETE FROM reservation_payment') {
+        $script:issue57FakePhysicalSeatRows = 0
+        return
+    }
+    if ($Query.Trim() -eq 'SELECT COUNT(*) FROM seat;') {
+        return [string]$script:issue57FakePhysicalSeatRows
     }
     if ($Query -match 'information_schema\.STATISTICS') {
         $issue57Rows = New-Object 'Collections.Generic.List[string]'
@@ -118,6 +126,18 @@ $issue57NoOpTransition = Set-Issue57SeatIndexVariant `
     -DatabaseName onticket_local `
     -QueryExecutor $issue57FakeExecutor
 Assert-Issue57Equal $issue57NoOpTransition.Changed $false 'An already-current schema must be a no-op.'
+
+Assert-Issue57Equal (Get-Issue57PhysicalSeatRowCount -QueryExecutor $issue57FakeExecutor) 2000 'Physical row evidence must expose total seat table size.'
+$issue57Cleanup = Clear-Issue57LoadTestFixtures -QueryExecutor $issue57FakeExecutor
+Assert-Issue57Equal $issue57Cleanup.LoadTestFixturesRemoved $true 'A fixture cleanup must report completion.'
+Assert-Issue57Equal $issue57Cleanup.SeatRowsAfterCleanup 0 'Fixture cleanup must leave an empty exclusive seat table.'
+Assert-Issue57Equal (Assert-Issue57MeasurementHealth -UnexpectedNonSuccessful 0 -DeadlocksDelta 0) $true 'A healthy A/B measurement must pass.'
+Assert-Issue57Throws {
+    Assert-Issue57MeasurementHealth -UnexpectedNonSuccessful 1 -DeadlocksDelta 0
+} 'An unexpected response must invalidate the A/B measurement.'
+Assert-Issue57Throws {
+    Assert-Issue57MeasurementHealth -UnexpectedNonSuccessful 0 -DeadlocksDelta 1
+} 'A database deadlock must invalidate the A/B measurement.'
 
 $script:issue57FakeDuplicateGroups = 1
 Assert-Issue57Throws {

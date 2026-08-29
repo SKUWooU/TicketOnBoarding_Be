@@ -171,10 +171,15 @@ if ($SeatIndexVariant -ne 'none') {
         param([string]$Query)
         Invoke-Issue55MariaDbRootQuery -Query $Query
     }
+    $issue57PhysicalSeatRows = Get-Issue57PhysicalSeatRowCount -QueryExecutor $issue57RootQueryExecutor
+    if ($issue57PhysicalSeatRows -ne [long]$issue53Fixture.totalSeats) {
+        throw "Seat index A/B fixture must be the only physical seat data: expected=$($issue53Fixture.totalSeats) actual=$issue57PhysicalSeatRows"
+    }
     $issue57Transition = Set-Issue57SeatIndexVariant `
         -Variant $SeatIndexVariant `
         -DatabaseName $DatabaseName `
         -QueryExecutor $issue57RootQueryExecutor
+    Invoke-Issue55MariaDbRootQuery -Query 'ANALYZE TABLE seat;' | Out-Null
     $issue57Evidence = Get-Issue57SeatIndexEvidence `
         -Variant $SeatIndexVariant `
         -DatabaseName $DatabaseName `
@@ -186,7 +191,9 @@ if ($SeatIndexVariant -ne 'none') {
         SetupDurationMilliseconds = $issue57IndexSetupStopwatch.ElapsedMilliseconds
         ExcludedFromMetricSamples = $true
         Transition = $issue57Transition
+        StatisticsAnalyzed = $true
         Evidence = $issue57Evidence
+        PhysicalSeatRows = $issue57PhysicalSeatRows
     }
 }
 if ($CollectStatementDigests.IsPresent) {
@@ -340,6 +347,11 @@ WHERE SCHEMA_NAME = '$DatabaseName'
     }
 
     $issue51MetricSummary = New-ContentionMetricsSummary -Samples $issue51Samples.ToArray()
+    if ($SeatIndexVariant -ne 'none') {
+        Assert-Issue57MeasurementHealth `
+            -UnexpectedNonSuccessful ([long]$issue53K6Summary.UnexpectedNonSuccessful) `
+            -DeadlocksDelta ([long]$issue51MetricSummary.Deltas.DbDeadlocks) | Out-Null
+    }
     $issue51Samples | Export-Csv -LiteralPath $issue51SamplesPath -NoTypeInformation -Encoding UTF8
     $issue51EndedAt = (Get-Date).ToUniversalTime()
     $issue51Summary = [ordered]@{
