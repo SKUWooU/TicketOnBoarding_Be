@@ -17,7 +17,8 @@
 
 - Issue: [#55](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/55)
 - Branch: `test/55-concert-time-row-bottleneck`
-- 상태: 구현·SQL별 로컬 반복 진단·전체 회귀 검증 완료, PR 준비 중
+- PR: [#56](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/56)
+- 상태: 구현·SQL별 로컬 반복 진단·전체 회귀 검증 완료, PR CI 대기
 - 계획 승인: 완료
 - 확인된 사실: 예약은 개별 좌석을 비관적 잠금한 뒤 모든 성공 transaction이 동일한 `concert_time.seat_amount` 행을 조건부 감소시키며, 해당 bulk update의 자동 flush로 Java 메서드 시간에는 선행 변경 flush가 섞임
 - 조사: 기본 MariaDB는 Performance Schema가 꺼져 있고 일반 계정은 접근 불가; 시작 옵션으로 활성화한 전용 진단 container에서 정규화 SQL별 횟수·누적·평균·최대 statement 시간을 수집할 수 있음을 확인
