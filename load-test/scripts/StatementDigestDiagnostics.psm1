@@ -25,7 +25,7 @@ function ConvertFrom-MariaDbStatementDigest {
         if ([string]::IsNullOrWhiteSpace($issue55Line)) {
             continue
         }
-        $issue55Parts = $issue55Line -split "`t", -1
+        $issue55Parts = $issue55Line.Split([char[]]@([char]9))
         if ($issue55Parts.Count -ne 8) {
             throw "Statement digest row must contain 8 tab-separated columns: $issue55Line"
         }

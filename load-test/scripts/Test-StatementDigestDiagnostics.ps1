@@ -38,7 +38,16 @@ function New-Issue55DigestLine {
         [long]$RowsAffected = 0
     )
     $issue55Encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Digest))
-    @($issue55Encoded, $Count, $TotalPicoseconds, $AveragePicoseconds, $MaximumPicoseconds, $Errors, $Warnings, $RowsAffected) -join "`t"
+    [string]::Join([char]9, [string[]]@(
+        $issue55Encoded,
+        $Count,
+        $TotalPicoseconds,
+        $AveragePicoseconds,
+        $MaximumPicoseconds,
+        $Errors,
+        $Warnings,
+        $RowsAffected
+    ))
 }
 
 $issue55Lines = @(
