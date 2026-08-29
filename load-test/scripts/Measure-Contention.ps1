@@ -28,6 +28,8 @@ param(
     [string]$DatabasePassword = 'onticket',
     [string]$DatabaseRootUser = 'root',
     [string]$DatabaseRootPassword = 'onticket-root',
+    [ValidateSet('none', 'current', 'composite')]
+    [string]$SeatIndexVariant = 'none',
     [switch]$CollectStatementDigests,
     [switch]$DisablePerformanceThresholds
 )
@@ -39,10 +41,12 @@ $issue51ScriptDirectory = $PSScriptRoot
 $issue51RepositoryRoot = (Resolve-Path (Join-Path $issue51ScriptDirectory '..\..')).Path
 $issue51ModulePath = Join-Path $issue51ScriptDirectory 'ContentionMetrics.psm1'
 $issue55StatementDigestModulePath = Join-Path $issue51ScriptDirectory 'StatementDigestDiagnostics.psm1'
+$issue57SeatIndexModulePath = Join-Path $issue51ScriptDirectory 'SeatIndexExperiment.psm1'
 $issue51K6Script = Join-Path $issue51RepositoryRoot 'load-test\k6\reservation-contention.js'
 $issue51ComposeFile = Join-Path $issue51RepositoryRoot 'compose.yml'
 Import-Module $issue51ModulePath -Force
 Import-Module $issue55StatementDigestModulePath -Force
+Import-Module $issue57SeatIndexModulePath -Force
 
 if ($PreAllocatedVus -gt $MaxVus) {
     throw 'PreAllocatedVus must not exceed MaxVus.'
@@ -140,6 +144,7 @@ function Get-Issue51MetricSample {
 }
 
 $issue55StatementDigestSummary = $null
+$issue57SeatIndexSummary = $null
 if ($CollectStatementDigests.IsPresent) {
     $issue55Availability = @(Invoke-Issue55MariaDbRootQuery -Query @'
 SHOW VARIABLES LIKE 'performance_schema';
@@ -159,6 +164,37 @@ $issue53Fixture = Invoke-RestMethod -Uri "$BaseUrl/loadtest/runs?runId=$RunId" -
 $issue53FixturePreparationStopwatch.Stop()
 if ([int]$issue53Fixture.totalSeats -le 0) {
     throw 'Prepared load-test fixture must contain at least one seat.'
+}
+if ($SeatIndexVariant -ne 'none') {
+    $issue57IndexSetupStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $issue57RootQueryExecutor = {
+        param([string]$Query)
+        Invoke-Issue55MariaDbRootQuery -Query $Query
+    }
+    $issue57PhysicalSeatRows = Get-Issue57PhysicalSeatRowCount -QueryExecutor $issue57RootQueryExecutor
+    if ($issue57PhysicalSeatRows -ne [long]$issue53Fixture.totalSeats) {
+        throw "Seat index A/B fixture must be the only physical seat data: expected=$($issue53Fixture.totalSeats) actual=$issue57PhysicalSeatRows"
+    }
+    $issue57Transition = Set-Issue57SeatIndexVariant `
+        -Variant $SeatIndexVariant `
+        -DatabaseName $DatabaseName `
+        -QueryExecutor $issue57RootQueryExecutor
+    Invoke-Issue55MariaDbRootQuery -Query 'ANALYZE TABLE seat;' | Out-Null
+    $issue57Evidence = Get-Issue57SeatIndexEvidence `
+        -Variant $SeatIndexVariant `
+        -DatabaseName $DatabaseName `
+        -ConcertTimeId ([long]$issue53Fixture.concertTimeId) `
+        -QueryExecutor $issue57RootQueryExecutor
+    $issue57IndexSetupStopwatch.Stop()
+    $issue57SeatIndexSummary = [ordered]@{
+        Variant = $SeatIndexVariant
+        SetupDurationMilliseconds = $issue57IndexSetupStopwatch.ElapsedMilliseconds
+        ExcludedFromMetricSamples = $true
+        Transition = $issue57Transition
+        StatisticsAnalyzed = $true
+        Evidence = $issue57Evidence
+        PhysicalSeatRows = $issue57PhysicalSeatRows
+    }
 }
 if ($CollectStatementDigests.IsPresent) {
     Invoke-Issue55MariaDbRootQuery -Query 'TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;' | Out-Null
@@ -252,6 +288,18 @@ try {
     if (-not $issue51InvariantSatisfied) {
         throw 'k6 output does not contain a successful final inventory invariant.'
     }
+    if ($Scenario -eq 'distributed') {
+        foreach ($issue57PersistedCount in @(
+            [long]$issue53FinalSnapshot.reservedSeats,
+            [long]$issue53FinalSnapshot.reservations,
+            [long]$issue53FinalSnapshot.bookings,
+            [long]$issue53FinalSnapshot.payments
+        )) {
+            if ($issue57PersistedCount -ne [long]$issue53K6Summary.ReservationSuccess) {
+                throw "Distributed persisted result count does not match successful reservations: expected=$($issue53K6Summary.ReservationSuccess) actual=$issue57PersistedCount"
+            }
+        }
+    }
     if ($CollectStatementDigests.IsPresent) {
         $issue55DigestRows = @(Invoke-Issue55MariaDbRootQuery -Query @"
 SELECT
@@ -268,12 +316,42 @@ WHERE SCHEMA_NAME = '$DatabaseName'
   AND DIGEST_TEXT IS NOT NULL;
 "@)
         $issue55StatementDigestSummary = New-ContentionStatementDigestSummary -Lines $issue55DigestRows
+        $issue57DigestLost = ConvertFrom-Issue57Scalar -Name 'Performance Schema digest lost' -Lines @(Invoke-Issue55MariaDbRootQuery -Query @'
+SELECT VARIABLE_VALUE
+FROM information_schema.GLOBAL_STATUS
+WHERE VARIABLE_NAME = 'PERFORMANCE_SCHEMA_DIGEST_LOST';
+'@)
+        $issue57NullDigestEvents = ConvertFrom-Issue57Scalar -Name 'Performance Schema NULL digest events' -Lines @(Invoke-Issue55MariaDbRootQuery -Query @"
+SELECT COALESCE(SUM(COUNT_STAR), 0)
+FROM performance_schema.events_statements_summary_by_digest
+WHERE SCHEMA_NAME = '$DatabaseName'
+  AND DIGEST IS NULL;
+"@)
+        if ($issue57DigestLost -ne 0 -or $issue57NullDigestEvents -ne 0) {
+            throw "Performance Schema lost digest events: status=$issue57DigestLost nullDigestEvents=$issue57NullDigestEvents"
+        }
+        $issue55Coverage = New-ContentionStatementDigestCoverage `
+            -Summary $issue55StatementDigestSummary `
+            -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess
+        $issue55MinimumCoverage = if ($SeatIndexVariant -eq 'none') { 1.0 } else { 0.95 }
         Assert-ContentionStatementDigestCounts `
             -Summary $issue55StatementDigestSummary `
-            -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess | Out-Null
+            -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess `
+            -MinimumCoverageRate $issue55MinimumCoverage | Out-Null
+        $issue55StatementDigestSummary | Add-Member -NotePropertyName Coverage -NotePropertyValue $issue55Coverage
+        $issue55StatementDigestSummary | Add-Member -NotePropertyName InstrumentationHealth -NotePropertyValue ([pscustomobject]@{
+            RequiredMinimumCoverageRate = $issue55MinimumCoverage
+            PerformanceSchemaDigestLost = $issue57DigestLost
+            NullDigestEvents = $issue57NullDigestEvents
+        })
     }
 
     $issue51MetricSummary = New-ContentionMetricsSummary -Samples $issue51Samples.ToArray()
+    if ($SeatIndexVariant -ne 'none') {
+        Assert-Issue57MeasurementHealth `
+            -UnexpectedNonSuccessful ([long]$issue53K6Summary.UnexpectedNonSuccessful) `
+            -DeadlocksDelta ([long]$issue51MetricSummary.Deltas.DbDeadlocks) | Out-Null
+    }
     $issue51Samples | Export-Csv -LiteralPath $issue51SamplesPath -NoTypeInformation -Encoding UTF8
     $issue51EndedAt = (Get-Date).ToUniversalTime()
     $issue51Summary = [ordered]@{
@@ -303,6 +381,7 @@ WHERE SCHEMA_NAME = '$DatabaseName'
             StderrFile = [IO.Path]::GetFileName($issue51StderrPath)
         }
         DatabaseStatementDigests = $issue55StatementDigestSummary
+        SeatIndexExperiment = $issue57SeatIndexSummary
         Metrics = $issue51MetricSummary
         SamplesFile = [IO.Path]::GetFileName($issue51SamplesPath)
     }

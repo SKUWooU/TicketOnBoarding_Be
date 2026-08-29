@@ -69,6 +69,15 @@ Assert-Issue55Equal $issue55Summary.ConcertTimeDecrement.MaximumMilliseconds 50 
 Assert-Issue55Equal $issue55Summary.ConcertTimeDecrement.RowsAffected 100 'Affected rows must be aggregated.'
 Assert-Issue55Equal (Assert-ContentionStatementDigestCounts -Summary $issue55Summary -ExpectedSuccessfulReservations 100) $true 'Matching statement and success counts must pass.'
 Assert-Issue55Throws { Assert-ContentionStatementDigestCounts -Summary $issue55Summary -ExpectedSuccessfulReservations 99 } 'A statement count mismatch must fail.'
+$issue55PartialSummary = New-ContentionStatementDigestSummary -Lines @(
+    (New-Issue55DigestLine -Digest 'SELECT s.id FROM seat s WHERE s.concert_time_id = ? AND s.seat_number = ? FOR UPDATE' -Count 98 -TotalPicoseconds 98000000000 -AveragePicoseconds 1000000000 -MaximumPicoseconds 3000000000)
+    (New-Issue55DigestLine -Digest 'UPDATE concert_time SET seat_amount = seat_amount - ? WHERE id = ? AND seat_amount >= ?' -Count 99 -TotalPicoseconds 99000000000 -AveragePicoseconds 1000000000 -MaximumPicoseconds 3000000000 -RowsAffected 99)
+)
+$issue55Coverage = New-ContentionStatementDigestCoverage -Summary $issue55PartialSummary -ExpectedSuccessfulReservations 100
+Assert-Issue55Equal $issue55Coverage.MinimumObservedRate 0.98 'Digest coverage must expose the least-covered required statement.'
+Assert-Issue55Equal $issue55Coverage.ExactCountMatch $false 'Partial digest coverage must not be reported as exact.'
+Assert-Issue55Equal (Assert-ContentionStatementDigestCounts -Summary $issue55PartialSummary -ExpectedSuccessfulReservations 100 -MinimumCoverageRate 0.95) $true 'An explicitly bounded partial coverage rate may pass.'
+Assert-Issue55Throws { Assert-ContentionStatementDigestCounts -Summary $issue55PartialSummary -ExpectedSuccessfulReservations 100 } 'The default gate must continue to require exact counts.'
 Assert-Issue55Throws { New-ContentionStatementDigestSummary -Lines @($issue55Lines[0]) } 'A missing concert time update digest must fail.'
 Assert-Issue55Throws { ConvertFrom-MariaDbStatementDigest -Lines @('not-tab-separated') } 'Malformed statement output must fail.'
 Assert-Issue55Throws { ConvertFrom-MariaDbStatementDigest -Lines @("%%%`t1`t1`t1`t1`t0`t0`t0") } 'Invalid Base64 SQL text must fail.'
