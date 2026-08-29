@@ -17,7 +17,8 @@
 
 - Issue: [#57](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/57)
 - Branch: `perf/57-seat-composite-index-ab`
-- 상태: 구현·로컬 A/B 측정 완료, 전체 검증 중
+- PR: [#58](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/58)
+- 상태: 구현·로컬 A/B·전체 회귀 검증 완료, CI·Reviewer 검토 대기
 - 계획 승인: 완료
 - 확인된 문제: Issue #55에서 100 RPS 좌석 잠금 SELECT 평균 중앙값 146.44ms·누적 105,292ms와 회차당 약 2,000행 탐색을 확인했지만 복합 unique index의 고경합 개선 효과는 아직 미검증
 - 조사: fixture는 run마다 별도 회차·2,000석을 추가하고 schema는 유지함; 기존 Testcontainers는 복합 index의 `rows=1` 전환·유일성·canonical 잠금 순서를 검증했으며 index 제거 시 FK 보조 index 복원이 필요함
