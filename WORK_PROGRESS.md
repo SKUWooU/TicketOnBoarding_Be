@@ -6,19 +6,38 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `6c798d8c0f421c0d9601e84d640c25ea3f1c3d5f` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `294136aead691800578dfe21375a58f735c4b599` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #57 — 좌석 잠금 복합 unique index의 고경합 A/B 검증
+
+- Issue: [#57](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/57)
+- Branch: `perf/57-seat-composite-index-ab`
+- 상태: 구현·로컬 A/B 측정 완료, 전체 검증 중
+- 계획 승인: 완료
+- 확인된 문제: Issue #55에서 100 RPS 좌석 잠금 SELECT 평균 중앙값 146.44ms·누적 105,292ms와 회차당 약 2,000행 탐색을 확인했지만 복합 unique index의 고경합 개선 효과는 아직 미검증
+- 조사: fixture는 run마다 별도 회차·2,000석을 추가하고 schema는 유지함; 기존 Testcontainers는 복합 index의 `rows=1` 전환·유일성·canonical 잠금 순서를 검증했으며 index 제거 시 FK 보조 index 복원이 필요함
+- 계획: current/composite 순서를 교차한 warmup 2회·50/100 RPS 각 variant 3회, query plan·SQL digest·k6·Hikari·DB lock·정합성 A/B, 종료 시 current schema 복원
+- 구현: index 중복 사전 점검·current/composite lifecycle·FK 보조 index 복원·실행계획 증거, 교차 순서 14-run runner, digest coverage·instrumentation health gate와 중앙값·범위 집계
+- 측정: 유효 본 측정 12/12회 정합성 충족·예상 밖 실패/deadlock 0; 100 RPS current→composite에서 완료/설정초 81.6→100, p95 3,252.76→91.33ms, dropped 185→0, Hikari pending 189→0, DB lock time 97,970→1,264ms, 좌석 잠금 평균 125.888→0.377ms
+- 판정: 약 2,000행 잠금 조회가 1행 식별로 전환되며 병목 원인과 복합 unique index 효과를 확인; 회차 감소 UPDATE 평균 0.305→1.679ms가 다음 부하 단계의 병목 후보지만 현재 100 RPS가 안정적이므로 분산 구조 도입은 보류
+- 검증: PowerShell 137개 assertion, k6 inspect, Compose config, Backend 전체 102개 test 강제 재실행 통과(실패·오류·skip 0), `git diff --check` 통과
+- 범위: Backend 로컬 `loadtest` profile·MariaDB 10.11.8·2,000석 fixture, 진단용 복합 unique index lifecycle과 반복 측정·근거 문서
+- 제외: 운영 DB DDL, 전체 Flyway baseline, 애플리케이션 Entity·Frontend·README, 실제 KOPIS·PG·SMS, Hikari 확대·Redis lock·대기열·outbox·브로커
+
+## 완료
+
 ### Backend Issue #55 — 회차 잔여 좌석 단일 행 갱신 병목 원인 격리
 
 - Issue: [#55](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/55)
 - Branch: `test/55-concert-time-row-bottleneck`
 - PR: [#56](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/56)
-- 상태: 구현·SQL별 로컬 반복 진단·전체 회귀 검증·Reviewer 검토 완료, 자동 squash merge 대기
+- squash commit: `294136aead691800578dfe21375a58f735c4b599`
+- 상태: 완료
 - 계획 승인: 완료
 - 확인된 사실: 예약은 개별 좌석을 비관적 잠금한 뒤 모든 성공 transaction이 동일한 `concert_time.seat_amount` 행을 조건부 감소시키며, 해당 bulk update의 자동 flush로 Java 메서드 시간에는 선행 변경 flush가 섞임
 - 조사: 기본 MariaDB는 Performance Schema가 꺼져 있고 일반 계정은 접근 불가; 시작 옵션으로 활성화한 전용 진단 container에서 정규화 SQL별 횟수·누적·평균·최대 statement 시간을 수집할 수 있음을 확인
@@ -30,8 +49,6 @@
 - 범위: Backend 로컬 `loadtest` profile·mock 결제·2,000석 fixture, SQL digest·Hikari·DB lock·k6 결과의 run별 연결
 - 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 성능 개선 적용, P6Spy 전면 로깅, 회차 counter 생략 경로, Hikari 확대·Redis lock·대기열·outbox·브로커
 - Reviewer: 구현 HEAD `6480a0eaee6a8a76e3544f24ed5084d6ea321daf`, Blocking 없음, `MERGE_READY: YES`; Backend CI 성공
-
-## 완료
 
 ### Backend Issue #53 — 가상 좌석 고경합의 단계별 성능 기준선 측정
 

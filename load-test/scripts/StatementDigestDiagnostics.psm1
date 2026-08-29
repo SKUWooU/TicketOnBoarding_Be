@@ -130,14 +130,26 @@ function Assert-ContentionStatementDigestCounts {
 
         [Parameter(Mandatory = $true)]
         [ValidateRange(1, 9223372036854775807)]
-        [long]$ExpectedSuccessfulReservations
+        [long]$ExpectedSuccessfulReservations,
+
+        [ValidateRange(0.01, 1.0)]
+        [double]$MinimumCoverageRate = 1.0
     )
 
-    if ([long]$Summary.SeatLockSelect.Count -ne $ExpectedSuccessfulReservations) {
-        throw "Seat lock statement count does not match successful reservations: expected=$ExpectedSuccessfulReservations actual=$($Summary.SeatLockSelect.Count)"
+    $issue55Coverage = New-ContentionStatementDigestCoverage `
+        -Summary $Summary `
+        -ExpectedSuccessfulReservations $ExpectedSuccessfulReservations
+    if ([long]$Summary.SeatLockSelect.Count -gt $ExpectedSuccessfulReservations) {
+        throw "Seat lock statement count exceeds successful reservations: expected=$ExpectedSuccessfulReservations actual=$($Summary.SeatLockSelect.Count)"
     }
-    if ([long]$Summary.ConcertTimeDecrement.Count -ne $ExpectedSuccessfulReservations) {
-        throw "Concert time decrement count does not match successful reservations: expected=$ExpectedSuccessfulReservations actual=$($Summary.ConcertTimeDecrement.Count)"
+    if ([long]$Summary.ConcertTimeDecrement.Count -gt $ExpectedSuccessfulReservations) {
+        throw "Concert time decrement count exceeds successful reservations: expected=$ExpectedSuccessfulReservations actual=$($Summary.ConcertTimeDecrement.Count)"
+    }
+    if ($issue55Coverage.SeatLockSelectRate -lt $MinimumCoverageRate) {
+        throw "Seat lock statement coverage is below the required rate: required=$MinimumCoverageRate actual=$($issue55Coverage.SeatLockSelectRate)"
+    }
+    if ($issue55Coverage.ConcertTimeDecrementRate -lt $MinimumCoverageRate) {
+        throw "Concert time decrement coverage is below the required rate: required=$MinimumCoverageRate actual=$($issue55Coverage.ConcertTimeDecrementRate)"
     }
     if ([long]$Summary.SeatLockSelect.Errors -ne 0 -or [long]$Summary.ConcertTimeDecrement.Errors -ne 0) {
         throw 'Required statement digest operations contain SQL errors.'
@@ -145,8 +157,33 @@ function Assert-ContentionStatementDigestCounts {
     $true
 }
 
+function New-ContentionStatementDigestCoverage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Summary,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateRange(1, 9223372036854775807)]
+        [long]$ExpectedSuccessfulReservations
+    )
+
+    $issue55SeatRate = [double]$Summary.SeatLockSelect.Count / $ExpectedSuccessfulReservations
+    $issue55CounterRate = [double]$Summary.ConcertTimeDecrement.Count / $ExpectedSuccessfulReservations
+    [pscustomobject]@{
+        ExpectedSuccessfulReservations = $ExpectedSuccessfulReservations
+        SeatLockSelectCount = [long]$Summary.SeatLockSelect.Count
+        SeatLockSelectRate = $issue55SeatRate
+        ConcertTimeDecrementCount = [long]$Summary.ConcertTimeDecrement.Count
+        ConcertTimeDecrementRate = $issue55CounterRate
+        MinimumObservedRate = [math]::Min($issue55SeatRate, $issue55CounterRate)
+        ExactCountMatch = $issue55SeatRate -eq 1.0 -and $issue55CounterRate -eq 1.0
+    }
+}
+
 Export-ModuleMember -Function @(
     'ConvertFrom-MariaDbStatementDigest',
     'New-ContentionStatementDigestSummary',
+    'New-ContentionStatementDigestCoverage',
     'Assert-ContentionStatementDigestCounts'
 )
