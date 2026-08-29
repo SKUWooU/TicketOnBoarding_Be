@@ -465,3 +465,25 @@ hot-section·hot-seat은 100 RPS에서 dropped 없이 예상 409를 처리했지
 ### 링크
 
 - [Backend Issue #53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
+
+## Issue #55 — 공유 회차 행 가설을 SQL별 시간으로 반증
+
+### 코드상 공유 자원과 실제 병목 statement는 다를 수 있다
+
+Issue #53에서 서로 다른 좌석 예약도 100 RPS부터 Hikari pending과 DB lock time이 급증했다. 모든 transaction이 같은 `concert_time.seat_amount`를 갱신하므로 공유 회차 행을 우선 의심했지만, 코드 구조만으로 병목을 확정하지 않았다. 특히 회차 bulk update의 자동 flush 때문에 Java repository 메서드 시간에는 선행 변경 flush까지 섞일 수 있었다.
+
+### normalized SQL digest로 측정 경계를 한 단계 내리기
+
+기본 Compose는 유지하고 진단 override에서만 MariaDB Performance Schema를 켰다. fixture 생성 뒤 digest를 초기화하고 좌석 `SELECT ... FOR UPDATE`와 회차 `UPDATE`의 횟수·누적·평균·최대 시간을 별도로 수집했다. SQL 원문과 파라미터는 summary에 저장하지 않았고 두 statement 횟수가 예약 성공 수와 다르면 측정을 무효화했다.
+
+### 가설을 고집하지 않고 다음 원인 후보로 이동하기
+
+100 RPS 3회 중앙값에서 좌석 잠금 SELECT는 평균 146.44ms·누적 105,292ms였고 회차 UPDATE는 평균 0.354ms·누적 255ms였다. 좌석 statement 평균이 410.63배 길었으며 DB row lock time은 +100,479ms였다. 회차 단일 행이 주병목이라는 가설은 반증됐다.
+
+실제 `seat` schema에는 `concert_time_id` 단일 FK index만 있고 `seat_number`를 포함한 복합 index가 없다. 실행계획은 한 좌석을 찾을 때 같은 회차 약 2,000행을 검사했다. 대기시간이 좌석 잠금 SELECT에 집중된 사실은 확인했지만 복합 index 적용 후 고경합 개선은 아직 측정하지 않았다. 다음 Issue에서 동일 진단 조건의 index 전후 A/B로 검증한다.
+
+상세한 판단 과정과 전체 범위는 [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #55](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/55)

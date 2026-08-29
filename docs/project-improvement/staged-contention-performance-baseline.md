@@ -114,9 +114,9 @@ distributed 100 RPS에서 3회 모두 dropped iteration 조건을 넘어 150 RPS
 - DB row lock wait 949회·93.35초 누적 증가
 - 예상 밖 실패와 deadlock 0
 
-좌석은 서로 다르지만 예약 transaction은 좌석을 잠근 뒤 동일한 `concert_time` 행의 `seat_amount`를 조건부 감소시킨다. 따라서 회차 잔여 수량 단일 행 갱신이 transaction을 직렬화하고, 대기 transaction이 Hikari connection을 점유한 채 쌓이는 것이 현재 가장 강한 병목 가설이다.
+좌석은 서로 다르지만 예약 transaction은 좌석을 잠근 뒤 동일한 `concert_time` 행의 `seat_amount`를 조건부 감소시킨다. 따라서 이 기준선 시점에는 회차 잔여 수량 단일 행 갱신이 transaction을 직렬화하고, 대기 transaction이 Hikari connection을 점유한 채 쌓이는 것을 가장 강한 병목 가설로 두었다.
 
-이는 측정과 코드 경로를 결합한 추론이지 아직 원인 격리 실험의 결론은 아니다. 다음 Issue에서 동일 좌석 잠금과 회차 counter 갱신의 대기 시간을 분리하거나 A/B fixture로 재현해야 한다.
+이는 측정과 코드 경로를 결합한 추론이지 원인 격리 실험의 결론은 아니었다. Issue #55의 SQL별 진단에서는 100 RPS 좌석 잠금 SELECT 평균이 회차 UPDATE보다 약 410.63배 길어 회차 단일 행 주병목 가설이 반증됐다. 상세 결과는 [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)에 기록한다.
 
 ### 경합 시나리오 100 → 150 RPS
 
@@ -158,7 +158,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 4. k6 setup·teardown의 보조 조회는 Hikari·DB 표본 시간창에 포함되지만 예약 전용 p95에는 포함되지 않는다.
 5. 10초 run은 장기 안정성·열화·GC 영향을 증명하지 않는다.
 6. 완료/설정초는 k6의 설정 부하 구간을 분모로 한 비교값으로, graceful stop을 포함한 wall-clock 처리량이 아니다.
-7. 다음 Issue는 distributed 50·100 RPS를 중심으로 `concert_time` 단일 행 갱신 대기와 좌석 잠금 대기를 분리한다. 원인이 확인되기 전에는 Hikari pool 확대, Redis lock, 대기열, outbox, 메시지 브로커를 도입하지 않는다.
+7. Issue #55에서 좌석 잠금 SELECT에 대기가 집중됨을 확인했다. 다음 Issue는 `(concert_time_id, seat_number)` 복합 unique index 전후를 같은 고경합 조건으로 비교하며, 결과 전에는 Hikari pool 확대, Redis lock, 대기열, outbox, 메시지 브로커를 도입하지 않는다.
 
 ## 9. 연결
 
