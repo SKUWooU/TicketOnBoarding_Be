@@ -39,6 +39,8 @@ jobs:
         run: |
           ./load-test/scripts/Test-ContentionMetrics.ps1
           ./load-test/scripts/Test-ContentionBaseline.ps1
+          ./load-test/scripts/Test-StatementDigestDiagnostics.ps1
+          ./load-test/scripts/Test-ContentionBottleneckDiagnosis.ps1
 
       - name: Run Backend tests
         run: |

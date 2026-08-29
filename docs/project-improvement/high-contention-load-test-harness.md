@@ -168,7 +168,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 4. 2,000석은 병목을 재현하기 위한 명시적 가상 fixture 규모이며, 좌석 수를 크게 만드는 것 자체가 대규모 트래픽 처리 능력의 증거는 아니다.
 5. 대기열·Redis 분산 lock·outbox·메시지 브로커는 아직 도입하지 않는다. 단계별 RPS에서 확인된 병목과 실패 양상이 해당 기술의 필요 조건을 충족할 때 별도 ADR로 판단한다.
 
-Issue #53에서 동일 조건 warmup·반복과 시나리오별 단계 측정을 완료했다. distributed는 50→100 RPS 사이에서 Hikari pending·DB lock wait·p95·dropped iteration이 함께 증가했다. 권장 다음 순서는 `회차 잔여 수량 단일 행 갱신 원인 격리 → 병목별 최소 개선 → distributed 50·100 RPS 동일 조건 재측정`이다.
+Issue #53에서 동일 조건 warmup·반복과 시나리오별 단계 측정을 완료했고, Issue #55의 SQL별 진단에서 회차 UPDATE 가설을 반증하고 좌석 잠금 SELECT의 넓은 탐색 범위를 격리했다. 권장 다음 순서는 `복합 unique index 전후 고경합 A/B → schema 적용 경계 결정 → distributed 50·100 RPS 동일 조건 재측정`이다.
 
 ## 10. 연결
 
@@ -179,5 +179,6 @@ Issue #53에서 동일 조건 warmup·반복과 시나리오별 단계 측정을
 - [고경합 부하의 경량 Hikari·MariaDB 관측 경계](lightweight-contention-observability.md)
 - [Backend Issue #53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
 - [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)
+- [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
 - [학습·개선 여정](LEARNING_JOURNEY.md)

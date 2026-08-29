@@ -22,8 +22,13 @@ param(
     [string]$BaseUrl = 'http://127.0.0.1:18080',
     [string]$ManagementBaseUrl = 'http://127.0.0.1:18081',
     [string]$OutputDirectory = '',
+    [ValidatePattern('^[A-Za-z0-9_]+$')]
+    [string]$DatabaseName = 'onticket_local',
     [string]$DatabaseUser = 'onticket',
     [string]$DatabasePassword = 'onticket',
+    [string]$DatabaseRootUser = 'root',
+    [string]$DatabaseRootPassword = 'onticket-root',
+    [switch]$CollectStatementDigests,
     [switch]$DisablePerformanceThresholds
 )
 
@@ -33,9 +38,11 @@ $ErrorActionPreference = 'Stop'
 $issue51ScriptDirectory = $PSScriptRoot
 $issue51RepositoryRoot = (Resolve-Path (Join-Path $issue51ScriptDirectory '..\..')).Path
 $issue51ModulePath = Join-Path $issue51ScriptDirectory 'ContentionMetrics.psm1'
+$issue55StatementDigestModulePath = Join-Path $issue51ScriptDirectory 'StatementDigestDiagnostics.psm1'
 $issue51K6Script = Join-Path $issue51RepositoryRoot 'load-test\k6\reservation-contention.js'
 $issue51ComposeFile = Join-Path $issue51RepositoryRoot 'compose.yml'
 Import-Module $issue51ModulePath -Force
+Import-Module $issue55StatementDigestModulePath -Force
 
 if ($PreAllocatedVus -gt $MaxVus) {
     throw 'PreAllocatedVus must not exceed MaxVus.'
@@ -87,6 +94,25 @@ function Get-Issue51MariaDbStatus {
     ConvertFrom-MariaDbStatus -Lines $issue51DbOutput
 }
 
+function Invoke-Issue55MariaDbRootQuery {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Query
+    )
+
+    $issue55DbOutput = & docker compose -f $issue51ComposeFile exec -T mariadb mariadb `
+        "-u$DatabaseRootUser" `
+        "-p$DatabaseRootPassword" `
+        -N `
+        -B `
+        $DatabaseName `
+        -e $Query 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "MariaDB statement diagnostics query failed with exit code $LASTEXITCODE."
+    }
+    @($issue55DbOutput)
+}
+
 function Get-Issue51MetricSample {
     param(
         [Parameter(Mandatory = $true)]
@@ -113,12 +139,29 @@ function Get-Issue51MetricSample {
     }
 }
 
+$issue55StatementDigestSummary = $null
+if ($CollectStatementDigests.IsPresent) {
+    $issue55Availability = @(Invoke-Issue55MariaDbRootQuery -Query @'
+SHOW VARIABLES LIKE 'performance_schema';
+SELECT NAME, ENABLED FROM performance_schema.setup_consumers WHERE NAME = 'statements_digest';
+'@)
+    if ($issue55Availability -notcontains "performance_schema`tON") {
+        throw 'MariaDB Performance Schema must be enabled for statement digest diagnostics.'
+    }
+    if ($issue55Availability -notcontains "statements_digest`tYES") {
+        throw 'MariaDB statements_digest consumer must be enabled for statement diagnostics.'
+    }
+}
+
 $issue53FixturePreparationStartedAt = (Get-Date).ToUniversalTime()
 $issue53FixturePreparationStopwatch = [Diagnostics.Stopwatch]::StartNew()
 $issue53Fixture = Invoke-RestMethod -Uri "$BaseUrl/loadtest/runs?runId=$RunId" -Method Post
 $issue53FixturePreparationStopwatch.Stop()
 if ([int]$issue53Fixture.totalSeats -le 0) {
     throw 'Prepared load-test fixture must contain at least one seat.'
+}
+if ($CollectStatementDigests.IsPresent) {
+    Invoke-Issue55MariaDbRootQuery -Query 'TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;' | Out-Null
 }
 
 $issue51StartedAt = (Get-Date).ToUniversalTime()
@@ -209,6 +252,26 @@ try {
     if (-not $issue51InvariantSatisfied) {
         throw 'k6 output does not contain a successful final inventory invariant.'
     }
+    if ($CollectStatementDigests.IsPresent) {
+        $issue55DigestRows = @(Invoke-Issue55MariaDbRootQuery -Query @"
+SELECT
+  REPLACE(REPLACE(TO_BASE64(DIGEST_TEXT), CHAR(10), ''), CHAR(13), ''),
+  COUNT_STAR,
+  SUM_TIMER_WAIT,
+  AVG_TIMER_WAIT,
+  MAX_TIMER_WAIT,
+  SUM_ERRORS,
+  SUM_WARNINGS,
+  SUM_ROWS_AFFECTED
+FROM performance_schema.events_statements_summary_by_digest
+WHERE SCHEMA_NAME = '$DatabaseName'
+  AND DIGEST_TEXT IS NOT NULL;
+"@)
+        $issue55StatementDigestSummary = New-ContentionStatementDigestSummary -Lines $issue55DigestRows
+        Assert-ContentionStatementDigestCounts `
+            -Summary $issue55StatementDigestSummary `
+            -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess | Out-Null
+    }
 
     $issue51MetricSummary = New-ContentionMetricsSummary -Samples $issue51Samples.ToArray()
     $issue51Samples | Export-Csv -LiteralPath $issue51SamplesPath -NoTypeInformation -Encoding UTF8
@@ -239,6 +302,7 @@ try {
             StdoutFile = [IO.Path]::GetFileName($issue51StdoutPath)
             StderrFile = [IO.Path]::GetFileName($issue51StderrPath)
         }
+        DatabaseStatementDigests = $issue55StatementDigestSummary
         Metrics = $issue51MetricSummary
         SamplesFile = [IO.Path]::GetFileName($issue51SamplesPath)
     }

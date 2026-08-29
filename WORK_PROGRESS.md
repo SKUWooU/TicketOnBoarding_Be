@@ -6,19 +6,38 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `eba2e77ed209fb88128a8baaf4c951866bafc080` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `6c798d8c0f421c0d9601e84d640c25ea3f1c3d5f` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #55 — 회차 잔여 좌석 단일 행 갱신 병목 원인 격리
+
+- Issue: [#55](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/55)
+- Branch: `test/55-concert-time-row-bottleneck`
+- 상태: 구현·SQL별 로컬 반복 진단·전체 회귀 검증 완료, PR 준비 중
+- 계획 승인: 완료
+- 확인된 사실: 예약은 개별 좌석을 비관적 잠금한 뒤 모든 성공 transaction이 동일한 `concert_time.seat_amount` 행을 조건부 감소시키며, 해당 bulk update의 자동 flush로 Java 메서드 시간에는 선행 변경 flush가 섞임
+- 조사: 기본 MariaDB는 Performance Schema가 꺼져 있고 일반 계정은 접근 불가; 시작 옵션으로 활성화한 전용 진단 container에서 정규화 SQL별 횟수·누적·평균·최대 statement 시간을 수집할 수 있음을 확인
+- 계획: 기본 Compose·운영 API를 바꾸지 않는 선택적 Performance Schema override, 좌석 잠금 SELECT와 회차 UPDATE digest 수집, distributed 50·100 RPS 각 3회 동일 조건 비교, 근거·한계 문서화
+- 구현: 진단 전용 Compose override, normalized SQL digest 분류·민감 SQL 원문 제외·성공 수 일치 gate, 7-run 전용 runner와 중앙값·범위·SQL 시간 비율 집계, PowerShell fixture CI
+- 측정: 100 RPS에서 좌석 잠금 SELECT 평균 중앙값 146.44ms·누적 105,292ms, 회차 UPDATE 평균 0.354ms·누적 255ms로 410.63배 차이; Hikari pending 189·DB lock time +100,479ms·p95 4,096.96ms, 예상 밖 실패·deadlock 0·불변식 충족
+- 판정: 회차 단일 행 UPDATE 주병목 가설은 반증; `(concert_time_id, seat_number)` 복합 index가 없어 잠금 조회가 회차당 약 2,000행을 검사하는 경로가 다음 고경합 A/B 후보
+- 검증: 신규 SQL digest 16개·진단 runner 15개, 기존 수집기 42개·baseline runner 19개 PowerShell assertion, k6 inspect, Backend 전체 102개 test 통과(실패·오류·skip 0), `git diff --check` 통과
+- 범위: Backend 로컬 `loadtest` profile·mock 결제·2,000석 fixture, SQL digest·Hikari·DB lock·k6 결과의 run별 연결
+- 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 성능 개선 적용, P6Spy 전면 로깅, 회차 counter 생략 경로, Hikari 확대·Redis lock·대기열·outbox·브로커
+
+## 완료
+
 ### Backend Issue #53 — 가상 좌석 고경합의 단계별 성능 기준선 측정
 
 - Issue: [#53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
 - Branch: `test/53-staged-contention-baseline`
 - PR: [#54](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/54)
-- 상태: 구현·단계별 로컬 측정·전체 회귀 검증 완료, PR CI·Reviewer 검토 대기
+- squash commit: `6c798d8c0f421c0d9601e84d640c25ea3f1c3d5f`
+- 상태: 완료
 - 계획 승인: 완료
 - 확인된 문제: k6 콘솔 처리율이 setup 시간을 포함하고 무거운 fixture 생성이 Hikari·DB 표본에 섞이며, 무경합 성공 처리량과 정상 409 경합 응답을 같은 TPS로 해석할 수 있음
 - 계획: fixture 사전 준비, 민감 정보 없는 구조화 k6 결과, 시나리오별 단계·3회 반복 runner, 중앙값·범위와 중단 조건, 로컬 기준선 문서화
@@ -27,8 +46,7 @@
 - 검증: 수집기 42개·baseline runner 19개 PowerShell assertion, k6 inspect, Backend 전체 102개 test 통과(실패·오류·skip 0), `git diff --check` 통과
 - 범위: Backend 로컬 `loadtest` profile·mock 결제·2,000석 fixture, distributed/hot-section/hot-seat 단계별 측정, ignored 원본 결과와 근거 문서
 - 제외: 실제 KOPIS·PG·SMS·운영 DB, Frontend, 운영 SLA, Prometheus/Grafana 전체 stack, 성능 개선·분산 기술 선제 도입
-
-## 완료
+- Reviewer: 최종 HEAD `c99fc3c3267a36f2847dfc6fe754d97c8414bbb8`, Blocking 없음, `MERGE_READY: YES`; Backend CI 성공 후 자동 squash merge
 
 ### Backend Issue #51 — 고경합 부하의 Hikari·MariaDB 지표 수집 경계 구성
 

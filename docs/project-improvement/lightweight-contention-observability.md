@@ -156,13 +156,14 @@ Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사와 Issue #53의 baseline ru
 2. MariaDB CLI와 Compose healthcheck가 DB thread gauge에 영향을 준다. 이를 숨기지 않고 결과에 표시하며 connection 포화는 Hikari를 주 근거로 본다.
 3. 로컬 결과는 process·OS·Docker가 자원을 공유하므로 실제 예매처나 다중 instance 성능을 나타내지 않는다.
 4. Issue #53에서 fixture 준비를 표본 밖으로 분리하고 단계별 3회 반복했다. distributed 50→100 RPS 사이에서 p95·Hikari pending·lock wait·dropped iteration 변곡점이 함께 재현됐다.
-5. 다음 Issue는 회차 잔여 수량 단일 행 갱신과 좌석 잠금의 대기 기여도를 분리한다. 원인이 확인되기 전에는 Hikari 크기 조정, 대기열, Redis 분산 lock, outbox, 메시지 브로커를 도입하지 않는다.
+5. Issue #55의 statement digest 진단에서 회차 UPDATE 가설을 반증하고 좌석 잠금 SELECT에 대기가 집중됨을 확인했다. 다음은 복합 unique index 전후 고경합 A/B이며, 결과 전에는 Hikari 크기 조정, 대기열, Redis 분산 lock, outbox, 메시지 브로커를 도입하지 않는다.
 
 ## 9. 연결
 
 - [Backend Issue #51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)
 - [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)
 - [가상 좌석 2,000석 고경합 부하 측정 기반](high-contention-load-test-harness.md)
+- [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)
 - [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
 - [학습·개선 여정](LEARNING_JOURNEY.md)
