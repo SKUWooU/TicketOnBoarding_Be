@@ -1,5 +1,6 @@
 package com.onticket.concert.service;
 
+import com.onticket.concert.config.SeatHoldConfiguration;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
@@ -60,6 +61,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
         SeatReservationService.class,
+        SeatHoldConfiguration.class,
         CancellationConsistencyBaselineIntegrationTest.ReservationLockBarrierConfiguration.class
 })
 @Testcontainers

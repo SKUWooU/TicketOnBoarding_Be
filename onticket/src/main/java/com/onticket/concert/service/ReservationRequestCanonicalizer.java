@@ -19,7 +19,10 @@ final class ReservationRequestCanonicalizer {
             throw new IllegalArgumentException("예약 요청이 필요합니다.");
         }
 
-        List<String> seatNumbers = reservRequest.getSeatNumberList();
+        return canonicalSeatNumbers(reservRequest.getSeatNumberList());
+    }
+
+    static List<String> canonicalSeatNumbers(List<String> seatNumbers) {
         if (seatNumbers == null || seatNumbers.isEmpty()) {
             throw new IllegalArgumentException("좌석을 한 개 이상 선택해야 합니다.");
         }

@@ -1,11 +1,16 @@
 package com.onticket.concert.controller;
 
 import com.onticket.concert.dto.ReservRequest;
+import com.onticket.concert.dto.SeatHoldRequest;
+import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.service.IdempotencyKeyConflictException;
 import com.onticket.concert.service.InvalidIdempotencyKeyException;
+import com.onticket.concert.service.InvalidSeatHoldRequestException;
 import com.onticket.concert.service.PaymentVerificationUnavailableException;
 import com.onticket.concert.service.ReservationIdempotencyService;
+import com.onticket.concert.service.SeatHoldConflictException;
+import com.onticket.concert.service.SeatHoldService;
 import com.onticket.concert.service.SeatReservationConflictException;
 import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.user.jwt.JwtUtil;
@@ -20,12 +25,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +57,9 @@ class ReservationControllerTest {
     private VerifiedReservationService verifiedReservationService;
 
     @Mock
+    private SeatHoldService seatHoldService;
+
+    @Mock
     private JwtUtil jwtUtil;
 
     private MockMvc mockMvc;
@@ -55,10 +67,15 @@ class ReservationControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                new ReservationController(reservationIdempotencyService, verifiedReservationService, jwtUtil)
+                new ReservationController(
+                        reservationIdempotencyService,
+                        verifiedReservationService,
+                        seatHoldService,
+                        jwtUtil
+                )
         ).build();
-        when(jwtUtil.validateToken(TOKEN)).thenReturn(true);
-        when(jwtUtil.getUsernameFromToken(TOKEN)).thenReturn(USERNAME);
+        lenient().when(jwtUtil.validateToken(TOKEN)).thenReturn(true);
+        lenient().when(jwtUtil.getUsernameFromToken(TOKEN)).thenReturn(USERNAME);
     }
 
     @Test
@@ -234,5 +251,68 @@ class ReservationControllerTest {
                                 }
                                 """))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void authenticatedUserCanHoldSeats() throws Exception {
+        LocalDateTime expiresAt = LocalDateTime.of(2030, 1, 1, 12, 5);
+        when(seatHoldService.hold(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class)))
+                .thenReturn(new SeatHoldResponse(List.of(
+                        new SeatHoldResponse.HeldSeat("A1", expiresAt)
+                )));
+
+        mockMvc.perform(post("/main/detail/{concertId}/seat-holds", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .accept(MediaType.APPLICATION_JSON)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.seats[0].seatNumber").value("A1"))
+                .andExpect(jsonPath("$.seats[0].expiresAt").exists());
+
+        verify(seatHoldService).hold(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class));
+    }
+
+    @Test
+    void seatHeldByAnotherUserReturnsHttp409() throws Exception {
+        when(seatHoldService.hold(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class)))
+                .thenThrow(new SeatHoldConflictException("다른 사용자가 임시 점유한 좌석입니다."));
+
+        mockMvc.perform(post("/main/detail/{concertId}/seat-holds", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void invalidSeatHoldRequestReturnsHttp400() throws Exception {
+        when(seatHoldService.hold(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class)))
+                .thenThrow(new InvalidSeatHoldRequestException("좌석을 한 개 이상 선택해야 합니다."));
+
+        mockMvc.perform(post("/main/detail/{concertId}/seat-holds", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void authenticatedOwnerCanReleaseSeats() throws Exception {
+        mockMvc.perform(delete("/main/detail/{concertId}/seat-holds", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isNoContent());
+
+        verify(seatHoldService).release(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class));
+    }
+
+    @Test
+    void seatHoldRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/main/detail/{concertId}/seat-holds", CONCERT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isUnauthorized());
     }
 }

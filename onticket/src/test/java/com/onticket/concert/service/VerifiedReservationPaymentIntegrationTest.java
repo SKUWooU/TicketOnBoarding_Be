@@ -1,5 +1,6 @@
 package com.onticket.concert.service;
 
+import com.onticket.concert.config.SeatHoldConfiguration;
 import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
@@ -7,6 +8,7 @@ import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.PaymentStatus;
 import com.onticket.concert.domain.Seat;
+import com.onticket.concert.domain.SeatAvailability;
 import com.onticket.concert.dto.SeatDto;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
@@ -42,6 +44,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -74,6 +78,7 @@ import static org.mockito.Mockito.when;
         VerifiedReservationService.class,
         VerifiedReservationTransactionService.class,
         VirtualTicketPricePolicy.class,
+        SeatHoldConfiguration.class,
         VerifiedReservationPaymentIntegrationTest.RepositoryBarrierConfiguration.class
 })
 @Testcontainers
@@ -133,6 +138,9 @@ class VerifiedReservationPaymentIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private Clock clock;
+
     @MockBean
     private PaymentVerificationPort paymentVerificationPort;
 
@@ -181,6 +189,60 @@ class VerifiedReservationPaymentIntegrationTest {
     }
 
     @Test
+    void activeHoldOwnerCanConfirmReservationAndConsumesHold() throws Exception {
+        String paymentId = "payment-held-seat-owner";
+        LocalDateTime now = LocalDateTime.now(clock);
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        seat.holdFor(USERNAME, now, now.plusMinutes(5));
+        seatRepository.saveAndFlush(seat);
+        entityManager.clear();
+        when(paymentVerificationPort.verify(paymentId))
+                .thenReturn(approved(paymentId, USERNAME, 30_000));
+
+        verifiedReservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request(paymentId, "A1"),
+                "held-seat-owner-key"
+        );
+
+        Seat reservedSeat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(reservedSeat.isReserved()).isTrue();
+        assertThat(reservedSeat.getHeldBy()).isNull();
+        assertThat(reservedSeat.getHeldUntil()).isNull();
+        assertThat(paymentRepository.count()).isEqualTo(1);
+        assertThat(bookingRepository.count()).isEqualTo(1);
+        assertInventory(23, 1, 1);
+    }
+
+    @Test
+    void activeHoldByDifferentUserRejectsReservationAndRollsBackPaymentAndBooking() {
+        String paymentId = "payment-held-by-other";
+        LocalDateTime now = LocalDateTime.now(clock);
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        seat.holdFor("other-user", now, now.plusMinutes(5));
+        seatRepository.saveAndFlush(seat);
+        entityManager.clear();
+        when(paymentVerificationPort.verify(paymentId))
+                .thenReturn(approved(paymentId, USERNAME, 30_000));
+
+        assertThatThrownBy(() -> verifiedReservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request(paymentId, "A1"),
+                "held-by-other-key"
+        )).isExactlyInstanceOf(SeatHoldConflictException.class)
+                .hasMessage("다른 사용자가 임시 점유한 좌석입니다.");
+
+        Seat heldSeat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(heldSeat.isReserved()).isFalse();
+        assertThat(heldSeat.getHeldBy()).isEqualTo("other-user");
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(bookingRepository.count()).isZero();
+        assertInventory(24, 0, 0);
+    }
+
+    @Test
     void repeatedSeatReadsExposeSameAvailableSeatWithoutCreatingHold() {
         SeatDto firstRead = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
                 .filter(seat -> seat.getSeatNumber().equals("A1"))
@@ -197,6 +259,43 @@ class VerifiedReservationPaymentIntegrationTest {
         assertThat(paymentRepository.count()).isZero();
         assertThat(bookingRepository.count()).isZero();
         assertInventory(24, 0, 0);
+    }
+
+    @Test
+    void seatReadExposesActiveHoldAsUnavailableWithoutLeakingOwner() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime expiresAt = now.plusMinutes(5);
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        seat.holdFor("hold-owner", now, expiresAt);
+        seatRepository.saveAndFlush(seat);
+        entityManager.clear();
+
+        SeatDto heldSeat = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
+                .filter(candidate -> candidate.getSeatNumber().equals("A1"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(heldSeat.isReserved()).isTrue();
+        assertThat(heldSeat.getAvailability()).isEqualTo(SeatAvailability.HELD);
+        assertThat(heldSeat.getHoldExpiresAt()).isEqualTo(expiresAt.truncatedTo(ChronoUnit.MICROS));
+    }
+
+    @Test
+    void seatReadTreatsExpiredHoldAsAvailable() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        seat.holdFor("expired-owner", now.minusMinutes(10), now.minusMinutes(5));
+        seatRepository.saveAndFlush(seat);
+        entityManager.clear();
+
+        SeatDto availableSeat = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
+                .filter(candidate -> candidate.getSeatNumber().equals("A1"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(availableSeat.isReserved()).isFalse();
+        assertThat(availableSeat.getAvailability()).isEqualTo(SeatAvailability.AVAILABLE);
+        assertThat(availableSeat.getHoldExpiresAt()).isNull();
     }
 
     @Test

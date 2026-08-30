@@ -1,8 +1,11 @@
 package com.onticket.concert.controller;
 
 import com.onticket.concert.dto.ReservRequest;
+import com.onticket.concert.dto.SeatHoldRequest;
+import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.service.ReservationIdempotencyService;
+import com.onticket.concert.service.SeatHoldService;
 import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.user.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,8 @@ public class ReservationController {
     private final ReservationIdempotencyService reservationIdempotencyService;
 
     private final VerifiedReservationService verifiedReservationService;
+
+    private final SeatHoldService seatHoldService;
 
     private final JwtUtil jwtUtil;
 
@@ -60,6 +65,34 @@ public class ReservationController {
                     idempotencyKey
             );
             return ResponseEntity.ok().body(reservationCreatedAt);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+    }
+
+    @PostMapping("/main/detail/{concertId}/seat-holds")
+    public ResponseEntity<?> holdSeats(
+            @CookieValue(value = "accessToken", required = false) String token,
+            @PathVariable("concertId") String concertId,
+            @RequestBody SeatHoldRequest request
+    ) {
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            SeatHoldResponse response = seatHoldService.hold(username, concertId, request);
+            return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+    }
+
+    @DeleteMapping("/main/detail/{concertId}/seat-holds")
+    public ResponseEntity<?> releaseSeats(
+            @CookieValue(value = "accessToken", required = false) String token,
+            @PathVariable("concertId") String concertId,
+            @RequestBody SeatHoldRequest request
+    ) {
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            seatHoldService.release(username, concertId, request);
+            return ResponseEntity.noContent().build();
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
     }
