@@ -21,7 +21,7 @@
 - 사용자: 서로 다른 두 사용자
 - 요청 식별: 서로 다른 payment ID와 idempotency key
 - 외부 연동: mock 결제 검증만 사용
-- 동시성 제어: 두 요청을 mock 결제 검증 barrier에서 맞춘 후 예약 transaction으로 진행
+- 동시성 제어: 두 요청의 transaction을 먼저 시작하고, 양쪽이 최초 Booking 조회를 끝낸 transaction 내부 barrier에서 맞춘 후 예약 진행
 - 반복: 동일 좌석 경쟁 3회
 
 2,000석 fixture는 query plan과 처리량 측정용이다. 이번 검증은 상태 경계와 row 불변식이 목적이므로 가장 작은 경쟁 단위인 한 좌석만 사용한다.
@@ -39,7 +39,7 @@
 - 3회 모두 성공 1건, `SeatReservationConflictException` 1건이었다.
 - 실패 메시지는 `이미 예약된 좌석입니다.`였다.
 - Payment·Booking·Reservation·reserved seat는 각각 1개만 남았다.
-- 성공 사용자의 Payment·Booking·Reservation 소유자가 일치했다.
+- Payment provider ID와 Payment·Booking·Reservation 사용자가 실제 성공 요청과 일치했다.
 - 잔여 좌석은 23, 예약 좌석은 1이었다.
 - 기존 HTTP 예외 계약 테스트가 이 예외를 409 Conflict로 매핑한다.
 
@@ -67,6 +67,7 @@ DB 기반 단일 인스턴스 구현과 경합 fixture를 먼저 검증한다. R
 - 실제 공연장 좌석이나 운영 트래픽이 아닌 명시적 가상 좌석 fixture다.
 - 실제 KOPIS·PG·SMS를 호출하지 않았다.
 - 아직 임시 점유가 없으므로 만료 시간이나 회수 지연을 측정하지 않았다.
+- transaction 내부 barrier는 두 요청이 겹쳐 실행됨을 고정하지만 DB lock wait 시간 자체를 계측한 성능 실험은 아니다.
 - 기능 정합성 기준선이며 TPS·p95 성능 결과가 아니다.
 
 ## 실행 명령

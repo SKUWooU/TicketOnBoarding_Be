@@ -18,10 +18,11 @@
 - Issue: [#61](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/61)
 - Branch: `test/61-seat-hold-expiration-baseline`
 - PR: [#62](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/62)
-- 상태: 구현·전체 로컬 검증 완료, Reviewer 검토·Backend CI 대기
+- 상태: Reviewer Blocking 2건 수정·전체 회귀 검증 완료, 최신 CI·재검토 대기
 - 계획 승인: 완료
 - 확인된 근거: 좌석 조회는 `reserved` snapshot만 반환하고 상태를 바꾸지 않으며, Frontend 선택도 로컬 상태에만 남는다. 따라서 서로 다른 사용자가 같은 `A1`을 동시에 선택 가능하고 검증된 예약 transaction에 먼저 진입한 한 요청만 확정된다.
-- 구현: 반복 좌석 조회가 점유를 만들지 않는 fixture와, 독립 사용자·결제 ID·멱등 key가 같은 좌석을 경쟁하는 mock 결제 동시성 fixture를 추가
+- 구현: 반복 좌석 조회가 점유를 만들지 않는 fixture와, 독립 사용자·결제 ID·멱등 key의 transaction을 내부 조회 barrier에서 동기화해 같은 좌석을 경쟁하는 mock 결제 fixture를 추가. 성공 결과의 사용자·결제 ID를 보존해 저장 소유권과 직접 대조
+- Reviewer: HEAD `2ee99f44618c7971f93ca5295cd46fdfc32d76f0`에서 transaction 외부 barrier와 승자 소유권 간접 검증 2건 Blocking; 활성 transaction 내부 barrier·직접 소유권 검증으로 수정 후 재검토 예정
 - 검증: 대상 MariaDB Testcontainers 23개 invocation·Backend 전체 107개 test(실패·오류·skip 0), PowerShell 153개 assertion, k6 inspect, Compose config 통과. 매 경쟁에서 성공 1·`SeatReservationConflictException` 1, Payment·Booking·Reservation·reserved seat 각 1, remaining 23
 - 범위: 기존 24석 fixture 중 `A1` 한 좌석, 서버 snapshot·검증된 예약 경계, mock 결제, 정합성 기준선과 후속 설계 조건
 - 제외: `HELD` 구현, 만료 scheduler, Redis·분산 lock·대기열, Frontend·README, 실제 KOPIS·PG·SMS, 성능 수치 주장
