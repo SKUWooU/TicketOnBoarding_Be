@@ -17,8 +17,8 @@
 
 - Issue: [#61](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/61)
 - Branch: `test/61-seat-hold-expiration-baseline`
-- PR: 생성 전
-- 상태: 구현·전체 로컬 검증 완료, PR 생성 대기
+- PR: [#62](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/62)
+- 상태: 구현·전체 로컬 검증 완료, Reviewer 검토·Backend CI 대기
 - 계획 승인: 완료
 - 확인된 근거: 좌석 조회는 `reserved` snapshot만 반환하고 상태를 바꾸지 않으며, Frontend 선택도 로컬 상태에만 남는다. 따라서 서로 다른 사용자가 같은 `A1`을 동시에 선택 가능하고 검증된 예약 transaction에 먼저 진입한 한 요청만 확정된다.
 - 구현: 반복 좌석 조회가 점유를 만들지 않는 fixture와, 독립 사용자·결제 ID·멱등 key가 같은 좌석을 경쟁하는 mock 결제 동시성 fixture를 추가
