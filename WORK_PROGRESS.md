@@ -6,31 +6,43 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `294136aead691800578dfe21375a58f735c4b599` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `e4917b4ec9b547de264048f772756a72b04ea25f` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #59 — 좌석 복합 unique 제약의 Entity schema 반영
+
+- Issue: [#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
+- Branch: `perf/59-seat-unique-constraint`
+- PR: [#60](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/60)
+- 상태: Reviewer Blocking의 A/B 실패 정리 순서 수정·로컬 검증 완료, 최신 CI·재검토 대기
+- 계획 승인: 완료
+- 확인된 근거: Issue #57의 고정 2,000석 A/B에서 복합 unique index가 좌석 잠금 탐색을 2,000행에서 1행으로 바꾸고 100 RPS p95를 3,064.39ms에서 143.41ms로 낮춤
+- 계획: `Seat` Entity 신규 schema에 `(concert_time_id, seat_number)` unique 제약을 선언하고 동일 회차 중복 거부·다른 회차 동일 번호 허용·실행계획·예약 회귀를 MariaDB Testcontainers로 검증
+- 구현: Entity schema 제약, 동일 회차 중복 거부·다른 회차 동일 번호 허용, 기존 migration 실패 기준선 보존, A/B runner 종료 시 load-test fixture 정리 후 영구 composite schema 복원
+- 검증: 대상 MariaDB Testcontainers 30개, Backend 전체 103개 test(실패·오류·skip 0), 중복 fixture로 복원 선행 실패→cleanup→composite 복원을 포함한 PowerShell 153개 assertion 통과
+- Reviewer: 구현 HEAD `650e8bb9ecd71acb32bc31ed8ac4b5248e0fb51e`에서 실패 경로의 schema 복원 순서 1건 Blocking; 수정 후 재검토 대기
+- 범위: Hibernate가 생성하는 신규 schema, MariaDB fixture, 좌석 식별 무결성·잠금 query plan·Backend 회귀
+- 제외: 기존 운영 DB 자동 migration, 전체 Flyway baseline, 실제 KOPIS·PG·SMS, Frontend·README, 2,000석 A/B 재측정, 분산 기술
+
+## 완료
+
 ### Backend Issue #57 — 좌석 잠금 복합 unique index의 고경합 A/B 검증
 
 - Issue: [#57](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/57)
-- Branch: `perf/57-seat-composite-index-ab`
 - PR: [#58](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/58)
-- 상태: Reviewer Blocking 3건 수정·재측정·전체 회귀 완료, 최신 CI·재검토 대기
+- squash commit: `e4917b4ec9b547de264048f772756a72b04ea25f`
+- 상태: 완료
 - 계획 승인: 완료
-- 확인된 문제: Issue #55에서 100 RPS 좌석 잠금 SELECT 평균 중앙값 146.44ms·누적 105,292ms와 회차당 약 2,000행 탐색을 확인했지만 복합 unique index의 고경합 개선 효과는 아직 미검증
-- 조사: fixture는 run마다 별도 회차·2,000석을 추가하고 schema는 유지함; 기존 Testcontainers는 복합 index의 `rows=1` 전환·유일성·canonical 잠금 순서를 검증했으며 index 제거 시 FK 보조 index 복원이 필요함
-- 계획: current/composite 순서를 교차한 warmup 2회·50/100 RPS 각 variant 3회, query plan·SQL digest·k6·Hikari·DB lock·정합성 A/B, 종료 시 current schema 복원
-- 구현: index 중복 사전 점검·current/composite lifecycle·FK 보조 index 복원, run별 load-test 데이터 정리와 물리 좌석 0→2,000행·`ANALYZE TABLE` 고정, 교차 순서 14-run runner, zero-error/deadlock·digest health·완료 batch gate와 중앙값·범위 집계
 - 측정: 최종 `i57-fixed-02` 본 측정 12/12회 정합성 충족·예상 밖 실패/deadlock 0; 100 RPS current→composite에서 완료/설정초 83.1→100.1, p95 3,064.39→143.41ms, dropped 169→0, Hikari pending 189→0, DB lock time 91,935→4,565ms, 좌석 잠금 평균 114.168→0.525ms
-- 판정: 고정 2,000행의 잠금 조회가 1행 식별로 전환되며 병목 원인과 복합 unique index 효과를 확인; 회차 감소 UPDATE 평균 0.381→5.287ms와 composite lock wait 412회가 다음 부하 단계 후보지만 현재 100 RPS가 안정적이므로 분산 구조 도입은 보류
-- 검증: PowerShell 149개 assertion, k6 inspect, Compose config, Backend 전체 102개 test 강제 재실행 통과(실패·오류·skip 0), `git diff --check` 통과
-- 범위: Backend 로컬 `loadtest` profile·MariaDB 10.11.8·2,000석 fixture, 진단용 복합 unique index lifecycle과 반복 측정·근거 문서
-- 제외: 운영 DB DDL, 전체 Flyway baseline, 애플리케이션 Entity·Frontend·README, 실제 KOPIS·PG·SMS, Hikari 확대·Redis lock·대기열·outbox·브로커
-
-## 완료
+- 판정: 고정 2,000행 잠금 조회를 1행 식별로 전환해 병목 원인과 복합 unique index 효과 확인; 현재 100 RPS가 안정적이므로 분산 구조 도입 보류
+- 검증: PowerShell 149개 assertion, k6 inspect, Compose config, Backend 전체 102개 test, Backend CI 통과
+- Reviewer: 최신 HEAD `f0fd9b03af8dd00f6363058371472c5ab5e79db1`, Blocking 없음, `MERGE_READY: YES`
+- 범위: 로컬 `loadtest` profile·MariaDB 10.11.8·2,000석 fixture와 반복 A/B
+- 제외: 운영 DB DDL, 전체 Flyway baseline, 애플리케이션 Entity·Frontend·README, 실제 외부 연동과 분산 기술
 
 ### Backend Issue #55 — 회차 잔여 좌석 단일 행 갱신 병목 원인 격리
 
