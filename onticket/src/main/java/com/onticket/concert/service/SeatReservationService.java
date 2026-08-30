@@ -6,6 +6,7 @@ import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Reservation;
 import com.onticket.concert.domain.ReservationStatus;
 import com.onticket.concert.domain.Seat;
+import com.onticket.concert.domain.SeatAvailability;
 import com.onticket.concert.dto.CalDto;
 import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.dto.SeatDto;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +39,7 @@ public class SeatReservationService {
     private final ReservationRepository reservationRepository;
     private final JwtUtil jwtUtil;
     private final ConcertRepository concertRepository;
+    private final Clock clock;
 
     //달력에서 사용할 데이터
     public List<CalDto> getAllOfConcertTime(String concertId){
@@ -58,11 +61,17 @@ public class SeatReservationService {
     public List<SeatDto> getSeatsByConcertTimeId(Long concertTimeId) {
         List<Seat> seatList= seatRepository.findByConcertTimeId(concertTimeId);
         List<SeatDto> seatDtoList=new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now(clock);
         for(Seat seat:seatList){
+            SeatAvailability availability = seat.availabilityAt(now);
             SeatDto seatDto=new SeatDto();
             seatDto.setSeatId(seat.getId());
             seatDto.setSeatNumber(seat.getSeatNumber());
-            seatDto.setReserved(seat.isReserved());
+            seatDto.setReserved(availability != SeatAvailability.AVAILABLE);
+            seatDto.setAvailability(availability);
+            seatDto.setHoldExpiresAt(
+                    availability == SeatAvailability.HELD ? seat.getHeldUntil() : null
+            );
             seatDtoList.add(seatDto);
         }
         return seatDtoList;
@@ -90,6 +99,7 @@ public class SeatReservationService {
                 .orElseThrow(() -> new Exception("해당 콘서트가 없습니다."));
         List<Seat> seatList = new ArrayList<>();
         List<Reservation> reservationList = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now(clock);
         for(String seatNumber:seatNumberList){
             Optional<Seat> seatOptional = seatRepository.findByConcertTimeIdAndSeatNumberWithLock(concertTimeId, seatNumber);
             if (!seatOptional.isPresent()) {
@@ -102,9 +112,13 @@ public class SeatReservationService {
             if (seat.isReserved()) {
                 throw new SeatReservationConflictException("이미 예약된 좌석입니다.");
             }
+            seat.clearExpiredHold(now);
+            if (seat.isHeldAt(now) && !seat.isHeldBy(username, now)) {
+                throw new SeatHoldConflictException("다른 사용자가 임시 점유한 좌석입니다.");
+            }
 
             //해당좌석 예약처리
-            seat.setReserved(true);
+            seat.markReserved();
             seatList.add(seat);
             seatRepository.save(seat);
 
@@ -114,7 +128,7 @@ public class SeatReservationService {
             reservation.setConcertName(concert.getConcertName());
             reservation.setPosterUrl(concert.getPosterUrl());
             reservation.setUsername(username);
-            reservation.setCreatedAt(LocalDateTime.now());
+            reservation.setCreatedAt(now);
             reservation.setConcertTimeId(concertTimeId);
             reservation.setConcertTime(LocalTime.parse(concertTime.getStartTime().format(formatter)));
             reservation.setConcertDate(concertTime.getDate());
@@ -179,7 +193,7 @@ public class SeatReservationService {
             throw new IllegalStateException("예약 좌석 상태가 올바르지 않습니다.");
         }
 
-        seat.setReserved(false);
+        seat.markAvailable();
         int updatedConcertTimes = concertTimeRepository.increaseSeatAmount(reservation.getConcertTimeId());
         if (updatedConcertTimes != 1) {
             throw new IllegalStateException("공연 회차의 잔여 좌석을 복구할 수 없습니다.");

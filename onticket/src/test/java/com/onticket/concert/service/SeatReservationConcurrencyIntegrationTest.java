@@ -1,5 +1,6 @@
 package com.onticket.concert.service;
 
+import com.onticket.concert.config.SeatHoldConfiguration;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
@@ -77,6 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
         SeatReservationService.class,
         ReservationIdempotencyService.class,
         ReservationBookingTransactionService.class,
+        SeatHoldConfiguration.class,
         SeatReservationConcurrencyIntegrationTest.SeatRepositoryBarrierConfiguration.class
 })
 @Testcontainers

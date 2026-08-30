@@ -1,5 +1,6 @@
 package com.onticket.concert.dto;
 
+import com.onticket.concert.domain.SeatAvailability;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,4 +18,8 @@ public class SeatDto {
 
     // 예약 상태
     private boolean reserved;
+
+    private SeatAvailability availability;
+
+    private java.time.LocalDateTime holdExpiresAt;
 }

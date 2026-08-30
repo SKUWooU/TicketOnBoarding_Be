@@ -549,3 +549,23 @@ Entity annotation은 Hibernate가 새로 만드는 local·test schema에는 제�
 ### 링크
 
 - [Backend Issue #61](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/61)
+
+## Issue #63 — 결제 전 좌석을 소유권과 만료가 있는 서버 상태로 만들기
+
+### 별도 분산 저장소보다 잠금 중인 좌석 row에서 시작하기
+
+기존 예약은 `(concert_time_id, seat_number)` 복합 unique 제약과 비관적 잠금을 사용한다. 현재 규모에서 별도 점유 table이나 Redis를 추가하면 좌석과 점유 사이의 추가 정합성, unique 제약, 잠금 순서와 만료 동기화 문제가 함께 생긴다. 따라서 `Seat`에 nullable `heldBy`, `heldUntil`을 추가하고 `reserved`와 현재 시각으로 `AVAILABLE/HELD/RESERVED`를 계산했다. 이 선택은 단일 DB transaction의 조건부 상태 전이를 먼저 검증하기 위한 최소 구조다.
+
+### 시간 경계를 테스트 가능한 정책으로 고정하기
+
+TTL은 기본 5분이며 `Clock`을 주입한다. 같은 사용자의 재요청은 최초 만료 시각을 반환하고 시간을 연장하지 않는다. `now < heldUntil`일 때만 활성 점유이고 정확히 만료 시각에 도달하면 다른 사용자가 잠금 안에서 회수할 수 있다. 별도 scheduler 없이 점유·해제·예약 요청이 해당 row를 잠글 때 expired 필드를 정리하는 lazy expiration을 사용한다.
+
+### 다좌석 원자성과 예약 소유권을 함께 지키기
+
+점유와 해제도 예약과 같은 canonical 좌석 번호 순서로 row를 잠근다. 앞 좌석을 변경한 뒤 뒤 좌석에서 타인 점유를 발견해도 transaction 전체가 rollback된다. 활성 점유는 소유자만 예약할 수 있고 예약 성공 시 `RESERVED`로 바뀌면서 점유 정보가 제거된다. Frontend 전환 전 호환을 위해 점유가 없는 기존 예약 경로는 아직 허용하지만, 타인의 활성 점유는 409로 거부한다.
+
+좌석 조회는 기존 Frontend가 점유 좌석을 선택하지 않도록 `reserved=true`를 유지하면서 새 필드 `availability=HELD`, `holdExpiresAt`을 함께 제공한다. 소유자 식별자는 응답에 노출하지 않는다. 상세 상태 표와 fixture 한계는 [DB 기반 좌석 임시 점유·만료 상태 전이](seat-hold-expiration-state-transition.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #63](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/63)

@@ -6,28 +6,44 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `14ccb7780e6405e517e551679820615e7881aae3` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `825e06e1dc907547102b3162fedc4e9be61a38ff` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #63 — DB 기반 좌석 임시 점유·만료 상태 전이
+
+- Issue: [#63](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/63)
+- Branch: `feat/63-seat-hold-expiration`
+- PR: [#64](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/64)
+- 상태: 구현·로컬 검증 완료, Reviewer 검토 대기
+- 계획 승인: 완료
+- 확인된 근거: `Seat`는 `reserved` boolean만 가지고 좌석 선택은 Frontend 로컬 상태에만 존재한다. 별도 hold table이나 `reserved` enum 전환보다 기존 잠금 row에 nullable 소유자·만료 시각을 추가하는 편이 현재 schema와 부하 fixture의 변경이 작다.
+- 계획: 기존 비관적 좌석 잠금과 canonical 순서를 재사용해 DB 기반 점유·동일 사용자 재사용·만료 회수·해제·활성 점유 소유권 예약을 구현하고, 기존 점유 없는 예약은 FE 전환 전까지 호환한다.
+- 구현: `Seat` row에 nullable 점유자·만료 시각을 추가하고 `AVAILABLE/HELD/RESERVED` 파생 상태, 기본 5분 TTL과 `Clock`, 점유·해제 API, 좌석 조회 호환 필드, 자기 점유 예약·타인 점유 409를 연결했다. 동일 사용자 재요청은 TTL을 연장하지 않고 만료는 쓰기 시점에 lazy 회수한다.
+- 검증: MariaDB Testcontainers에서 동일 좌석 2사용자 동시 점유 성공 1·conflict 1, 만료 직전/정확한 만료 경계, 다좌석 취득·해제 rollback, 자기/타인 점유 예약과 Payment·Booking rollback, 조회·HTTP 400/401/409 계약을 확인했다. Backend 전체 119 tests(실패·오류·skip 0), `git diff --check`, Compose config 통과.
+- 근거: [DB 기반 좌석 임시 점유·만료 상태 전이](docs/project-improvement/seat-hold-expiration-state-transition.md)
+- 범위: Backend `Seat`·점유 service/API·좌석 응답·예약 transaction, `Clock`·TTL, MariaDB 동시성·시간 경계·rollback fixture와 근거 문서
+- 제외: 실제 KOPIS·PG·SMS, Frontend·README, Redis·분산 lock·scheduler·대기열·브로커, 운영 DB 자동 migration, 성능 수치 측정
+
+## 완료
+
 ### Backend Issue #61 — 결제 전 좌석 선택의 임시 점유·만료 기준선
 
 - Issue: [#61](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/61)
 - Branch: `test/61-seat-hold-expiration-baseline`
 - PR: [#62](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/62)
-- 상태: 두 번째 Reviewer Blocking의 실제 transaction 경계 수정·전체 회귀 검증 완료, 최신 CI·재검토 대기
+- squash commit: `825e06e1dc907547102b3162fedc4e9be61a38ff`
+- 상태: 완료
 - 계획 승인: 완료
 - 확인된 근거: 좌석 조회는 `reserved` snapshot만 반환하고 상태를 바꾸지 않으며, Frontend 선택도 로컬 상태에만 남는다. 따라서 서로 다른 사용자가 같은 `A1`을 동시에 선택 가능하고 검증된 예약 transaction에 먼저 진입한 한 요청만 확정된다.
 - 구현: 반복 좌석 조회가 점유를 만들지 않는 fixture와, 독립 사용자·결제 ID·멱등 key가 실제 예약 transaction의 Booking flush 직후 같은 좌석을 경쟁하는 mock 결제 fixture를 추가. 성공 결과의 사용자·결제 ID를 보존해 저장 소유권과 직접 대조
-- Reviewer: HEAD `2ee99f44618c7971f93ca5295cd46fdfc32d76f0`의 2건은 수정. HEAD `9bb4bd85309f478bd21f524f44ec21e47d1d0c6f`에서 외부 `TransactionTemplate`이 운영 경계를 넓힌 1건 Blocking을 받아 제거하고 실제 transaction 내부 Booking flush barrier로 수정
+- Reviewer: 최종 HEAD `de6a19902398fb403794beda08070f4379ca96d8`, Blocking 없음, `MERGE_READY: YES`
 - 검증: 대상 MariaDB Testcontainers 21개 invocation·Backend 전체 105개 test(실패·오류·skip 0), PowerShell 153개 assertion, k6 inspect, Compose config 통과. 경쟁 결과 성공 1·`SeatReservationConflictException` 1, Payment·Booking·Reservation·reserved seat 각 1, remaining 23
 - 범위: 기존 24석 fixture 중 `A1` 한 좌석, 서버 snapshot·검증된 예약 경계, mock 결제, 정합성 기준선과 후속 설계 조건
 - 제외: `HELD` 구현, 만료 scheduler, Redis·분산 lock·대기열, Frontend·README, 실제 KOPIS·PG·SMS, 성능 수치 주장
-
-## 완료
 
 ### Backend Issue #59 — 좌석 복합 unique 제약의 Entity schema 반영
 
