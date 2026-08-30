@@ -7,6 +7,7 @@ import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.PaymentStatus;
 import com.onticket.concert.domain.Seat;
+import com.onticket.concert.dto.SeatDto;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.ConcertDetailRepository;
@@ -56,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,6 +102,9 @@ class VerifiedReservationPaymentIntegrationTest {
 
     @Autowired
     private VerifiedReservationService verifiedReservationService;
+
+    @Autowired
+    private SeatReservationService seatReservationService;
 
     @Autowired
     private ConcertRepository concertRepository;
@@ -168,6 +173,84 @@ class VerifiedReservationPaymentIntegrationTest {
         });
         assertInventory(22, 2, 2);
         assertThat(bookingRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void repeatedSeatReadsExposeSameAvailableSeatWithoutCreatingHold() {
+        SeatDto firstRead = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
+                .filter(seat -> seat.getSeatNumber().equals("A1"))
+                .findFirst()
+                .orElseThrow();
+        SeatDto secondRead = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
+                .filter(seat -> seat.getSeatNumber().equals("A1"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(firstRead.isReserved()).isFalse();
+        assertThat(secondRead.isReserved()).isFalse();
+        assertThat(secondRead.getSeatId()).isEqualTo(firstRead.getSeatId());
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(bookingRepository.count()).isZero();
+        assertInventory(24, 0, 0);
+    }
+
+    @RepeatedTest(3)
+    void concurrentDifferentUsersForSameAvailableSeatAllowsOneVerifiedReservation() throws Exception {
+        String firstUsername = "seat-selection-user-a";
+        String secondUsername = "seat-selection-user-b";
+        String firstPaymentId = "seat-selection-payment-a";
+        String secondPaymentId = "seat-selection-payment-b";
+        CyclicBarrier paymentVerificationBarrier = new CyclicBarrier(2);
+        when(paymentVerificationPort.verify(anyString())).thenAnswer(invocation -> {
+            String paymentId = invocation.getArgument(0, String.class);
+            paymentVerificationBarrier.await(5, TimeUnit.SECONDS);
+            if (paymentId.equals(firstPaymentId)) {
+                return approved(paymentId, firstUsername, 30_000);
+            }
+            if (paymentId.equals(secondPaymentId)) {
+                return approved(paymentId, secondUsername, 30_000);
+            }
+            throw new IllegalArgumentException("예상하지 않은 결제 식별자입니다.");
+        });
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            List<Future<AttemptResult>> futures = List.of(
+                    executor.submit(() -> attemptReservation(
+                            firstUsername, firstPaymentId, "A1", "seat-selection-key-a", ready, start)),
+                    executor.submit(() -> attemptReservation(
+                            secondUsername, secondPaymentId, "A1", "seat-selection-key-b", ready, start))
+            );
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            List<AttemptResult> results = new ArrayList<>();
+            for (Future<AttemptResult> future : futures) {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            }
+
+            assertThat(results).filteredOn(AttemptResult::success).hasSize(1);
+            assertThat(results).filteredOn(result -> !result.success()).singleElement().satisfies(result -> {
+                assertThat(result.exceptionType()).isEqualTo(SeatReservationConflictException.class.getSimpleName());
+                assertThat(result.message()).isEqualTo("이미 예약된 좌석입니다.");
+            });
+            Payment payment = paymentRepository.findAll().getFirst();
+            Booking booking = bookingRepository.findAll().getFirst();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.RESERVATION_CONFIRMED);
+            assertThat(booking.getUsername()).isEqualTo(payment.getUsername());
+            assertThat(reservationRepository.findAll()).singleElement()
+                    .satisfies(reservation -> assertThat(reservation.getUsername()).isEqualTo(payment.getUsername()));
+            assertThat(paymentRepository.count()).isEqualTo(1);
+            assertThat(bookingRepository.count()).isEqualTo(1);
+            assertInventory(23, 1, 1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     @Test
@@ -476,13 +559,24 @@ class VerifiedReservationPaymentIntegrationTest {
             CountDownLatch ready,
             CountDownLatch start
     ) {
+        return attemptReservation(USERNAME, paymentId, seatNumber, idempotencyKey, ready, start);
+    }
+
+    private AttemptResult attemptReservation(
+            String username,
+            String paymentId,
+            String seatNumber,
+            String idempotencyKey,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
         ready.countDown();
         try {
             if (!start.await(5, TimeUnit.SECONDS)) {
                 return AttemptResult.failure("Timeout", "start latch timeout");
             }
             verifiedReservationService.reserve(
-                    USERNAME,
+                    username,
                     CONCERT_ID,
                     request(paymentId, seatNumber),
                     idempotencyKey

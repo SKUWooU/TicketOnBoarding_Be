@@ -529,3 +529,23 @@ Entity annotation은 Hibernate가 새로 만드는 local·test schema에는 제�
 ### 링크
 
 - [Backend Issue #59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
+
+## Issue #61 — 좌석 선택과 예약 확정 사이의 빈 상태를 기준선으로 만들기
+
+### 화면의 선택과 서버의 점유를 구분하기
+
+현재 좌석 GET은 `reserved` 여부의 순간 snapshot을 반환할 뿐 상태를 변경하지 않는다. Frontend의 좌석 클릭도 컴포넌트 로컬 상태만 바꾸므로 사용자가 좌석을 골라 결제 화면으로 이동해도 서버에는 소유자나 만료 시각이 없다. 즉 “선택됨”은 사용자 화면의 표현이고, 다른 사용자에게 선택을 막는 “임시 점유”는 아직 존재하지 않는다.
+
+### 없는 만료 기능을 시간 지연 테스트로 꾸미지 않기
+
+점유 row·상태·시계가 없으므로 `sleep` 후 만료를 주장하는 테스트는 만들 수 없다. 대신 반복 GET이 같은 `A1`을 계속 available로 노출하고 Payment·Booking·Reservation·재고를 바꾸지 않는다는 사실을 고정했다. 이어 독립 사용자 두 명을 mock 결제 검증 지점에서 barrier로 맞춰 같은 `A1`에 진입시켰다. 세 번 모두 한 요청만 확정되고 다른 요청은 `SeatReservationConflictException`으로 rollback되며 Payment·Booking·Reservation·reserved seat가 각각 하나만 남았다.
+
+### 후속 구현의 최소 계약을 먼저 정하기
+
+다음 구현은 좌석 상태 `AVAILABLE → HELD → RESERVED`, 점유 소유자, `expiresAt`, 주입 가능한 `Clock`, 조건부 DB 갱신과 만료 점유 회수, 동일 요청 멱등성, 결제 성공·실패 시 상태 전이를 함께 정의해야 한다. 먼저 DB 기반 lazy expiration/reclaim으로 단일 인스턴스 정합성을 검증하고, 실제 병목이나 다중 인스턴스 요구가 생기기 전에는 Redis·분산 lock·대기열을 도입하지 않는다.
+
+상세 fixture와 한계는 [결제 전 좌석 임시 점유·만료 부재 기준선](seat-hold-expiration-baseline.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #61](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/61)
