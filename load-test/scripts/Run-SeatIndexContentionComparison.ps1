@@ -187,20 +187,15 @@ try {
     $issue57AllRunsCompleted = $true
 } finally {
     try {
-        Set-Issue57SeatIndexVariant `
-            -Variant composite `
+        $issue59Finalization = Restore-Issue59PermanentSeatSchema `
             -DatabaseName $DatabaseName `
-            -QueryExecutor $issue57RootQueryExecutor | Out-Null
-        $issue57PermanentSchemaRestored = $true
+            -QueryExecutor $issue57RootQueryExecutor
+        $issue57FinalCleanupCompleted = $issue59Finalization.FinalCleanupCompleted
+        $issue57PermanentSchemaRestored = $issue59Finalization.PermanentCompositeSchemaRestored
     } finally {
-        try {
-            Clear-Issue57LoadTestFixtures -QueryExecutor $issue57RootQueryExecutor | Out-Null
-            $issue57FinalCleanupCompleted = $true
-        } finally {
-            $issue57BatchCompleted = $issue57AllRunsCompleted -and (Test-SeatIndexContentionBatchComplete -Records $issue57Records.ToArray() -Plan $issue57Plan)
-            $issue57ValidBatch = $issue57BatchCompleted -and $issue57PermanentSchemaRestored -and $issue57FinalCleanupCompleted
-            Write-Issue57ComparisonFiles
-        }
+        $issue57BatchCompleted = $issue57AllRunsCompleted -and (Test-SeatIndexContentionBatchComplete -Records $issue57Records.ToArray() -Plan $issue57Plan)
+        $issue57ValidBatch = $issue57BatchCompleted -and $issue57PermanentSchemaRestored -and $issue57FinalCleanupCompleted
+        Write-Issue57ComparisonFiles
     }
 }
 

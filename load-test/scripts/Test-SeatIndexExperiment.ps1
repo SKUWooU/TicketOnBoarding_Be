@@ -43,6 +43,7 @@ $issue57FakeExecutor = {
     }
     if ($Query -match '^\s*DELETE FROM reservation_payment') {
         $script:issue57FakePhysicalSeatRows = 0
+        $script:issue57FakeDuplicateGroups = 0
         return
     }
     if ($Query.Trim() -eq 'SELECT COUNT(*) FROM seat;') {
@@ -128,9 +129,18 @@ $issue57NoOpTransition = Set-Issue57SeatIndexVariant `
 Assert-Issue57Equal $issue57NoOpTransition.Changed $false 'An already-current schema must be a no-op.'
 
 Assert-Issue57Equal (Get-Issue57PhysicalSeatRowCount -QueryExecutor $issue57FakeExecutor) 2000 'Physical row evidence must expose total seat table size.'
-$issue57Cleanup = Clear-Issue57LoadTestFixtures -QueryExecutor $issue57FakeExecutor
-Assert-Issue57Equal $issue57Cleanup.LoadTestFixturesRemoved $true 'A fixture cleanup must report completion.'
-Assert-Issue57Equal $issue57Cleanup.SeatRowsAfterCleanup 0 'Fixture cleanup must leave an empty exclusive seat table.'
+$script:issue57FakeDuplicateGroups = 1
+Assert-Issue57Throws {
+    Set-Issue57SeatIndexVariant -Variant composite -DatabaseName onticket_local -QueryExecutor $issue57FakeExecutor
+} 'A duplicate current-stage fixture must fail before permanent finalization.'
+$issue59Finalization = Restore-Issue59PermanentSeatSchema `
+    -DatabaseName onticket_local `
+    -QueryExecutor $issue57FakeExecutor
+Assert-Issue57Equal $issue59Finalization.FinalCleanupCompleted $true 'Permanent schema finalization must complete fixture cleanup.'
+Assert-Issue57Equal $issue59Finalization.Cleanup.SeatRowsAfterCleanup 0 'Permanent schema finalization must leave an empty exclusive seat table.'
+Assert-Issue57Equal $issue59Finalization.PermanentCompositeSchemaRestored $true 'Permanent schema finalization must restore the composite index.'
+Assert-Issue57Equal $script:issue57FakeComposite $true 'A failed current-stage fixture must finish with the composite index present.'
+Assert-Issue57Equal $script:issue57FakeDuplicateGroups 0 'Fixture cleanup must remove duplicate load-test seat groups before index restoration.'
 Assert-Issue57Equal (Assert-Issue57MeasurementHealth -UnexpectedNonSuccessful 0 -DeadlocksDelta 0) $true 'A healthy A/B measurement must pass.'
 Assert-Issue57Throws {
     Assert-Issue57MeasurementHealth -UnexpectedNonSuccessful 1 -DeadlocksDelta 0

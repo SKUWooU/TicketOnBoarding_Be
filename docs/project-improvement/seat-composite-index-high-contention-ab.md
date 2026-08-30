@@ -139,7 +139,7 @@ Issue #57 병합 시점에는 복합 unique index가 제품 schema에 적용되�
 4. 같은 50·100 RPS A/B 또는 적용 후 회귀로 성능·정합성을 재확인한다.
 5. 전체 Flyway baseline 전환은 복합 index 한 건과 분리한다.
 
-Issue #59 이후 A/B runner는 비교를 위해 일시적으로 무인덱스 variant를 만들 수 있지만 `finally`에서 영구 composite schema로 복원한다. 기존 `i57-fixed-02` manifest의 `CurrentSchemaRestored=true`는 당시 schema 기준의 역사적 증거이며 수정하지 않는다.
+Issue #59 이후 A/B runner는 비교를 위해 일시적으로 무인덱스 variant를 만들 수 있지만 `finally`에서 load-test fixture를 먼저 정리하고 영구 composite schema로 복원한다. 이 순서는 실패 run에 중복 fixture가 남아 index 생성을 막는 경로를 제거하며, 실제 중복 fake 상태의 복원 선행 실패→cleanup→composite 생성으로 검증한다. 기존 `i57-fixed-02` manifest의 `CurrentSchemaRestored=true`는 당시 schema 기준의 역사적 증거이며 수정하지 않는다.
 
 ## 8. 자동 검증
 

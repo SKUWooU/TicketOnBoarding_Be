@@ -123,10 +123,6 @@ Assert-Issue57Near $issue57Comparison.DbRowLockTimeMsDelta.ImprovementPercent 98
 Assert-Issue57Equal $issue57Comparison.ConcertTimeDecrementAverageMilliseconds.CurrentMedian 0.3 'Current counter statement average must be preserved.'
 Assert-Issue57Equal $issue57Comparison.ConcertTimeDecrementAverageMilliseconds.CompositeMedian 0.3 'Composite counter statement average must be preserved.'
 
-$issue59RunnerSource = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'Run-SeatIndexContentionComparison.ps1')
-Assert-Issue57Equal ($issue59RunnerSource.Contains('PermanentCompositeSchemaRestored')) $true 'The A/B manifest must report permanent composite schema restoration.'
-Assert-Issue57Equal ($issue59RunnerSource -match '(?s)finally\s*\{\s*try\s*\{\s*Set-Issue57SeatIndexVariant\s*`\s*-Variant composite') $true 'The A/B runner finally block must restore the permanent composite schema.'
-
 $issue57Mismatched = $issue57Records[0].PSObject.Copy()
 $issue57Mismatched.Summary = $issue57Records[0].Summary.PSObject.Copy()
 $issue57Mismatched.Summary.SeatIndexExperiment = [pscustomobject]@{ Variant = 'composite' }

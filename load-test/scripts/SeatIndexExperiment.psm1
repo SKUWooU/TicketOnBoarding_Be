@@ -243,6 +243,36 @@ ON seat (concert_time_id);
     }
 }
 
+function Restore-Issue59PermanentSeatSchema {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidatePattern('^[A-Za-z0-9_]+$')]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$QueryExecutor
+    )
+
+    $issue59Cleanup = $null
+    $issue59Transition = $null
+    try {
+        $issue59Cleanup = Clear-Issue57LoadTestFixtures -QueryExecutor $QueryExecutor
+    } finally {
+        $issue59Transition = Set-Issue57SeatIndexVariant `
+            -Variant composite `
+            -DatabaseName $DatabaseName `
+            -QueryExecutor $QueryExecutor
+    }
+
+    [pscustomobject]@{
+        FinalCleanupCompleted = $issue59Cleanup.LoadTestFixturesRemoved -and $issue59Cleanup.SeatRowsAfterCleanup -eq 0
+        PermanentCompositeSchemaRestored = $issue59Transition.Variant -eq 'composite'
+        Cleanup = $issue59Cleanup
+        Transition = $issue59Transition
+    }
+}
+
 function Get-Issue57SeatIndexEvidence {
     [CmdletBinding()]
     param(
@@ -317,5 +347,6 @@ Export-ModuleMember -Function @(
     'Get-Issue57PhysicalSeatRowCount',
     'Assert-Issue57MeasurementHealth',
     'Set-Issue57SeatIndexVariant',
+    'Restore-Issue59PermanentSeatSchema',
     'Get-Issue57SeatIndexEvidence'
 )

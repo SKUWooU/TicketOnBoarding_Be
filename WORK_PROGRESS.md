@@ -18,12 +18,13 @@
 - Issue: [#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
 - Branch: `perf/59-seat-unique-constraint`
 - PR: [#60](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/60)
-- 상태: 구현·로컬 검증 완료, Backend CI·Reviewer 검토 대기
+- 상태: Reviewer Blocking의 A/B 실패 정리 순서 수정·로컬 검증 완료, 최신 CI·재검토 대기
 - 계획 승인: 완료
 - 확인된 근거: Issue #57의 고정 2,000석 A/B에서 복합 unique index가 좌석 잠금 탐색을 2,000행에서 1행으로 바꾸고 100 RPS p95를 3,064.39ms에서 143.41ms로 낮춤
 - 계획: `Seat` Entity 신규 schema에 `(concert_time_id, seat_number)` unique 제약을 선언하고 동일 회차 중복 거부·다른 회차 동일 번호 허용·실행계획·예약 회귀를 MariaDB Testcontainers로 검증
-- 구현: Entity schema 제약, 동일 회차 중복 거부·다른 회차 동일 번호 허용, 기존 migration 실패 기준선 보존, A/B runner 종료 시 영구 composite schema 복원
-- 검증: 대상 MariaDB Testcontainers 30개, Backend 전체 103개 test(실패·오류·skip 0), PowerShell 151개 assertion 통과
+- 구현: Entity schema 제약, 동일 회차 중복 거부·다른 회차 동일 번호 허용, 기존 migration 실패 기준선 보존, A/B runner 종료 시 load-test fixture 정리 후 영구 composite schema 복원
+- 검증: 대상 MariaDB Testcontainers 30개, Backend 전체 103개 test(실패·오류·skip 0), 중복 fixture로 복원 선행 실패→cleanup→composite 복원을 포함한 PowerShell 153개 assertion 통과
+- Reviewer: 구현 HEAD `650e8bb9ecd71acb32bc31ed8ac4b5248e0fb51e`에서 실패 경로의 schema 복원 순서 1건 Blocking; 수정 후 재검토 대기
 - 범위: Hibernate가 생성하는 신규 schema, MariaDB fixture, 좌석 식별 무결성·잠금 query plan·Backend 회귀
 - 제외: 기존 운영 DB 자동 migration, 전체 Flyway baseline, 실제 KOPIS·PG·SMS, Frontend·README, 2,000석 A/B 재측정, 분산 기술
 

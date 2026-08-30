@@ -518,7 +518,9 @@ Issue #55에서 좌석 잠금 SELECT의 대기와 약 2,000행 탐색을 확인�
 
 Issue #57은 `(concert_time_id, seat_number)` index가 좌석 잠금 조회를 2,000행 탐색에서 1행 식별로 바꾸고 100 RPS p95와 connection 대기를 낮춘다는 사실을 확인했다. 좌석 번호는 공연 전체에서 유일하지 않고 회차 안에서만 유일하므로 같은 column 조합은 조회 최적화뿐 아니라 좌석 식별 불변식이기도 하다.
 
-`Seat` Entity의 `@Table`에 이름이 고정된 복합 unique 제약을 선언했다. 작은 fixture에서 같은 회차 `A1` 재삽입은 `23000/1062`로 거부되고 기존 row 1개가 유지됐으며, 다른 회차의 `A1`은 허용됐다. 기존 24석 fixture의 `SHOW INDEX`는 `concert_time_id, seat_number` 순서와 unique 속성을, 잠금 SQL `EXPLAIN`은 `const/rows=1`을 확인했다. canonical 복수 좌석 예약을 포함한 대상 30개·전체 Backend 103개 test와 PowerShell 151개 assertion도 통과했다. 2,000석 A/B는 이미 성능 효과를 측정했으므로 같은 조건을 불필요하게 반복하지 않았다.
+`Seat` Entity의 `@Table`에 이름이 고정된 복합 unique 제약을 선언했다. 작은 fixture에서 같은 회차 `A1` 재삽입은 `23000/1062`로 거부되고 기존 row 1개가 유지됐으며, 다른 회차의 `A1`은 허용됐다. 기존 24석 fixture의 `SHOW INDEX`는 `concert_time_id, seat_number` 순서와 unique 속성을, 잠금 SQL `EXPLAIN`은 `const/rows=1`을 확인했다. canonical 복수 좌석 예약을 포함한 대상 30개·전체 Backend 103개 test도 통과했다. 2,000석 A/B는 이미 성능 효과를 측정했으므로 같은 조건을 불필요하게 반복하지 않았다.
+
+첫 A/B 종료 구현은 composite 복원 뒤 fixture를 정리했다. Reviewer 검토에서 무인덱스 단계에 중복 fixture가 생기면 복원이 먼저 실패하고, 이후 cleanup이 성공해도 index 생성을 재시도하지 않는 경로가 확인됐다. 종료 절차를 load-test fixture cleanup 후 composite 복원 순서의 공용 함수로 옮겼고, 실제 fake 상태에서 복원 선행 실패→중복 제거→index 생성까지 검증했다. 수정 후 PowerShell 검증은 총 153개 assertion이다.
 
 ### Entity schema 적용과 기존 DB migration을 구분하기
 
