@@ -87,7 +87,7 @@ class SeatReservationConcurrencyIntegrationTest {
     private static final String CONCERT_ID = "BASELINE-CONCERT";
     private static final String USERNAME = "baseline-user";
     private static final String SEAT_COMPOSITE_UNIQUE_INDEX = "uk_seat_concert_time_number";
-    private static final String SEAT_FOREIGN_KEY_SUPPORT_INDEX = "idx_seat_concert_time_test_restore";
+    private static final String SEAT_MIGRATION_SUPPORT_INDEX = "idx_seat_concert_time_migration_test";
     private static final AtomicReference<CyclicBarrier> AGGREGATE_READ_BARRIER = new AtomicReference<>();
     private static final AtomicReference<CyclicBarrier> FIRST_SEAT_LOCK_BARRIER = new AtomicReference<>();
     private static final AtomicReference<CyclicBarrier> IDEMPOTENCY_LOOKUP_BARRIER = new AtomicReference<>();
@@ -477,18 +477,12 @@ class SeatReservationConcurrencyIntegrationTest {
 
     @RepeatedTest(3)
     void indexedOppositeSeatOrderConcurrentReservationUsesCanonicalOrderWithoutDeadlock() throws Exception {
-        createSeatCompositeUniqueIndex();
         SEAT_LOCK_QUERY_ORDER.clear();
 
-        List<LockAttemptResult> results;
-        try {
-            results = runRequestsConcurrently(List.of(
-                    List.of("A1", "A2"),
-                    List.of("A2", "A1")
-            ));
-        } finally {
-            dropSeatCompositeUniqueIndex();
-        }
+        List<LockAttemptResult> results = runRequestsConcurrently(List.of(
+                List.of("A1", "A2"),
+                List.of("A2", "A1")
+        ));
 
         InventorySnapshot snapshot = inventorySnapshot();
         List<List<String>> lockQueryOrders = SEAT_LOCK_QUERY_ORDER.values().stream()
@@ -605,10 +599,13 @@ class SeatReservationConcurrencyIntegrationTest {
     }
 
     @Test
-    void seatLockQueryIndexBaseline() {
+    void entitySchemaCreatesCompositeUniqueIndexForSeatLockQuery() {
         List<Map<String, Object>> indexes = jdbcTemplate.queryForList("SHOW INDEX FROM seat");
-        List<String> indexedColumns = indexes.stream()
+        List<Map<String, Object>> compositeIndexRows = indexes.stream()
+                .filter(row -> SEAT_COMPOSITE_UNIQUE_INDEX.equals(row.get("Key_name")))
                 .sorted(Comparator.comparingInt(row -> ((Number) row.get("Seq_in_index")).intValue()))
+                .toList();
+        List<String> indexedColumns = compositeIndexRows.stream()
                 .map(row -> String.valueOf(row.get("Column_name")))
                 .toList();
 
@@ -618,85 +615,88 @@ class SeatReservationConcurrencyIntegrationTest {
                 "A1"
         );
 
-        System.out.printf("SEAT_INDEX_BASELINE columns=%s explain=%s%n", indexedColumns, explain);
+        System.out.printf("SEAT_ENTITY_COMPOSITE_INDEX columns=%s explain=%s%n", indexedColumns, explain);
 
-        assertThat(indexedColumns).contains("id", "concert_time_id");
-        assertThat(indexedColumns).doesNotContain("seat_number");
+        assertThat(indexedColumns).containsExactly("concert_time_id", "seat_number");
+        assertThat(compositeIndexRows)
+                .allSatisfy(row -> assertThat(((Number) row.get("Non_unique")).intValue()).isZero());
         assertThat(explain).hasSize(1);
-        assertThat(explain.getFirst().get("type")).isEqualTo("ALL");
-        assertThat(explain.getFirst().get("key")).isNull();
+        assertThat(explain.getFirst().get("type")).isEqualTo("const");
+        assertThat(explain.getFirst().get("key")).isEqualTo(SEAT_COMPOSITE_UNIQUE_INDEX);
+        assertThat(Integer.parseInt(String.valueOf(explain.getFirst().get("rows")))).isEqualTo(1);
     }
 
     @Test
-    void compositeUniqueIndexChangesSeatLockQueryPlan() {
-        createSeatCompositeUniqueIndex();
-
-        try {
-            List<Map<String, Object>> indexes = jdbcTemplate.queryForList("SHOW INDEX FROM seat");
-            List<Map<String, Object>> compositeIndexRows = indexes.stream()
-                    .filter(row -> SEAT_COMPOSITE_UNIQUE_INDEX.equals(row.get("Key_name")))
-                    .sorted(Comparator.comparingInt(row -> ((Number) row.get("Seq_in_index")).intValue()))
-                    .toList();
-            List<String> compositeIndexColumns = compositeIndexRows.stream()
-                    .map(row -> String.valueOf(row.get("Column_name")))
-                    .toList();
-
-            List<Map<String, Object>> explain = jdbcTemplate.queryForList(
-                    "EXPLAIN SELECT * FROM seat WHERE concert_time_id = ? AND seat_number = ? FOR UPDATE",
-                    concertTimeId,
-                    "A1"
-            );
-
-            System.out.printf(
-                    "SEAT_COMPOSITE_INDEX columns=%s explain=%s%n",
-                    compositeIndexColumns,
-                    explain
-            );
-
-            assertThat(compositeIndexColumns).containsExactly("concert_time_id", "seat_number");
-            assertThat(compositeIndexRows)
-                    .allSatisfy(row -> assertThat(((Number) row.get("Non_unique")).intValue()).isZero());
-            assertThat(explain).hasSize(1);
-            assertThat(explain.getFirst().get("type")).isEqualTo("const");
-            assertThat(explain.getFirst().get("key")).isEqualTo(SEAT_COMPOSITE_UNIQUE_INDEX);
-            assertThat(Integer.parseInt(String.valueOf(explain.getFirst().get("rows")))).isEqualTo(1);
-
-            DataAccessException duplicateInsertFailure = catchThrowableOfType(
-                    () -> insertSeat("A1"),
-                    DataAccessException.class
-            );
-            assertSqlFailure(duplicateInsertFailure, "23000", 1062);
-            assertThat(countSeats("A1")).isEqualTo(1);
-        } finally {
-            dropSeatCompositeUniqueIndex();
-        }
-    }
-
-    @Test
-    void duplicateSeatIdentityBlocksUniqueIndexMigrationWithoutChangingData() {
-        insertSeat("A1");
-
-        List<Map<String, Object>> duplicates = jdbcTemplate.queryForList("""
-                SELECT concert_time_id, seat_number, COUNT(*) AS duplicate_count
-                FROM seat
-                GROUP BY concert_time_id, seat_number
-                HAVING COUNT(*) > 1
-                """);
-
-        assertThat(duplicates).singleElement().satisfies(duplicate -> {
-            assertThat(((Number) duplicate.get("concert_time_id")).longValue()).isEqualTo(concertTimeId);
-            assertThat(duplicate.get("seat_number")).isEqualTo("A1");
-            assertThat(((Number) duplicate.get("duplicate_count")).intValue()).isEqualTo(2);
-        });
-
-        DataAccessException migrationFailure = catchThrowableOfType(
-                this::createSeatCompositeUniqueIndex,
+    void entitySchemaRejectsDuplicateSeatIdentityWithinSameConcertTime() {
+        DataAccessException duplicateInsertFailure = catchThrowableOfType(
+                () -> insertSeat(concertTimeId, "A1"),
                 DataAccessException.class
         );
 
-        assertSqlFailure(migrationFailure, "23000", 1062);
-        assertThat(hasSeatCompositeUniqueIndex()).isFalse();
-        assertThat(countSeats("A1")).isEqualTo(2);
+        assertSqlFailure(duplicateInsertFailure, "23000", 1062);
+        assertThat(countSeats(concertTimeId, "A1")).isEqualTo(1);
+    }
+
+    @Test
+    void entitySchemaAllowsSameSeatNumberInDifferentConcertTimes() {
+        Concert concert = concertRepository.findById(CONCERT_ID).orElseThrow();
+        ConcertTime secondConcertTime = new ConcertTime();
+        secondConcertTime.setConcert(concert);
+        secondConcertTime.setDate(LocalDate.of(2030, 1, 11));
+        secondConcertTime.setDayOfWeek("FRIDAY");
+        secondConcertTime.setStartTime(LocalTime.of(19, 0));
+        secondConcertTime.setSeatAmount(1);
+        secondConcertTime = concertTimeRepository.saveAndFlush(secondConcertTime);
+
+        insertSeat(secondConcertTime.getId(), "A1");
+
+        assertThat(countSeats(concertTimeId, "A1")).isEqualTo(1);
+        assertThat(countSeats(secondConcertTime.getId(), "A1")).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateSeatIdentityStillBlocksExistingSchemaMigrationWithoutChangingData() {
+        dropSeatCompositeUniqueIndexForMigrationBaseline();
+        boolean duplicateInserted = false;
+
+        try {
+            insertSeat(concertTimeId, "A1");
+            duplicateInserted = true;
+
+            List<Map<String, Object>> duplicates = jdbcTemplate.queryForList("""
+                    SELECT concert_time_id, seat_number, COUNT(*) AS duplicate_count
+                    FROM seat
+                    GROUP BY concert_time_id, seat_number
+                    HAVING COUNT(*) > 1
+                    """);
+
+            assertThat(duplicates).singleElement().satisfies(duplicate -> {
+                assertThat(((Number) duplicate.get("concert_time_id")).longValue()).isEqualTo(concertTimeId);
+                assertThat(duplicate.get("seat_number")).isEqualTo("A1");
+                assertThat(((Number) duplicate.get("duplicate_count")).intValue()).isEqualTo(2);
+            });
+
+            DataAccessException migrationFailure = catchThrowableOfType(
+                    this::createSeatCompositeUniqueIndex,
+                    DataAccessException.class
+            );
+
+            assertSqlFailure(migrationFailure, "23000", 1062);
+            assertThat(hasSeatCompositeUniqueIndex()).isFalse();
+            assertThat(countSeats(concertTimeId, "A1")).isEqualTo(2);
+        } finally {
+            if (duplicateInserted) {
+                jdbcTemplate.update(
+                        "DELETE FROM seat WHERE concert_time_id = ? AND seat_number = ? ORDER BY id DESC LIMIT 1",
+                        concertTimeId,
+                        "A1"
+                );
+            }
+            if (!hasSeatCompositeUniqueIndex()) {
+                createSeatCompositeUniqueIndex();
+            }
+            jdbcTemplate.execute("DROP INDEX %s ON seat".formatted(SEAT_MIGRATION_SUPPORT_INDEX));
+        }
     }
 
     private List<AttemptResult> runConcurrently(List<String> seatNumbers) throws Exception {
@@ -843,6 +843,23 @@ class SeatReservationConcurrencyIntegrationTest {
                 .hasMessage(message);
     }
 
+    private void insertSeat(Long targetConcertTimeId, String seatNumber) {
+        jdbcTemplate.update(
+                "INSERT INTO seat (concert_time_id, reserved, seat_number) VALUES (?, false, ?)",
+                targetConcertTimeId,
+                seatNumber
+        );
+    }
+
+    private int countSeats(Long targetConcertTimeId, String seatNumber) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM seat WHERE concert_time_id = ? AND seat_number = ?",
+                Integer.class,
+                targetConcertTimeId,
+                seatNumber
+        );
+    }
+
     private void createSeatCompositeUniqueIndex() {
         jdbcTemplate.execute("""
                 CREATE UNIQUE INDEX %s
@@ -850,21 +867,12 @@ class SeatReservationConcurrencyIntegrationTest {
                 """.formatted(SEAT_COMPOSITE_UNIQUE_INDEX));
     }
 
-    private void insertSeat(String seatNumber) {
-        jdbcTemplate.update(
-                "INSERT INTO seat (concert_time_id, reserved, seat_number) VALUES (?, false, ?)",
-                concertTimeId,
-                seatNumber
-        );
-    }
-
-    private int countSeats(String seatNumber) {
-        return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM seat WHERE concert_time_id = ? AND seat_number = ?",
-                Integer.class,
-                concertTimeId,
-                seatNumber
-        );
+    private void dropSeatCompositeUniqueIndexForMigrationBaseline() {
+        jdbcTemplate.execute("""
+                CREATE INDEX %s
+                ON seat (concert_time_id)
+                """.formatted(SEAT_MIGRATION_SUPPORT_INDEX));
+        jdbcTemplate.execute("DROP INDEX %s ON seat".formatted(SEAT_COMPOSITE_UNIQUE_INDEX));
     }
 
     private boolean hasSeatCompositeUniqueIndex() {
@@ -884,18 +892,6 @@ class SeatReservationConcurrencyIntegrationTest {
                 sqlException.getErrorCode(),
                 sqlException.getMessage()
         );
-    }
-
-    private void dropSeatCompositeUniqueIndex() {
-        boolean supportIndexExists = jdbcTemplate.queryForList("SHOW INDEX FROM seat").stream()
-                .anyMatch(row -> SEAT_FOREIGN_KEY_SUPPORT_INDEX.equals(row.get("Key_name")));
-        if (!supportIndexExists) {
-            jdbcTemplate.execute("""
-                    CREATE INDEX %s
-                    ON seat (concert_time_id)
-                    """.formatted(SEAT_FOREIGN_KEY_SUPPORT_INDEX));
-        }
-        jdbcTemplate.execute("DROP INDEX %s ON seat".formatted(SEAT_COMPOSITE_UNIQUE_INDEX));
     }
 
     private void assertReservationsMatchAttemptResults(List<LockAttemptResult> results) {

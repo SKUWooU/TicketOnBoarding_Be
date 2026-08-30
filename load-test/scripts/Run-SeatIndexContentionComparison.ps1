@@ -59,7 +59,7 @@ New-Item -ItemType Directory -Path $issue57OutputDirectory -Force | Out-Null
 
 $issue57Plan = @(New-SeatIndexContentionComparisonPlan -DurationSeconds $DurationSeconds -Repeats $Repeats -TotalSeats 2000)
 $issue57Records = New-Object 'Collections.Generic.List[object]'
-$issue57SchemaRestored = $false
+$issue57PermanentSchemaRestored = $false
 $issue57FinalCleanupCompleted = $false
 $issue57AllRunsCompleted = $false
 $issue57BatchCompleted = $false
@@ -116,7 +116,7 @@ function Write-Issue57ComparisonFiles {
         ExpectedRecordCount = $issue57Plan.Count
         BatchCompleted = $issue57BatchCompleted
         ValidBatch = $issue57ValidBatch
-        CurrentSchemaRestored = $issue57SchemaRestored
+        PermanentCompositeSchemaRestored = $issue57PermanentSchemaRestored
         FinalCleanupCompleted = $issue57FinalCleanupCompleted
         Records = $issue57Records.ToArray()
     }
@@ -188,17 +188,17 @@ try {
 } finally {
     try {
         Set-Issue57SeatIndexVariant `
-            -Variant current `
+            -Variant composite `
             -DatabaseName $DatabaseName `
             -QueryExecutor $issue57RootQueryExecutor | Out-Null
-        $issue57SchemaRestored = $true
+        $issue57PermanentSchemaRestored = $true
     } finally {
         try {
             Clear-Issue57LoadTestFixtures -QueryExecutor $issue57RootQueryExecutor | Out-Null
             $issue57FinalCleanupCompleted = $true
         } finally {
             $issue57BatchCompleted = $issue57AllRunsCompleted -and (Test-SeatIndexContentionBatchComplete -Records $issue57Records.ToArray() -Plan $issue57Plan)
-            $issue57ValidBatch = $issue57BatchCompleted -and $issue57SchemaRestored -and $issue57FinalCleanupCompleted
+            $issue57ValidBatch = $issue57BatchCompleted -and $issue57PermanentSchemaRestored -and $issue57FinalCleanupCompleted
             Write-Issue57ComparisonFiles
         }
     }

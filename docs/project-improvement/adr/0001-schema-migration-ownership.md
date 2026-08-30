@@ -38,6 +38,12 @@ test `ddl-auto=create`에서는 제약이 생기지만 운영 `ddl-auto` 정책�
 
 운영 DB에는 아직 복합 unique index가 적용되지 않는다. 대신 중복 사전 점검, DDL 실패 상태와 다음 migration의 필수 조건이 검증된다. 후속 Issue는 전체 baseline DDL이라는 더 큰 범위를 명시적으로 다루게 된다.
 
+## Issue #59 부분 적용
+
+Issue #57의 고경합 A/B로 복합 unique index의 효과가 확인된 뒤, Issue #59에서는 `Seat` Entity가 생성하는 신규 schema에 같은 이름과 column 순서의 unique 제약을 선언한다. 이는 disposable local·test schema와 향후 신규 Hibernate 생성 schema의 도메인 불변식을 코드에 남기는 최소 적용이다.
+
+이 결정은 Flyway 보류를 해제하지 않는다. 이미 존재하는 DB에는 Entity annotation이 migration 이력을 제공하지 않으며, `ddl-auto=validate` 환경에서도 제약을 자동 생성하지 않는다. 기존 DB 적용에는 여전히 전체 schema baseline, 실제 schema diff, 중복 사전 점검과 승인된 정리 절차가 필요하다.
+
 ## 적용 범위와 한계
 
 결정은 현재 저장소의 schema 정보와 MariaDB 10.11.8 fixture에 한정한다. 실제 운영 schema dump나 배포 설정이 제공되면 기존 DB 전략을 다시 검토한다.
@@ -53,4 +59,5 @@ test `ddl-auto=create`에서는 제약이 생기지만 운영 `ddl-auto` 정책�
 
 - [Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
 - [PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
+- [Issue #59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
 - [좌석 복합 unique index migration 안전성 기준선](../seat-unique-index-migration-baseline.md)

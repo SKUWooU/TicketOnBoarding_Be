@@ -85,6 +85,12 @@ index 생성 후 같은 회차에 `A1`을 다시 insert하면 SQL state `23000`,
 5. 중복 발견 시 Reservation의 `seat_id`, reserved 상태와 좌석 식별을 확인한 수동 정리 정책이 있어야 한다.
 6. 복합 unique index 적용 후 예약 동시성 19개 test invocation과 EXPLAIN을 재검증한다.
 
+## Issue #59 적용 경계
+
+Issue #57의 2,000석 고경합 A/B 근거 이후 Issue #59는 위 조건 중 신규 Hibernate 생성 schema의 표현을 먼저 적용한다. `Seat` Entity의 `(concert_time_id, seat_number)` unique 제약으로 신규 local·test schema는 동일 회차 중복 좌석을 DB에서 거부하고 좌석 잠금 query에 복합 index를 제공한다.
+
+기존 DB migration 조건은 그대로 남는다. Entity annotation은 기존 table을 안전하게 변경하는 versioned migration이 아니므로, 전체 Flyway baseline과 실제 schema diff 없이 운영 적용 완료로 기록하지 않는다.
+
 ## 한계
 
 이 결과는 가상 좌석 25행의 migration 정확성 기준선이다. 운영 데이터의 중복 여부, DDL 실행 시간, metadata lock 시간이나 무중단 적용 가능성을 의미하지 않는다. 대용량 운영 테이블의 online DDL 전략은 실제 row 수와 쓰기 부하가 확인된 뒤 결정한다.
@@ -93,6 +99,7 @@ index 생성 후 같은 회차에 `A1`을 다시 insert하면 SQL state `23000`,
 
 - [Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
 - [PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
+- [Issue #59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
 - [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)
 - [복수 좌석 canonical 잠금 순서와 요청 검증](canonical-seat-lock-order.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
