@@ -6,29 +6,40 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `e4917b4ec9b547de264048f772756a72b04ea25f` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `14ccb7780e6405e517e551679820615e7881aae3` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #61 — 결제 전 좌석 선택의 임시 점유·만료 기준선
+
+- Issue: [#61](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/61)
+- Branch: `test/61-seat-hold-expiration-baseline`
+- PR: [#62](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/62)
+- 상태: 두 번째 Reviewer Blocking의 실제 transaction 경계 수정·전체 회귀 검증 완료, 최신 CI·재검토 대기
+- 계획 승인: 완료
+- 확인된 근거: 좌석 조회는 `reserved` snapshot만 반환하고 상태를 바꾸지 않으며, Frontend 선택도 로컬 상태에만 남는다. 따라서 서로 다른 사용자가 같은 `A1`을 동시에 선택 가능하고 검증된 예약 transaction에 먼저 진입한 한 요청만 확정된다.
+- 구현: 반복 좌석 조회가 점유를 만들지 않는 fixture와, 독립 사용자·결제 ID·멱등 key가 실제 예약 transaction의 Booking flush 직후 같은 좌석을 경쟁하는 mock 결제 fixture를 추가. 성공 결과의 사용자·결제 ID를 보존해 저장 소유권과 직접 대조
+- Reviewer: HEAD `2ee99f44618c7971f93ca5295cd46fdfc32d76f0`의 2건은 수정. HEAD `9bb4bd85309f478bd21f524f44ec21e47d1d0c6f`에서 외부 `TransactionTemplate`이 운영 경계를 넓힌 1건 Blocking을 받아 제거하고 실제 transaction 내부 Booking flush barrier로 수정
+- 검증: 대상 MariaDB Testcontainers 21개 invocation·Backend 전체 105개 test(실패·오류·skip 0), PowerShell 153개 assertion, k6 inspect, Compose config 통과. 경쟁 결과 성공 1·`SeatReservationConflictException` 1, Payment·Booking·Reservation·reserved seat 각 1, remaining 23
+- 범위: 기존 24석 fixture 중 `A1` 한 좌석, 서버 snapshot·검증된 예약 경계, mock 결제, 정합성 기준선과 후속 설계 조건
+- 제외: `HELD` 구현, 만료 scheduler, Redis·분산 lock·대기열, Frontend·README, 실제 KOPIS·PG·SMS, 성능 수치 주장
+
+## 완료
+
 ### Backend Issue #59 — 좌석 복합 unique 제약의 Entity schema 반영
 
 - Issue: [#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
-- Branch: `perf/59-seat-unique-constraint`
 - PR: [#60](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/60)
-- 상태: Reviewer Blocking의 A/B 실패 정리 순서 수정·로컬 검증 완료, 최신 CI·재검토 대기
+- squash commit: `14ccb7780e6405e517e551679820615e7881aae3`
+- 상태: 완료
 - 계획 승인: 완료
-- 확인된 근거: Issue #57의 고정 2,000석 A/B에서 복합 unique index가 좌석 잠금 탐색을 2,000행에서 1행으로 바꾸고 100 RPS p95를 3,064.39ms에서 143.41ms로 낮춤
-- 계획: `Seat` Entity 신규 schema에 `(concert_time_id, seat_number)` unique 제약을 선언하고 동일 회차 중복 거부·다른 회차 동일 번호 허용·실행계획·예약 회귀를 MariaDB Testcontainers로 검증
-- 구현: Entity schema 제약, 동일 회차 중복 거부·다른 회차 동일 번호 허용, 기존 migration 실패 기준선 보존, A/B runner 종료 시 load-test fixture 정리 후 영구 composite schema 복원
-- 검증: 대상 MariaDB Testcontainers 30개, Backend 전체 103개 test(실패·오류·skip 0), 중복 fixture로 복원 선행 실패→cleanup→composite 복원을 포함한 PowerShell 153개 assertion 통과
-- Reviewer: 구현 HEAD `650e8bb9ecd71acb32bc31ed8ac4b5248e0fb51e`에서 실패 경로의 schema 복원 순서 1건 Blocking; 수정 후 재검토 대기
-- 범위: Hibernate가 생성하는 신규 schema, MariaDB fixture, 좌석 식별 무결성·잠금 query plan·Backend 회귀
-- 제외: 기존 운영 DB 자동 migration, 전체 Flyway baseline, 실제 KOPIS·PG·SMS, Frontend·README, 2,000석 A/B 재측정, 분산 기술
-
-## 완료
+- 구현: `Seat` 신규 schema에 `(concert_time_id, seat_number)` unique 제약을 선언하고 A/B runner 종료 시 fixture 정리 후 composite schema를 복원
+- 검증: MariaDB 대상 30개·Backend 전체 103개 test, PowerShell 153개 assertion, Backend CI 통과
+- Reviewer: 최종 HEAD `12e3e00970c9aed19b5e985c41029b669ae38124`, Blocking 없음, `MERGE_READY: YES`
+- 한계: 기존 DB versioned migration과 전체 Flyway baseline은 별도 Issue로 보류
 
 ### Backend Issue #57 — 좌석 잠금 복합 unique index의 고경합 A/B 검증
 

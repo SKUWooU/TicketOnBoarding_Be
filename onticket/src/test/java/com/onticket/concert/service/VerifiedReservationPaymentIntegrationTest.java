@@ -7,6 +7,7 @@ import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.PaymentStatus;
 import com.onticket.concert.domain.Seat;
+import com.onticket.concert.dto.SeatDto;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.ConcertDetailRepository;
@@ -33,6 +34,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -56,6 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,7 +74,7 @@ import static org.mockito.Mockito.when;
         VerifiedReservationService.class,
         VerifiedReservationTransactionService.class,
         VirtualTicketPricePolicy.class,
-        VerifiedReservationPaymentIntegrationTest.BookingRepositoryBarrierConfiguration.class
+        VerifiedReservationPaymentIntegrationTest.RepositoryBarrierConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -83,6 +86,8 @@ class VerifiedReservationPaymentIntegrationTest {
     private static final LocalDateTime APPROVED_AT = LocalDateTime.of(2030, 1, 1, 12, 0);
     private static final AtomicReference<CyclicBarrier> BOOKING_LOOKUP_BARRIER = new AtomicReference<>();
     private static final AtomicInteger BOOKING_LOOKUP_COUNT = new AtomicInteger();
+    private static final AtomicReference<CyclicBarrier> BOOKING_SAVE_BARRIER = new AtomicReference<>();
+    private static final AtomicInteger BOOKING_SAVE_COUNT = new AtomicInteger();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -100,6 +105,9 @@ class VerifiedReservationPaymentIntegrationTest {
 
     @Autowired
     private VerifiedReservationService verifiedReservationService;
+
+    @Autowired
+    private SeatReservationService seatReservationService;
 
     @Autowired
     private ConcertRepository concertRepository;
@@ -138,6 +146,8 @@ class VerifiedReservationPaymentIntegrationTest {
         deleteFixture();
         BOOKING_LOOKUP_BARRIER.set(null);
         BOOKING_LOOKUP_COUNT.set(0);
+        BOOKING_SAVE_BARRIER.set(null);
+        BOOKING_SAVE_COUNT.set(0);
         concertTimeId = createFixture();
     }
 
@@ -168,6 +178,92 @@ class VerifiedReservationPaymentIntegrationTest {
         });
         assertInventory(22, 2, 2);
         assertThat(bookingRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void repeatedSeatReadsExposeSameAvailableSeatWithoutCreatingHold() {
+        SeatDto firstRead = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
+                .filter(seat -> seat.getSeatNumber().equals("A1"))
+                .findFirst()
+                .orElseThrow();
+        SeatDto secondRead = seatReservationService.getSeatsByConcertTimeId(concertTimeId).stream()
+                .filter(seat -> seat.getSeatNumber().equals("A1"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(firstRead.isReserved()).isFalse();
+        assertThat(secondRead.isReserved()).isFalse();
+        assertThat(secondRead.getSeatId()).isEqualTo(firstRead.getSeatId());
+        assertThat(paymentRepository.count()).isZero();
+        assertThat(bookingRepository.count()).isZero();
+        assertInventory(24, 0, 0);
+    }
+
+    @Test
+    void concurrentDifferentUsersForSameAvailableSeatAllowsOneVerifiedReservation() throws Exception {
+        String firstUsername = "seat-selection-user-a";
+        String secondUsername = "seat-selection-user-b";
+        String firstPaymentId = "seat-selection-payment-a";
+        String secondPaymentId = "seat-selection-payment-b";
+        BOOKING_SAVE_BARRIER.set(new CyclicBarrier(2));
+        when(paymentVerificationPort.verify(anyString())).thenAnswer(invocation -> {
+            String paymentId = invocation.getArgument(0, String.class);
+            if (paymentId.equals(firstPaymentId)) {
+                return approved(paymentId, firstUsername, 30_000);
+            }
+            if (paymentId.equals(secondPaymentId)) {
+                return approved(paymentId, secondUsername, 30_000);
+            }
+            throw new IllegalArgumentException("예상하지 않은 결제 식별자입니다.");
+        });
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            List<Future<AttemptResult>> futures = List.of(
+                    executor.submit(() -> attemptReservation(
+                            firstUsername, firstPaymentId, "A1", "seat-selection-key-a", ready, start)),
+                    executor.submit(() -> attemptReservation(
+                            secondUsername, secondPaymentId, "A1", "seat-selection-key-b", ready, start))
+            );
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            List<AttemptResult> results = new ArrayList<>();
+            for (Future<AttemptResult> future : futures) {
+                results.add(future.get(20, TimeUnit.SECONDS));
+            }
+
+            assertThat(results)
+                    .as("동일 좌석 경쟁 결과: %s", results)
+                    .filteredOn(AttemptResult::success)
+                    .hasSize(1);
+            AttemptResult winner = results.stream()
+                    .filter(AttemptResult::success)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(results).filteredOn(result -> !result.success()).singleElement().satisfies(result -> {
+                assertThat(result.exceptionType()).isEqualTo(SeatReservationConflictException.class.getSimpleName());
+                assertThat(result.message()).isEqualTo("이미 예약된 좌석입니다.");
+            });
+            Payment payment = paymentRepository.findAll().getFirst();
+            Booking booking = bookingRepository.findAll().getFirst();
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.RESERVATION_CONFIRMED);
+            assertThat(payment.getProviderPaymentId()).isEqualTo(winner.paymentId());
+            assertThat(payment.getUsername()).isEqualTo(winner.username());
+            assertThat(booking.getUsername()).isEqualTo(winner.username());
+            assertThat(reservationRepository.findAll()).singleElement()
+                    .satisfies(reservation -> assertThat(reservation.getUsername()).isEqualTo(winner.username()));
+            assertThat(paymentRepository.count()).isEqualTo(1);
+            assertThat(bookingRepository.count()).isEqualTo(1);
+            assertInventory(23, 1, 1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     @Test
@@ -476,20 +572,36 @@ class VerifiedReservationPaymentIntegrationTest {
             CountDownLatch ready,
             CountDownLatch start
     ) {
+        return attemptReservation(USERNAME, paymentId, seatNumber, idempotencyKey, ready, start);
+    }
+
+    private AttemptResult attemptReservation(
+            String username,
+            String paymentId,
+            String seatNumber,
+            String idempotencyKey,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
         ready.countDown();
         try {
             if (!start.await(5, TimeUnit.SECONDS)) {
-                return AttemptResult.failure("Timeout", "start latch timeout");
+                return AttemptResult.failure(username, paymentId, "Timeout", "start latch timeout");
             }
             verifiedReservationService.reserve(
-                    USERNAME,
+                    username,
                     CONCERT_ID,
                     request(paymentId, seatNumber),
                     idempotencyKey
             );
-            return AttemptResult.succeeded();
+            return AttemptResult.succeeded(username, paymentId);
         } catch (Exception exception) {
-            return AttemptResult.failure(exception.getClass().getSimpleName(), exception.getMessage());
+            return AttemptResult.failure(
+                    username,
+                    paymentId,
+                    exception.getClass().getSimpleName(),
+                    exception.getMessage()
+            );
         }
     }
 
@@ -578,13 +690,19 @@ class VerifiedReservationPaymentIntegrationTest {
         entityManager.clear();
     }
 
-    private record AttemptResult(boolean success, String exceptionType, String message) {
-        static AttemptResult succeeded() {
-            return new AttemptResult(true, null, null);
+    private record AttemptResult(
+            boolean success,
+            String username,
+            String paymentId,
+            String exceptionType,
+            String message
+    ) {
+        static AttemptResult succeeded(String username, String paymentId) {
+            return new AttemptResult(true, username, paymentId, null, null);
         }
 
-        static AttemptResult failure(String exceptionType, String message) {
-            return new AttemptResult(false, exceptionType, message);
+        static AttemptResult failure(String username, String paymentId, String exceptionType, String message) {
+            return new AttemptResult(false, username, paymentId, exceptionType, message);
         }
     }
 
@@ -604,41 +722,64 @@ class VerifiedReservationPaymentIntegrationTest {
     }
 
     @TestConfiguration
-    static class BookingRepositoryBarrierConfiguration {
+    static class RepositoryBarrierConfiguration {
 
         @Bean
-        static BeanPostProcessor bookingRepositoryBarrierBeanPostProcessor() {
+        static BeanPostProcessor repositoryBarrierBeanPostProcessor() {
             return new BeanPostProcessor() {
                 @Override
                 public Object postProcessAfterInitialization(Object bean, String beanName) {
-                    if (!(bean instanceof BookingRepository bookingRepository)) {
-                        return bean;
-                    }
-                    return Proxy.newProxyInstance(
-                            BookingRepository.class.getClassLoader(),
-                            new Class<?>[]{BookingRepository.class},
-                            (proxy, method, args) -> {
-                                Object result;
-                                try {
-                                    result = method.invoke(bookingRepository, args);
-                                } catch (InvocationTargetException exception) {
-                                    throw exception.getCause();
-                                }
-
-                                if (method.getName().equals("findByUsernameAndIdempotencyKey")) {
-                                    int lookupCount = BOOKING_LOOKUP_COUNT.incrementAndGet();
-                                    CyclicBarrier barrier = BOOKING_LOOKUP_BARRIER.get();
-                                    if (barrier != null && lookupCount <= 2) {
-                                        try {
-                                            barrier.await(5, TimeUnit.SECONDS);
-                                        } catch (TimeoutException exception) {
-                                            throw new IllegalStateException("멱등 키 조회 barrier 대기 시간을 초과했습니다.", exception);
-                                        }
+                    if (bean instanceof BookingRepository bookingRepository) {
+                        return Proxy.newProxyInstance(
+                                BookingRepository.class.getClassLoader(),
+                                new Class<?>[]{BookingRepository.class},
+                                (proxy, method, args) -> {
+                                    Object result = invokeRepositoryMethod(bookingRepository, method, args);
+                                    if (method.getName().equals("findByUsernameAndIdempotencyKey")) {
+                                        awaitBarrier(
+                                                BOOKING_LOOKUP_BARRIER.get(),
+                                                BOOKING_LOOKUP_COUNT.incrementAndGet(),
+                                                "멱등 키 조회"
+                                        );
                                     }
+                                    if (method.getName().equals("saveAndFlush")) {
+                                        CyclicBarrier barrier = BOOKING_SAVE_BARRIER.get();
+                                        if (barrier != null
+                                                && !TransactionSynchronizationManager.isActualTransactionActive()) {
+                                            throw new IllegalStateException("Booking 저장 barrier는 활성 transaction 안에서 실행해야 합니다.");
+                                        }
+                                        awaitBarrier(
+                                                barrier,
+                                                BOOKING_SAVE_COUNT.incrementAndGet(),
+                                                "Booking 저장"
+                                        );
+                                    }
+                                    return result;
                                 }
-                                return result;
-                            }
-                    );
+                        );
+                    }
+                    return bean;
+                }
+
+                private Object invokeRepositoryMethod(Object repository, java.lang.reflect.Method method, Object[] args)
+                        throws Throwable {
+                    try {
+                        return method.invoke(repository, args);
+                    } catch (InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                }
+
+                private void awaitBarrier(CyclicBarrier barrier, int invocationCount, String operation)
+                        throws Exception {
+                    if (barrier == null || invocationCount > 2) {
+                        return;
+                    }
+                    try {
+                        barrier.await(15, TimeUnit.SECONDS);
+                    } catch (TimeoutException exception) {
+                        throw new IllegalStateException(operation + " barrier 대기 시간을 초과했습니다.", exception);
+                    }
                 }
             };
         }
