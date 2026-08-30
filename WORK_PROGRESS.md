@@ -17,7 +17,8 @@
 
 - Issue: [#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
 - Branch: `perf/59-seat-unique-constraint`
-- 상태: 구현·로컬 검증 완료, commit·PR 준비
+- PR: [#60](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/60)
+- 상태: 구현·로컬 검증 완료, Backend CI·Reviewer 검토 대기
 - 계획 승인: 완료
 - 확인된 근거: Issue #57의 고정 2,000석 A/B에서 복합 unique index가 좌석 잠금 탐색을 2,000행에서 1행으로 바꾸고 100 RPS p95를 3,064.39ms에서 143.41ms로 낮춤
 - 계획: `Seat` Entity 신규 schema에 `(concert_time_id, seat_number)` unique 제약을 선언하고 동일 회차 중복 거부·다른 회차 동일 번호 허용·실행계획·예약 회귀를 MariaDB Testcontainers로 검증
