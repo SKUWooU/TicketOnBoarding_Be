@@ -21,8 +21,8 @@
 - 사용자: 서로 다른 두 사용자
 - 요청 식별: 서로 다른 payment ID와 idempotency key
 - 외부 연동: mock 결제 검증만 사용
-- 동시성 제어: 두 요청의 transaction을 먼저 시작하고, 양쪽이 최초 Booking 조회를 끝낸 transaction 내부 barrier에서 맞춘 후 예약 진행
-- 반복: 동일 좌석 경쟁 3회
+- 동시성 제어: 결제 검증은 transaction 밖에서 수행하고, 실제 예약 transaction 안에서 양쪽 `Booking.saveAndFlush`가 끝난 직후 barrier로 맞춘 후 좌석 예약 진행
+- 반복 횟수보다 운영 transaction 경계의 결정적 동기화를 우선한 단일 동일 좌석 경쟁
 
 2,000석 fixture는 query plan과 처리량 측정용이다. 이번 검증은 상태 경계와 row 불변식이 목적이므로 가장 작은 경쟁 단위인 한 좌석만 사용한다.
 
@@ -36,14 +36,14 @@
 
 ### 독립 사용자 경쟁
 
-- 3회 모두 성공 1건, `SeatReservationConflictException` 1건이었다.
+- 경쟁 결과 성공 1건, `SeatReservationConflictException` 1건이었다.
 - 실패 메시지는 `이미 예약된 좌석입니다.`였다.
 - Payment·Booking·Reservation·reserved seat는 각각 1개만 남았다.
 - Payment provider ID와 Payment·Booking·Reservation 사용자가 실제 성공 요청과 일치했다.
 - 잔여 좌석은 23, 예약 좌석은 1이었다.
 - 기존 HTTP 예외 계약 테스트가 이 예외를 409 Conflict로 매핑한다.
 
-대상 테스트 클래스는 총 23개 invocation, Backend 전체 회귀는 107개 test로 실패·오류·skip 0을 확인했다. 기존 부하 도구도 PowerShell 153개 assertion, k6 inspect, Compose config를 통과했다.
+대상 테스트 클래스는 총 21개 invocation, Backend 전체 회귀는 105개 test로 실패·오류·skip 0을 확인했다. 기존 부하 도구도 PowerShell 153개 assertion, k6 inspect, Compose config를 통과했다.
 
 ## 해석
 

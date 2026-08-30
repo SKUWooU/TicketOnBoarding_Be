@@ -32,11 +32,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -55,7 +53,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -89,7 +86,8 @@ class VerifiedReservationPaymentIntegrationTest {
     private static final LocalDateTime APPROVED_AT = LocalDateTime.of(2030, 1, 1, 12, 0);
     private static final AtomicReference<CyclicBarrier> BOOKING_LOOKUP_BARRIER = new AtomicReference<>();
     private static final AtomicInteger BOOKING_LOOKUP_COUNT = new AtomicInteger();
-    private static final AtomicBoolean BOOKING_BARRIER_REQUIRES_TRANSACTION = new AtomicBoolean();
+    private static final AtomicReference<CyclicBarrier> BOOKING_SAVE_BARRIER = new AtomicReference<>();
+    private static final AtomicInteger BOOKING_SAVE_COUNT = new AtomicInteger();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -135,9 +133,6 @@ class VerifiedReservationPaymentIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
-    @Autowired
-    private PlatformTransactionManager transactionManager;
-
     @MockBean
     private PaymentVerificationPort paymentVerificationPort;
 
@@ -151,7 +146,8 @@ class VerifiedReservationPaymentIntegrationTest {
         deleteFixture();
         BOOKING_LOOKUP_BARRIER.set(null);
         BOOKING_LOOKUP_COUNT.set(0);
-        BOOKING_BARRIER_REQUIRES_TRANSACTION.set(false);
+        BOOKING_SAVE_BARRIER.set(null);
+        BOOKING_SAVE_COUNT.set(0);
         concertTimeId = createFixture();
     }
 
@@ -203,14 +199,13 @@ class VerifiedReservationPaymentIntegrationTest {
         assertInventory(24, 0, 0);
     }
 
-    @RepeatedTest(3)
+    @Test
     void concurrentDifferentUsersForSameAvailableSeatAllowsOneVerifiedReservation() throws Exception {
         String firstUsername = "seat-selection-user-a";
         String secondUsername = "seat-selection-user-b";
         String firstPaymentId = "seat-selection-payment-a";
         String secondPaymentId = "seat-selection-payment-b";
-        BOOKING_LOOKUP_BARRIER.set(new CyclicBarrier(2));
-        BOOKING_BARRIER_REQUIRES_TRANSACTION.set(true);
+        BOOKING_SAVE_BARRIER.set(new CyclicBarrier(2));
         when(paymentVerificationPort.verify(anyString())).thenAnswer(invocation -> {
             String paymentId = invocation.getArgument(0, String.class);
             if (paymentId.equals(firstPaymentId)) {
@@ -228,9 +223,9 @@ class VerifiedReservationPaymentIntegrationTest {
 
         try {
             List<Future<AttemptResult>> futures = List.of(
-                    executor.submit(() -> attemptReservationInTransaction(
+                    executor.submit(() -> attemptReservation(
                             firstUsername, firstPaymentId, "A1", "seat-selection-key-a", ready, start)),
-                    executor.submit(() -> attemptReservationInTransaction(
+                    executor.submit(() -> attemptReservation(
                             secondUsername, secondPaymentId, "A1", "seat-selection-key-b", ready, start))
             );
 
@@ -610,49 +605,6 @@ class VerifiedReservationPaymentIntegrationTest {
         }
     }
 
-    private AttemptResult attemptReservationInTransaction(
-            String username,
-            String paymentId,
-            String seatNumber,
-            String idempotencyKey,
-            CountDownLatch ready,
-            CountDownLatch start
-    ) {
-        ready.countDown();
-        try {
-            if (!start.await(5, TimeUnit.SECONDS)) {
-                return AttemptResult.failure(username, paymentId, "Timeout", "start latch timeout");
-            }
-            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-            return transactionTemplate.execute(status -> {
-                try {
-                    verifiedReservationService.reserve(
-                            username,
-                            CONCERT_ID,
-                            request(paymentId, seatNumber),
-                            idempotencyKey
-                    );
-                    return AttemptResult.succeeded(username, paymentId);
-                } catch (Exception exception) {
-                    status.setRollbackOnly();
-                    return AttemptResult.failure(
-                            username,
-                            paymentId,
-                            exception.getClass().getSimpleName(),
-                            exception.getMessage()
-                    );
-                }
-            });
-        } catch (Exception exception) {
-            return AttemptResult.failure(
-                    username,
-                    paymentId,
-                    exception.getClass().getSimpleName(),
-                    exception.getMessage()
-            );
-        }
-    }
-
     private void assertRejectedWithoutChanges(
             VerifiedReservRequest request,
             String idempotencyKey,
@@ -784,16 +736,22 @@ class VerifiedReservationPaymentIntegrationTest {
                                 (proxy, method, args) -> {
                                     Object result = invokeRepositoryMethod(bookingRepository, method, args);
                                     if (method.getName().equals("findByUsernameAndIdempotencyKey")) {
-                                        CyclicBarrier barrier = BOOKING_LOOKUP_BARRIER.get();
+                                        awaitBarrier(
+                                                BOOKING_LOOKUP_BARRIER.get(),
+                                                BOOKING_LOOKUP_COUNT.incrementAndGet(),
+                                                "멱등 키 조회"
+                                        );
+                                    }
+                                    if (method.getName().equals("saveAndFlush")) {
+                                        CyclicBarrier barrier = BOOKING_SAVE_BARRIER.get();
                                         if (barrier != null
-                                                && BOOKING_BARRIER_REQUIRES_TRANSACTION.get()
                                                 && !TransactionSynchronizationManager.isActualTransactionActive()) {
-                                            throw new IllegalStateException("멱등 키 조회 barrier는 활성 transaction 안에서 실행해야 합니다.");
+                                            throw new IllegalStateException("Booking 저장 barrier는 활성 transaction 안에서 실행해야 합니다.");
                                         }
                                         awaitBarrier(
                                                 barrier,
-                                                BOOKING_LOOKUP_COUNT.incrementAndGet(),
-                                                "멱등 키 조회"
+                                                BOOKING_SAVE_COUNT.incrementAndGet(),
+                                                "Booking 저장"
                                         );
                                     }
                                     return result;
