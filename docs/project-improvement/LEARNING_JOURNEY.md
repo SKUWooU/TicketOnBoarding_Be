@@ -569,3 +569,23 @@ TTL은 기본 5분이며 `Clock`을 주입한다. 같은 사용자의 재요청�
 ### 링크
 
 - [Backend Issue #63](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/63)
+
+## Issue #65 — 점유 단계와 예약 확정 단계의 비용을 분리해 측정하기
+
+### 기존 예약 부하 도구를 이름만 바꿔 재사용하지 않기
+
+기존 k6는 검증된 예약을 호출하므로 Payment·Booking·Reservation과 회차 재고 갱신이 모두 섞인다. 점유 API의 병목을 보려면 `Seat` 잠금과 `HELD` 전이만 측정해야 한다. 점유 전용 metric·summary·snapshot을 만들고 같은 2,000석 fixture의 hold만 run 전에 reset해 table 누적도 제거했다.
+
+### 성공 응답 수와 점유 row 수가 항상 같지 않음을 모델에 반영하기
+
+같은 소유자의 재점유는 200을 반환하지만 새 row를 만들지 않는다. 초기 hot-section smoke는 VU 사용자와 좌석 주기가 우연히 맞아 모든 재요청이 같은 소유자 200이 됐다. 이를 서버 성능으로 기록하지 않고 500개 사용자를 iteration 기준으로 순환해 타인 409를 실제로 만들었다. distributed는 성공 수와 `HELD` 수를 일치시키고, hot 시나리오는 40석·1석과 partial state 0으로 검증 기준을 분리했다.
+
+### 병목이 없다는 결과도 다음 기술을 도입하지 않을 근거로 사용하기
+
+distributed는 150 RPS까지, hot 경합은 200 RPS까지 목표 도달률 100%와 Hikari pending 0을 유지했다. 단일 좌석 lock wait는 200 RPS에서 중앙값 142회·722ms까지 증가했지만 p95 29.37ms, dropped·deadlock 0이었다. 검증 범위 안에서 Redis lock이나 대기열을 추가할 근거가 없으므로 다음 단계는 Frontend 점유 연동과 legacy 경로 축소다.
+
+상세 조건·수치·한계는 [좌석 임시 점유 API의 고경합 부하 기준선](seat-hold-contention-performance-baseline.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #65](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/65)

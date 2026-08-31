@@ -1,9 +1,12 @@
 package com.onticket.loadtest;
 
+import com.onticket.concert.config.SeatHoldConfiguration;
 import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Payment;
+import com.onticket.concert.domain.Seat;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.PaymentRepository;
+import com.onticket.concert.repository.SeatRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -28,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("loadtest")
-@Import(LoadTestFixtureService.class)
+@Import({LoadTestFixtureService.class, SeatHoldConfiguration.class})
 @Testcontainers
 class LoadTestFixtureIntegrationTest {
 
@@ -54,6 +57,9 @@ class LoadTestFixtureIntegrationTest {
 
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @Autowired
+    private SeatRepository seatRepository;
 
     @Test
     void createsTwoThousandSeatsAndKeepsInitializationIdempotent() {
@@ -115,5 +121,29 @@ class LoadTestFixtureIntegrationTest {
         assertThat(snapshot.bookings()).isZero();
         assertThat(snapshot.payments()).isZero();
         assertThat(snapshot.invariantSatisfied()).isTrue();
+    }
+
+    @Test
+    void seatHoldSnapshotAndResetReuseTheSameTwoThousandSeats() {
+        LoadTestFixtureService.FixtureMetadata fixture = fixtureService.initialize("hold-run");
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(fixture.concertTimeId(), "R001-S001");
+        LocalDateTime now = LocalDateTime.now();
+        seat.holdFor("load-user-hold-run.001", now, now.plusMinutes(5));
+        seatRepository.saveAndFlush(seat);
+
+        LoadTestFixtureService.SeatHoldSnapshot held = fixtureService.seatHoldSnapshot("hold-run");
+        assertThat(held.actualSeatCount()).isEqualTo(2_000);
+        assertThat(held.activeHeldSeats()).isOne();
+        assertThat(held.holdRows()).isOne();
+        assertThat(held.partialHoldStates()).isZero();
+        assertThat(held.reservedSeats()).isZero();
+        assertThat(held.invariantSatisfied()).isTrue();
+
+        LoadTestFixtureService.SeatHoldSnapshot reset = fixtureService.resetSeatHolds("hold-run");
+        assertThat(reset.actualSeatCount()).isEqualTo(2_000);
+        assertThat(reset.activeHeldSeats()).isZero();
+        assertThat(reset.holdRows()).isZero();
+        assertThat(reset.remainingSeats()).isEqualTo(2_000);
+        assertThat(reset.invariantSatisfied()).isTrue();
     }
 }

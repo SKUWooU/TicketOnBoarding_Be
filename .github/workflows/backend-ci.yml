@@ -43,6 +43,7 @@ jobs:
           ./load-test/scripts/Test-ContentionBottleneckDiagnosis.ps1
           ./load-test/scripts/Test-SeatIndexExperiment.ps1
           ./load-test/scripts/Test-SeatIndexContentionComparison.ps1
+          ./load-test/scripts/Test-SeatHoldContention.ps1
 
       - name: Run Backend tests
         run: |

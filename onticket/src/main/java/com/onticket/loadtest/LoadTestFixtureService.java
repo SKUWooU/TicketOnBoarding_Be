@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +38,7 @@ public class LoadTestFixtureService {
     private final ReservationRepository reservationRepository;
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
+    private final Clock clock;
     private final int rows;
     private final int seatsPerRow;
 
@@ -46,6 +49,7 @@ public class LoadTestFixtureService {
             ReservationRepository reservationRepository,
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
+            Clock clock,
             @Value("${onticket.loadtest.fixture.rows:50}") int rows,
             @Value("${onticket.loadtest.fixture.seats-per-row:40}") int seatsPerRow
     ) {
@@ -58,6 +62,7 @@ public class LoadTestFixtureService {
         this.reservationRepository = reservationRepository;
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
+        this.clock = clock;
         this.rows = rows;
         this.seatsPerRow = seatsPerRow;
     }
@@ -143,6 +148,56 @@ public class LoadTestFixtureService {
         );
     }
 
+    @Transactional
+    public SeatHoldSnapshot resetSeatHolds(String runId) {
+        FixtureMetadata fixture = metadata(runId);
+        seatRepository.clearHoldsByConcertTimeId(fixture.concertTimeId());
+        return seatHoldSnapshot(fixture);
+    }
+
+    @Transactional(readOnly = true)
+    public SeatHoldSnapshot seatHoldSnapshot(String runId) {
+        return seatHoldSnapshot(metadata(runId));
+    }
+
+    private SeatHoldSnapshot seatHoldSnapshot(FixtureMetadata fixture) {
+        long seatCount = seatRepository.countByConcertTimeId(fixture.concertTimeId());
+        long reservedSeats = seatRepository.countByConcertTimeIdAndReservedTrue(fixture.concertTimeId());
+        long holdRows = seatRepository.countHoldRows(fixture.concertTimeId());
+        long activeHeldSeats = seatRepository.countActiveHolds(
+                fixture.concertTimeId(),
+                LocalDateTime.now(clock)
+        );
+        long partialHoldStates = seatRepository.countPartialHoldStates(fixture.concertTimeId());
+        int remainingSeats = concertTimeRepository.findById(fixture.concertTimeId())
+                .orElseThrow()
+                .getSeatAmount();
+        long reservations = reservationRepository.countByConcertTimeId(fixture.concertTimeId());
+        long bookings = bookingRepository.countByIdempotencyKeyStartingWith(idempotencyKeyPrefix(fixture.runId()));
+        long payments = paymentRepository.countByProviderPaymentIdStartingWith(paymentIdPrefix(fixture.runId()));
+        boolean invariantSatisfied = seatCount == fixture.totalSeats()
+                && remainingSeats == fixture.totalSeats()
+                && reservedSeats == 0
+                && reservations == 0
+                && bookings == 0
+                && payments == 0
+                && partialHoldStates == 0
+                && activeHeldSeats == holdRows;
+        return new SeatHoldSnapshot(
+                fixture.totalSeats(),
+                seatCount,
+                remainingSeats,
+                reservedSeats,
+                activeHeldSeats,
+                holdRows,
+                partialHoldStates,
+                reservations,
+                bookings,
+                payments,
+                invariantSatisfied
+        );
+    }
+
     static String seatNumber(int row, int number) {
         return "R%03d-S%03d".formatted(row, number);
     }
@@ -193,6 +248,21 @@ public class LoadTestFixtureService {
             long actualSeatCount,
             int remainingSeats,
             long reservedSeats,
+            long reservations,
+            long bookings,
+            long payments,
+            boolean invariantSatisfied
+    ) {
+    }
+
+    public record SeatHoldSnapshot(
+            int expectedTotalSeats,
+            long actualSeatCount,
+            int remainingSeats,
+            long reservedSeats,
+            long activeHeldSeats,
+            long holdRows,
+            long partialHoldStates,
             long reservations,
             long bookings,
             long payments,
