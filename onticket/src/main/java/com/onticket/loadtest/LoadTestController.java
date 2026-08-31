@@ -38,6 +38,16 @@ public class LoadTestController {
         return fixtureService.snapshot(runId);
     }
 
+    @PostMapping("/seat-holds/reset")
+    public LoadTestFixtureService.SeatHoldSnapshot resetSeatHolds(@RequestParam String runId) {
+        return fixtureService.resetSeatHolds(runId);
+    }
+
+    @GetMapping("/seat-holds/snapshot")
+    public LoadTestFixtureService.SeatHoldSnapshot seatHoldSnapshot(@RequestParam String runId) {
+        return fixtureService.seatHoldSnapshot(runId);
+    }
+
     @GetMapping("/tokens")
     public List<LoadTestToken> tokens(
             @RequestParam String runId,

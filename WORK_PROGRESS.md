@@ -6,29 +6,45 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `825e06e1dc907547102b3162fedc4e9be61a38ff` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `b04c39a1193825435ef1e151dfd39be6eaddf108` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
+### Backend Issue #65 — 좌석 임시 점유 API의 고경합 부하 기준선
+
+- Issue: [#65](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/65)
+- Branch: `test/65-seat-hold-contention-baseline`
+- PR: [#66](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/66)
+- 상태: Reviewer Blocking 수정·재검증 완료, 재검토 대기
+- 계획 승인: 완료
+- 확인 중인 근거: 기존 2,000석 fixture·JWT 발급·k6 constant-arrival-rate·Hikari/MariaDB 수집기는 예약 확정 API에 결합돼 있다. 점유 API는 Payment·Booking·회차 재고를 변경하지 않으며 TTL 동안 동일 좌석의 성공 응답 수와 실제 `HELD` row 수가 다를 수 있어 별도 결과 계약이 필요하다.
+- 구현: `loadtest` profile의 동일 fixture hold reset·상태 snapshot, 점유 전용 k6·metric parser·단계별 반복 runner·중단 gate를 추가했다. hot 시나리오는 iteration 기준 500개 사용자를 순환해 같은 소유자 재요청과 타인 409가 구분되도록 했다.
+- 측정: `issue65-base-01` warmup 1회 제외 27회 유효. distributed 50·100·150 RPS p95 중앙값 18.10·28.22·33.68ms, hot-section 100·150·200 RPS 20.48·25.44·38.07ms, hot-seat 100·150·200 RPS 24.10·32.03·29.37ms. 전 구간 목표 도달률 100%, dropped·예상 밖 실패·deadlock·Hikari pending 0, 상태 불변식 충족.
+- 관측: hot-seat DB lock waits/time 중앙값은 100 RPS 6회·25ms, 150 RPS 69회·516ms, 200 RPS 142회·722ms로 증가했지만 p95·connection 포화 변곡으로 이어지지 않았다.
+- 검증: Backend 전체 120 tests(실패·오류·skip 0), 기존 153개와 점유 전용 39개를 합한 PowerShell 192개 assertion, 예약·점유 k6 inspect, `git diff --check`, Compose config 통과. 최종 batch 28회 중 warmup 제외 27회 모두 유효하고 생략 0회다.
+- 근거: [좌석 임시 점유 API의 고경합 부하 기준선](docs/project-improvement/seat-hold-contention-performance-baseline.md)
+- 범위 후보: loadtest profile의 점유 fixture reset·snapshot, 점유 전용 k6와 단계별 runner, 정상 409/예상 밖 실패 분리, TPS·p95·Hikari·DB lock·상태 불변식 및 근거 문서
+- 제외: 실제 KOPIS·PG·SMS·OAuth, Frontend·README, 운영 배포·SLA 주장, Redis·분산 lock·scheduler·대기열·브로커 구현
+
+## 완료
+
 ### Backend Issue #63 — DB 기반 좌석 임시 점유·만료 상태 전이
 
 - Issue: [#63](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/63)
 - Branch: `feat/63-seat-hold-expiration`
 - PR: [#64](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/64)
-- 상태: 구현·로컬 검증 완료, Reviewer 검토 대기
+- squash commit: `b04c39a1193825435ef1e151dfd39be6eaddf108`
+- 상태: 완료
 - 계획 승인: 완료
-- 확인된 근거: `Seat`는 `reserved` boolean만 가지고 좌석 선택은 Frontend 로컬 상태에만 존재한다. 별도 hold table이나 `reserved` enum 전환보다 기존 잠금 row에 nullable 소유자·만료 시각을 추가하는 편이 현재 schema와 부하 fixture의 변경이 작다.
-- 계획: 기존 비관적 좌석 잠금과 canonical 순서를 재사용해 DB 기반 점유·동일 사용자 재사용·만료 회수·해제·활성 점유 소유권 예약을 구현하고, 기존 점유 없는 예약은 FE 전환 전까지 호환한다.
 - 구현: `Seat` row에 nullable 점유자·만료 시각을 추가하고 `AVAILABLE/HELD/RESERVED` 파생 상태, 기본 5분 TTL과 `Clock`, 점유·해제 API, 좌석 조회 호환 필드, 자기 점유 예약·타인 점유 409를 연결했다. 동일 사용자 재요청은 TTL을 연장하지 않고 만료는 쓰기 시점에 lazy 회수한다.
-- 검증: MariaDB Testcontainers에서 동일 좌석 2사용자 동시 점유 성공 1·conflict 1, 만료 직전/정확한 만료 경계, 다좌석 취득·해제 rollback, 자기/타인 점유 예약과 Payment·Booking rollback, 조회·HTTP 400/401/409 계약을 확인했다. Backend 전체 119 tests(실패·오류·skip 0), `git diff --check`, Compose config 통과.
+- Reviewer: 최종 HEAD `57c60a42ee2ab75672f249cd3fafe755a1dd9130`, Blocking 없음, `MERGE_READY: YES`
+- 검증: MariaDB Testcontainers에서 동일 좌석 2사용자 동시 점유 성공 1·conflict 1, 만료 직전/정확한 만료 경계, 다좌석 취득·해제 rollback, 자기/타인 점유 예약과 Payment·Booking rollback, 조회·HTTP 400/401/409 계약을 확인했다. Backend 전체 119 tests(실패·오류·skip 0), Backend CI, `git diff --check`, Compose config 통과.
 - 근거: [DB 기반 좌석 임시 점유·만료 상태 전이](docs/project-improvement/seat-hold-expiration-state-transition.md)
 - 범위: Backend `Seat`·점유 service/API·좌석 응답·예약 transaction, `Clock`·TTL, MariaDB 동시성·시간 경계·rollback fixture와 근거 문서
 - 제외: 실제 KOPIS·PG·SMS, Frontend·README, Redis·분산 lock·scheduler·대기열·브로커, 운영 DB 자동 migration, 성능 수치 측정
-
-## 완료
 
 ### Backend Issue #61 — 결제 전 좌석 선택의 임시 점유·만료 기준선
 
