@@ -34,6 +34,7 @@ public class LoadTestPaymentVerificationAdapter implements PaymentVerificationPo
             }
             return new PaymentApproval(
                     paymentId,
+                    parts[3],
                     parts[1],
                     amount,
                     true,
@@ -45,6 +46,6 @@ public class LoadTestPaymentVerificationAdapter implements PaymentVerificationPo
     }
 
     private PaymentApproval rejected(String paymentId) {
-        return new PaymentApproval(paymentId, null, 0, false, null);
+        return new PaymentApproval(paymentId, null, null, 0, false, null);
     }
 }

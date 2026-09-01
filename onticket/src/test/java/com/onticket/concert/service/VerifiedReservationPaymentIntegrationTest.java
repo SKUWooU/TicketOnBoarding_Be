@@ -369,7 +369,7 @@ class VerifiedReservationPaymentIntegrationTest {
     void declinedPaymentIsRejectedWithoutDatabaseChanges() {
         String paymentId = "payment-declined";
         when(paymentVerificationPort.verify(paymentId))
-                .thenReturn(new PaymentApproval(paymentId, USERNAME, 30_000, false, APPROVED_AT));
+                .thenReturn(new PaymentApproval(paymentId, null, USERNAME, 30_000, false, APPROVED_AT));
 
         assertRejectedWithoutChanges(
                 request(paymentId, "A1"),
@@ -719,7 +719,7 @@ class VerifiedReservationPaymentIntegrationTest {
     }
 
     private PaymentApproval approved(String paymentId, String username, long amount) {
-        return new PaymentApproval(paymentId, username, amount, true, APPROVED_AT);
+        return new PaymentApproval(paymentId, null, username, amount, true, APPROVED_AT);
     }
 
     private VerifiedReservRequest request(String paymentId, String... seatNumbers) {

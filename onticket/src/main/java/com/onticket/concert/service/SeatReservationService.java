@@ -94,7 +94,8 @@ public class SeatReservationService {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
         List<String> seatNumberList = ReservationRequestCanonicalizer.canonicalSeatNumbers(reservRequest);
         Long concertTimeId= reservRequest.getConcertTimeId();
-        Concert concert = concertRepository.findByConcertId(concertId);
+        Concert concert = concertRepository.findById(concertId)
+                .orElseThrow(() -> new Exception("존재하지 않는 공연입니다."));
         ConcertTime concertTime = concertTimeRepository.findById(concertTimeId)
                 .orElseThrow(() -> new Exception("해당 콘서트가 없습니다."));
         List<Seat> seatList = new ArrayList<>();

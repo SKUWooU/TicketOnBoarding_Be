@@ -13,23 +13,22 @@
 
 ## 진행 중
 
-### Backend Issue #65 — 좌석 임시 점유 API의 고경합 부하 기준선
+### Backend Issue #67 — 서버 소유 결제 요청과 예약 검증 경계
 
-- Issue: [#65](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/65)
-- Branch: `test/65-seat-hold-contention-baseline`
-- PR: [#66](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/66)
-- 상태: Reviewer Blocking 수정·재검증 완료, 재검토 대기
-- 계획 승인: 완료
-- 확인 중인 근거: 기존 2,000석 fixture·JWT 발급·k6 constant-arrival-rate·Hikari/MariaDB 수집기는 예약 확정 API에 결합돼 있다. 점유 API는 Payment·Booking·회차 재고를 변경하지 않으며 TTL 동안 동일 좌석의 성공 응답 수와 실제 `HELD` row 수가 다를 수 있어 별도 결과 계약이 필요하다.
-- 구현: `loadtest` profile의 동일 fixture hold reset·상태 snapshot, 점유 전용 k6·metric parser·단계별 반복 runner·중단 gate를 추가했다. hot 시나리오는 iteration 기준 500개 사용자를 순환해 같은 소유자 재요청과 타인 409가 구분되도록 했다.
-- 측정: `issue65-base-01` warmup 1회 제외 27회 유효. distributed 50·100·150 RPS p95 중앙값 18.10·28.22·33.68ms, hot-section 100·150·200 RPS 20.48·25.44·38.07ms, hot-seat 100·150·200 RPS 24.10·32.03·29.37ms. 전 구간 목표 도달률 100%, dropped·예상 밖 실패·deadlock·Hikari pending 0, 상태 불변식 충족.
-- 관측: hot-seat DB lock waits/time 중앙값은 100 RPS 6회·25ms, 150 RPS 69회·516ms, 200 RPS 142회·722ms로 증가했지만 p95·connection 포화 변곡으로 이어지지 않았다.
-- 검증: Backend 전체 120 tests(실패·오류·skip 0), 기존 153개와 점유 전용 39개를 합한 PowerShell 192개 assertion, 예약·점유 k6 inspect, `git diff --check`, Compose config 통과. 최종 batch 28회 중 warmup 제외 27회 모두 유효하고 생략 0회다.
-- 근거: [좌석 임시 점유 API의 고경합 부하 기준선](docs/project-improvement/seat-hold-contention-performance-baseline.md)
-- 범위 후보: loadtest profile의 점유 fixture reset·snapshot, 점유 전용 k6와 단계별 runner, 정상 409/예상 밖 실패 분리, TPS·p95·Hikari·DB lock·상태 불변식 및 근거 문서
-- 제외: 실제 KOPIS·PG·SMS·OAuth, Frontend·README, 운영 배포·SLA 주장, Redis·분산 lock·scheduler·대기열·브로커 구현
+- Issue: [#67](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/67)
+- Branch: `feat/67-server-owned-checkout`
+- PR: [#68](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/68)
+- 상태: 구현·로컬 검증 완료, Reviewer 검토 중
+- 범위: 본인 점유 좌석 Checkout, 서버 금액·merchantUid, 멱등·만료·예약 확정 소비
+- 제외: 실제 PortOne 호출·credentials, Frontend, 실제 결제·환불, 운영 migration, 분산 기술
 
 ## 완료
+
+### Backend Issue #65 — 좌석 임시 점유 API의 고경합 부하 기준선
+
+- PR: [#66](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/66) / squash `5e09a83`
+- 결과: 가상 2,000석·mock 인증의 27회 유효 측정에서 최대 200 RPS, 예상 밖 실패·deadlock·Hikari pending 0
+- 근거: [좌석 임시 점유 API의 고경합 부하 기준선](docs/project-improvement/seat-hold-contention-performance-baseline.md)
 
 ### Backend Issue #63 — DB 기반 좌석 임시 점유·만료 상태 전이
 

@@ -12,4 +12,7 @@ public class VerifiedReservRequest extends ReservRequest {
 
     @JsonProperty("paymentId")
     private String paymentId;
+
+    @JsonProperty("merchantUid")
+    private String merchantUid;
 }
