@@ -13,16 +13,17 @@
 
 ## 진행 중
 
-### Backend Issue #67 — 서버 소유 결제 요청과 예약 검증 경계
-
-- Issue: [#67](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/67)
-- Branch: `feat/67-server-owned-checkout`
-- PR: [#68](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/68)
-- 상태: 구현·로컬 검증 완료, Reviewer 검토 중
-- 범위: 본인 점유 좌석 Checkout, 서버 금액·merchantUid, 멱등·만료·예약 확정 소비
-- 제외: 실제 PortOne 호출·credentials, Frontend, 실제 결제·환불, 운영 migration, 분산 기술
+- 없음
 
 ## 완료
+
+### Backend Issue #67 — 서버 소유 결제 요청과 예약 검증 경계
+
+- PR: [#68](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/68) / squash `3fb9ff3`
+- 결과: 본인 HELD 좌석의 서버 Checkout, 서버 금액·merchantUid·만료, 결제 검증 후 잠금 기반 1회 예약 확정 경계를 구성
+- 검증: Backend 142 tests·CI 통과, Reviewer Blocking 수정 후 `MERGE_READY: YES`
+- 근거: [서버 소유 Checkout과 예약 검증 경계](docs/project-improvement/server-owned-checkout-boundary.md)
+- 후속: 실제 PG adapter 전 동일 hold의 복수 `READY` Checkout과 결제 보상 정책 결정
 
 ### Backend Issue #65 — 좌석 임시 점유 API의 고경합 부하 기준선
 
