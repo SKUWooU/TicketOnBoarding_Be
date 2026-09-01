@@ -55,6 +55,21 @@ final class ReservationRequestCanonicalizer {
         return digest(canonicalRequest);
     }
 
+    static String checkoutVerifiedFingerprint(
+            String concertId,
+            ReservRequest reservRequest,
+            String paymentId,
+            String merchantUid
+    ) {
+        if (merchantUid == null || merchantUid.isBlank()) {
+            throw new InvalidPaymentException("고객사 주문 식별자가 필요합니다.");
+        }
+        String canonicalRequest = canonicalRequest(concertId, reservRequest)
+                + "|payment|" + requiredLengthValue(paymentId, "결제 식별자가 필요합니다.")
+                + "|merchant|" + requiredLengthValue(merchantUid, "고객사 주문 식별자가 필요합니다.");
+        return digest(canonicalRequest);
+    }
+
     private static String canonicalRequest(String concertId, ReservRequest reservRequest) {
         if (concertId == null || concertId.isBlank()) {
             throw new IllegalArgumentException("공연 ID가 필요합니다.");
@@ -80,5 +95,12 @@ final class ReservationRequestCanonicalizer {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 알고리즘을 사용할 수 없습니다.", exception);
         }
+    }
+
+    private static String requiredLengthValue(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new InvalidPaymentException(message);
+        }
+        return value.length() + ":" + value;
     }
 }
