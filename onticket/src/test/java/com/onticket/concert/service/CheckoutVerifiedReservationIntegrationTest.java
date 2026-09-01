@@ -2,6 +2,7 @@ package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Checkout;
+import com.onticket.concert.domain.CheckoutRequestKey;
 import com.onticket.concert.domain.CheckoutStatus;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertTime;
@@ -14,6 +15,7 @@ import com.onticket.concert.dto.SeatHoldRequest;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.CheckoutRepository;
+import com.onticket.concert.repository.CheckoutRequestKeyRepository;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.PaymentRepository;
@@ -22,6 +24,7 @@ import com.onticket.concert.repository.SeatRepository;
 import com.onticket.user.jwt.JwtUtil;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -31,6 +34,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -46,6 +50,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -77,7 +83,8 @@ import static org.mockito.Mockito.when;
         CheckoutVerifiedReservationService.class,
         VerifiedReservationTransactionService.class,
         VirtualTicketPricePolicy.class,
-        CheckoutVerifiedReservationIntegrationTest.ClockConfiguration.class
+        CheckoutVerifiedReservationIntegrationTest.ClockConfiguration.class,
+        CheckoutVerifiedReservationIntegrationTest.CheckoutAliasLockBarrierConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -86,6 +93,8 @@ class CheckoutVerifiedReservationIntegrationTest {
     private static final String CONCERT_ID = "CHECKOUT-RESERVATION-CONCERT";
     private static final String USERNAME = "checkout-reservation-user";
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2030, 1, 1, 12, 0);
+    private static final AtomicReference<CheckoutAliasLockBarrier> CHECKOUT_ALIAS_LOCK_BARRIER =
+            new AtomicReference<>();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -112,6 +121,9 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @Autowired
     private CheckoutRepository checkoutRepository;
+
+    @Autowired
+    private CheckoutRequestKeyRepository checkoutRequestKeyRepository;
 
     @Autowired
     private PaymentRepository paymentRepository;
@@ -147,8 +159,10 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        CHECKOUT_ALIAS_LOCK_BARRIER.set(null);
         paymentRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
+        checkoutRequestKeyRepository.deleteAllInBatch();
         checkoutRepository.deleteAllInBatch();
         bookingRepository.deleteAllInBatch();
         seatRepository.deleteAllInBatch();
@@ -162,6 +176,13 @@ class CheckoutVerifiedReservationIntegrationTest {
     @Test
     void approvedPaymentMatchingCheckoutConfirmsReservationOnce() throws Exception {
         CheckoutResponse checkout = prepareCheckout("checkout-prepare-1", "A1", "A2");
+        CheckoutResponse reusedCheckout = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2", "A1"),
+                "checkout-reused-key"
+        );
+        assertThat(reusedCheckout.getMerchantUid()).isEqualTo(checkout.getMerchantUid());
         VerifiedReservRequest request = verifiedRequest(
                 checkout.getMerchantUid(),
                 "payment-success",
@@ -185,6 +206,20 @@ class CheckoutVerifiedReservationIntegrationTest {
         );
 
         assertThat(retry).isEqualTo(first);
+        CheckoutResponse confirmedRetry = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-reused-key"
+        );
+        assertThat(confirmedRetry.getMerchantUid()).isEqualTo(checkout.getMerchantUid());
+        assertThat(confirmedRetry.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-reused-key"
+        )).isExactlyInstanceOf(IdempotencyKeyConflictException.class);
         verify(paymentVerificationPort, times(1)).verify("payment-success");
         assertConfirmedSnapshot(checkout.getMerchantUid(), 0, 2);
     }
@@ -308,6 +343,48 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
     }
 
+    @RepeatedTest(3)
+    void aliasKeyBindingAfterSeatTransactionDoesNotDeadlockWithReservationConfirmation() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("checkout-lock-order-first", "A1");
+        VerifiedReservRequest reservationRequest = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-lock-order",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-lock-order"))
+                .thenReturn(approved("payment-lock-order", checkout.getMerchantUid(), 30_000));
+
+        CheckoutAliasLockBarrier barrier = new CheckoutAliasLockBarrier("checkout-lock-order-alias");
+        CHECKOUT_ALIAS_LOCK_BARRIER.set(barrier);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<LocalDateTime> reservation = executor.submit(() -> reservationService.reserve(
+                    USERNAME,
+                    CONCERT_ID,
+                    reservationRequest,
+                    "reservation-lock-order"
+            ));
+            assertThat(barrier.awaitCheckoutLock()).isTrue();
+
+            Future<CheckoutResponse> alias = executor.submit(() -> checkoutService.prepare(
+                    USERNAME,
+                    CONCERT_ID,
+                    checkoutRequest("A1"),
+                    "checkout-lock-order-alias"
+            ));
+
+            assertThat(reservation.get(10, TimeUnit.SECONDS)).isNotNull();
+            CheckoutResponse aliasResult = alias.get(10, TimeUnit.SECONDS);
+            assertThat(aliasResult.getMerchantUid()).isEqualTo(checkout.getMerchantUid());
+            assertThat(aliasResult.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
+        } finally {
+            CHECKOUT_ALIAS_LOCK_BARRIER.compareAndSet(barrier, null);
+        }
+
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
+    }
+
     private AttemptResult attempt(
             VerifiedReservRequest request,
             String idempotencyKey,
@@ -337,6 +414,13 @@ class CheckoutVerifiedReservationIntegrationTest {
         checkoutRequest.setConcertTimeId(concertTimeId);
         checkoutRequest.setSeatNumberList(List.of(seatNumbers));
         return checkoutService.prepare(USERNAME, CONCERT_ID, checkoutRequest, idempotencyKey);
+    }
+
+    private CheckoutRequest checkoutRequest(String... seatNumbers) {
+        CheckoutRequest request = new CheckoutRequest();
+        request.setConcertTimeId(concertTimeId);
+        request.setSeatNumberList(List.of(seatNumbers));
+        return request;
     }
 
     private VerifiedReservRequest verifiedRequest(
@@ -433,6 +517,36 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    private static final class CheckoutAliasLockBarrier {
+
+        private final String aliasKey;
+        private final CountDownLatch checkoutLockAcquired = new CountDownLatch(1);
+        private final CountDownLatch aliasKeySaveAttempted = new CountDownLatch(1);
+
+        private CheckoutAliasLockBarrier(String aliasKey) {
+            this.aliasKey = aliasKey;
+        }
+
+        boolean targets(CheckoutRequestKey requestKey) {
+            return aliasKey.equals(requestKey.getIdempotencyKey());
+        }
+
+        void checkoutLockAcquired() throws InterruptedException {
+            checkoutLockAcquired.countDown();
+            if (!aliasKeySaveAttempted.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("후속 Checkout 키 저장 시도를 기다리지 못했습니다.");
+            }
+        }
+
+        boolean awaitCheckoutLock() throws InterruptedException {
+            return checkoutLockAcquired.await(5, TimeUnit.SECONDS);
+        }
+
+        void aliasKeySaveAttempted() {
+            aliasKeySaveAttempted.countDown();
+        }
+    }
+
     @TestConfiguration
     static class ClockConfiguration {
 
@@ -440,6 +554,61 @@ class CheckoutVerifiedReservationIntegrationTest {
         @Primary
         MutableClock mutableClock() {
             return new MutableClock(BASE_TIME.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        }
+    }
+
+    @TestConfiguration
+    static class CheckoutAliasLockBarrierConfiguration {
+
+        @Bean
+        static BeanPostProcessor checkoutAliasLockBarrierBeanPostProcessor() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (bean instanceof CheckoutRepository checkoutRepository) {
+                        return Proxy.newProxyInstance(
+                                CheckoutRepository.class.getClassLoader(),
+                                new Class<?>[]{CheckoutRepository.class},
+                                (proxy, method, args) -> {
+                                    Object result = invoke(checkoutRepository, method, args);
+                                    CheckoutAliasLockBarrier barrier = CHECKOUT_ALIAS_LOCK_BARRIER.get();
+                                    if (barrier != null && method.getName().equals("findByMerchantUidWithLock")) {
+                                        barrier.checkoutLockAcquired();
+                                    }
+                                    return result;
+                                }
+                        );
+                    }
+                    if (bean instanceof CheckoutRequestKeyRepository checkoutRequestKeyRepository) {
+                        return Proxy.newProxyInstance(
+                                CheckoutRequestKeyRepository.class.getClassLoader(),
+                                new Class<?>[]{CheckoutRequestKeyRepository.class},
+                                (proxy, method, args) -> {
+                                    CheckoutAliasLockBarrier barrier = CHECKOUT_ALIAS_LOCK_BARRIER.get();
+                                    if (barrier != null
+                                            && method.getName().equals("saveAndFlush")
+                                            && args != null
+                                            && args.length == 1
+                                            && args[0] instanceof CheckoutRequestKey requestKey
+                                            && barrier.targets(requestKey)) {
+                                        barrier.aliasKeySaveAttempted();
+                                    }
+                                    return invoke(checkoutRequestKeyRepository, method, args);
+                                }
+                        );
+                    }
+                    return bean;
+                }
+
+                private Object invoke(Object repository, java.lang.reflect.Method method, Object[] args)
+                        throws Throwable {
+                    try {
+                        return method.invoke(repository, args);
+                    } catch (InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                }
+            };
         }
     }
 

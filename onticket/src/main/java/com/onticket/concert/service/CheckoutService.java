@@ -1,9 +1,11 @@
 package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Checkout;
+import com.onticket.concert.domain.CheckoutRequestKey;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.repository.CheckoutRepository;
+import com.onticket.concert.repository.CheckoutRequestKeyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ public class CheckoutService {
     private static final String MERCHANT_UID_PREFIX = "ticket_";
 
     private final CheckoutRepository checkoutRepository;
+    private final CheckoutRequestKeyRepository checkoutRequestKeyRepository;
     private final CheckoutPreparationTransactionService transactionService;
     private final CheckoutExpirationService expirationService;
     private final VirtualTicketPricePolicy pricePolicy;
@@ -47,6 +50,15 @@ public class CheckoutService {
             throw new InvalidCheckoutRequestException(exception.getMessage());
         }
 
+        Optional<CheckoutRequestKey> existingRequestKey = checkoutRequestKeyRepository
+                .findByUsernameAndIdempotencyKey(username, idempotencyKey);
+        if (existingRequestKey.isPresent()) {
+            return resultForMatchingRequest(
+                    existingRequestKey.get().getCheckout(),
+                    requestFingerprint
+            );
+        }
+
         Optional<Checkout> existing = checkoutRepository
                 .findByUsernameAndIdempotencyKey(username, idempotencyKey);
         if (existing.isPresent()) {
@@ -64,12 +76,85 @@ public class CheckoutService {
                     requestFingerprint,
                     expectedAmount
             );
-            return response(created);
+            return bindPreparedRequestKey(
+                    created,
+                    username,
+                    idempotencyKey,
+                    requestFingerprint
+            );
+        } catch (CheckoutHoldIdentityConflictException exception) {
+            Optional<CheckoutRequestKey> concurrentRequestKey = checkoutRequestKeyRepository
+                    .findByUsernameAndIdempotencyKey(username, idempotencyKey);
+            if (concurrentRequestKey.isPresent()) {
+                return resultForMatchingRequest(
+                        concurrentRequestKey.get().getCheckout(),
+                        requestFingerprint
+                );
+            }
+            Optional<Checkout> concurrentHoldCheckout = checkoutRepository
+                    .findByUsernameAndRequestFingerprintAndExpiresAt(
+                            exception.getUsername(),
+                            exception.getRequestFingerprint(),
+                            exception.getExpiresAt()
+                    );
+            if (concurrentHoldCheckout.isPresent()) {
+                return bindPreparedRequestKey(
+                        concurrentHoldCheckout.get(),
+                        username,
+                        idempotencyKey,
+                        requestFingerprint
+                );
+            }
+            Optional<Checkout> concurrentIdempotentCheckout = checkoutRepository
+                    .findByUsernameAndIdempotencyKey(username, idempotencyKey);
+            if (concurrentIdempotentCheckout.isPresent()) {
+                return resultForMatchingRequest(
+                        concurrentIdempotentCheckout.get(),
+                        requestFingerprint
+                );
+            }
+            throw exception.getDataIntegrityViolation();
         } catch (DataIntegrityViolationException exception) {
             Checkout concurrent = checkoutRepository
                     .findByUsernameAndIdempotencyKey(username, idempotencyKey)
                     .orElseThrow(() -> exception);
             return resultForMatchingRequest(concurrent, requestFingerprint);
+        }
+    }
+
+    private CheckoutResponse bindPreparedRequestKey(
+            Checkout checkout,
+            String username,
+            String idempotencyKey,
+            String requestFingerprint
+    ) {
+        Optional<CheckoutRequestKey> existingRequestKey = checkoutRequestKeyRepository
+                .findByUsernameAndIdempotencyKey(username, idempotencyKey);
+        if (existingRequestKey.isPresent()) {
+            return resultForMatchingRequest(
+                    existingRequestKey.get().getCheckout(),
+                    requestFingerprint
+            );
+        }
+        try {
+            transactionService.bindRequestKey(
+                    checkout,
+                    username,
+                    idempotencyKey,
+                    requestFingerprint
+            );
+            CheckoutRequestKey boundRequestKey = checkoutRequestKeyRepository
+                    .findByUsernameAndIdempotencyKey(username, idempotencyKey)
+                    .orElseThrow(() -> new IllegalStateException("결제 요청 키 귀속 결과를 찾을 수 없습니다."));
+            return resultForMatchingRequest(boundRequestKey.getCheckout(), requestFingerprint);
+        } catch (DataIntegrityViolationException exception) {
+            CheckoutRequestKey concurrentRequestKey = checkoutRequestKeyRepository
+                    .findByUsernameAndIdempotencyKey(username, idempotencyKey)
+                    .orElseThrow(() -> exception);
+            return resultForMatchingRequest(
+                    concurrentRequestKey.getCheckout(),
+                    requestFingerprint
+            );
         }
     }
 

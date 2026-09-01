@@ -13,7 +13,14 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #70 — 동일 좌석 점유의 중복 READY Checkout 생성 방지
+
+- Issue: [#70](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/70)
+- Branch: `fix/70-single-active-checkout`
+- PR: [#71](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/71)
+- 상태: 두 차례 Reviewer Blocking 수정·전체 검증 완료, Reviewer 재검토 대기
+- 범위: 동일 hold·다른 멱등 키의 Checkout 단일화, 수락 키 귀속과 만료 후 재생성
+- 제외: Frontend, 실제 PG·환불, 운영 migration, 분산 기술
 
 ## 완료
 

@@ -9,11 +9,13 @@ import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.dto.SeatHoldRequest;
 import com.onticket.concert.repository.CheckoutRepository;
+import com.onticket.concert.repository.CheckoutRequestKeyRepository;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.SeatRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -24,6 +26,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MariaDBContainer;
@@ -38,6 +41,11 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,6 +98,9 @@ class CheckoutIntegrationTest {
     private CheckoutRepository checkoutRepository;
 
     @Autowired
+    private CheckoutRequestKeyRepository checkoutRequestKeyRepository;
+
+    @Autowired
     private SeatRepository seatRepository;
 
     @Autowired
@@ -108,6 +119,7 @@ class CheckoutIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        checkoutRequestKeyRepository.deleteAllInBatch();
         checkoutRepository.deleteAllInBatch();
         seatRepository.deleteAllInBatch();
         concertTimeRepository.deleteAllInBatch();
@@ -164,6 +176,168 @@ class CheckoutIntegrationTest {
                 checkoutRequest("A2"),
                 "checkout-key-2"
         )).isExactlyInstanceOf(IdempotencyKeyConflictException.class);
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void differentIdempotencyKeysReuseTheCheckoutForTheSameActiveHold() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-hold-key-1"
+        );
+        CheckoutResponse second = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-hold-key-2"
+        );
+
+        assertThat(second.getMerchantUid()).isEqualTo(first.getMerchantUid());
+        assertThat(second.getExpiresAt()).isEqualTo(first.getExpiresAt());
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+
+        CheckoutResponse secondRetry = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-hold-key-2"
+        );
+        assertThat(secondRetry.getMerchantUid()).isEqualTo(first.getMerchantUid());
+
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2"),
+                "checkout-hold-key-2"
+        )).isExactlyInstanceOf(IdempotencyKeyConflictException.class);
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+    }
+
+    @RepeatedTest(3)
+    void concurrentDifferentKeysConvergeOnOneCheckoutForTheSameActiveHold() throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CheckoutResponse> first = executor.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return checkoutService.prepare(
+                        USERNAME,
+                        CONCERT_ID,
+                        checkoutRequest("A1"),
+                        "checkout-concurrent-hold-key-1"
+                );
+            });
+            Future<CheckoutResponse> second = executor.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return checkoutService.prepare(
+                        USERNAME,
+                        CONCERT_ID,
+                        checkoutRequest("A1"),
+                        "checkout-concurrent-hold-key-2"
+                );
+            });
+            start.countDown();
+
+            CheckoutResponse firstResult = first.get(10, TimeUnit.SECONDS);
+            CheckoutResponse secondResult = second.get(10, TimeUnit.SECONDS);
+            assertThat(secondResult.getMerchantUid()).isEqualTo(firstResult.getMerchantUid());
+        }
+
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void differentSeatSelectionsCreateIndependentCheckouts() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-different-seat-key-1"
+        );
+        CheckoutResponse second = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2"),
+                "checkout-different-seat-key-2"
+        );
+
+        assertThat(second.getMerchantUid()).isNotEqualTo(first.getMerchantUid());
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void newHoldAfterExpiryCreatesANewCheckout() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-expiring-hold-key"
+        );
+
+        clock.set(first.getExpiresAt());
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-expiring-hold-key"
+        )).isExactlyInstanceOf(CheckoutExpiredException.class);
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+
+        CheckoutResponse second = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-renewed-hold-key"
+        );
+
+        assertThat(second.getMerchantUid()).isNotEqualTo(first.getMerchantUid());
+        assertThat(second.getExpiresAt()).isEqualTo(first.getExpiresAt().plusMinutes(5));
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutRepository.findByMerchantUid(first.getMerchantUid()).orElseThrow().getStatus())
+                .isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(checkoutRepository.findByMerchantUid(second.getMerchantUid()).orElseThrow().getStatus())
+                .isEqualTo(CheckoutStatus.READY);
+    }
+
+    @Test
+    void databaseConstraintRejectsDuplicateHoldIdentity() {
+        LocalDateTime expiresAt = BASE_TIME.plusMinutes(5);
+        Checkout first = Checkout.ready(
+                "ticket_direct_1",
+                USERNAME,
+                "direct-hold-key-1",
+                CONCERT_ID,
+                concertTimeId,
+                "f".repeat(64),
+                30_000,
+                BASE_TIME,
+                expiresAt
+        );
+        Checkout duplicate = Checkout.ready(
+                "ticket_direct_2",
+                USERNAME,
+                "direct-hold-key-2",
+                CONCERT_ID,
+                concertTimeId,
+                "f".repeat(64),
+                30_000,
+                BASE_TIME,
+                expiresAt
+        );
+        checkoutRepository.saveAndFlush(first);
+
+        assertThatThrownBy(() -> checkoutRepository.saveAndFlush(duplicate))
+                .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(checkoutRepository.count()).isEqualTo(1);
     }
 

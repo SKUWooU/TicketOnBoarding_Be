@@ -1,13 +1,16 @@
 package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Checkout;
+import com.onticket.concert.domain.CheckoutRequestKey;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.repository.CheckoutRepository;
+import com.onticket.concert.repository.CheckoutRequestKeyRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.SeatRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,7 @@ import java.util.Objects;
 public class CheckoutPreparationTransactionService {
 
     private final CheckoutRepository checkoutRepository;
+    private final CheckoutRequestKeyRepository checkoutRequestKeyRepository;
     private final ConcertTimeRepository concertTimeRepository;
     private final SeatRepository seatRepository;
     private final Clock clock;
@@ -64,17 +68,61 @@ public class CheckoutPreparationTransactionService {
             }
         }
 
-        Checkout checkout = Checkout.ready(
-                merchantUid,
+        Checkout checkout = checkoutRepository
+                .findByUsernameAndRequestFingerprintAndExpiresAt(
+                        username,
+                        requestFingerprint,
+                        earliestExpiry
+                )
+                .orElse(null);
+        if (checkout != null) {
+            return checkout;
+        }
+
+        try {
+            checkout = Checkout.ready(
+                    merchantUid,
+                    username,
+                    idempotencyKey,
+                    concertId,
+                    request.getConcertTimeId(),
+                    requestFingerprint,
+                    expectedAmount,
+                    now,
+                    earliestExpiry
+            );
+            checkout = checkoutRepository.saveAndFlush(checkout);
+            checkoutRequestKeyRepository.saveAndFlush(CheckoutRequestKey.bind(
+                    username,
+                    idempotencyKey,
+                    requestFingerprint,
+                    checkout
+            ));
+            return checkout;
+        } catch (DataIntegrityViolationException exception) {
+            throw new CheckoutHoldIdentityConflictException(
+                    username,
+                    requestFingerprint,
+                    earliestExpiry,
+                    exception
+            );
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void bindRequestKey(
+            Checkout checkout,
+            String username,
+            String idempotencyKey,
+            String requestFingerprint
+    ) {
+        Checkout managedCheckout = checkoutRepository.findById(checkout.getId())
+                .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
+        checkoutRequestKeyRepository.saveAndFlush(CheckoutRequestKey.bind(
                 username,
                 idempotencyKey,
-                concertId,
-                request.getConcertTimeId(),
                 requestFingerprint,
-                expectedAmount,
-                now,
-                earliestExpiry
-        );
-        return checkoutRepository.saveAndFlush(checkout);
+                managedCheckout
+        ));
     }
 }
