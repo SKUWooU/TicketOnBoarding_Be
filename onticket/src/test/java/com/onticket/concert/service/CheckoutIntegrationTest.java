@@ -533,6 +533,7 @@ class CheckoutIntegrationTest {
                         duplicate,
                         seat,
                         "d".repeat(64),
+                        seat.getHeldUntil(),
                         seat.getHeldUntil()
                 )
         )).isInstanceOf(DataIntegrityViolationException.class);

@@ -17,15 +17,15 @@ import com.onticket.concert.service.InvalidIdempotencyKeyException;
 import com.onticket.concert.service.InvalidPaymentException;
 import com.onticket.concert.service.InvalidSeatHoldRequestException;
 import com.onticket.concert.service.PaymentVerificationUnavailableException;
+import com.onticket.concert.service.PaymentVerificationUnknownException;
 import com.onticket.concert.service.ReservationIdempotencyService;
 import com.onticket.concert.service.SeatHoldConflictException;
 import com.onticket.concert.service.SeatHoldService;
 import com.onticket.concert.service.SeatReservationConflictException;
 import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.concert.repository.BookingRepository;
-import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.PaymentRepository;
-import com.onticket.concert.service.CheckoutExpirationService;
+import com.onticket.concert.service.CheckoutPaymentVerificationTransactionService;
 import com.onticket.concert.service.PaymentVerificationPort;
 import com.onticket.concert.service.VerifiedReservationTransactionService;
 import com.onticket.user.jwt.JwtUtil;
@@ -44,7 +44,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDateTime;
-import java.time.Clock;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -443,15 +442,26 @@ class ReservationControllerTest {
     }
 
     @Test
+    void checkoutWithUnknownPaymentVerificationReturnsHttp409() throws Exception {
+        when(checkoutVerifiedReservationService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq("checkout-unknown-key")
+        )).thenThrow(new PaymentVerificationUnknownException());
+
+        performCheckoutVerifiedReservation("checkout-unknown-key")
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void malformedCheckoutReservationPayloadsUseRealServiceAndReturnHttp400() throws Exception {
         CheckoutVerifiedReservationService realValidationService = new CheckoutVerifiedReservationService(
                 mock(BookingRepository.class),
-                mock(CheckoutRepository.class),
                 mock(PaymentRepository.class),
                 mock(PaymentVerificationPort.class),
-                mock(VerifiedReservationTransactionService.class),
-                mock(CheckoutExpirationService.class),
-                Clock.systemUTC()
+                mock(CheckoutPaymentVerificationTransactionService.class),
+                mock(VerifiedReservationTransactionService.class)
         );
         MockMvc validationMockMvc = MockMvcBuilders.standaloneSetup(
                 new ReservationController(

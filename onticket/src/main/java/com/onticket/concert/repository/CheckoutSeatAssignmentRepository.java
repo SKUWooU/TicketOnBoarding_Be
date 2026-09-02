@@ -18,7 +18,7 @@ public interface CheckoutSeatAssignmentRepository
             SELECT assignment
             FROM CheckoutSeatAssignment assignment
             WHERE assignment.seat.id IN :seatIds
-              AND assignment.activeUntil > :now
+              AND COALESCE(assignment.verificationLeaseUntil, assignment.activeUntil) > :now
             ORDER BY assignment.seat.id
             """)
     List<CheckoutSeatAssignment> findActiveBySeatIdsWithLock(
@@ -30,12 +30,23 @@ public interface CheckoutSeatAssignmentRepository
             SELECT CASE WHEN COUNT(assignment) > 0 THEN true ELSE false END
             FROM CheckoutSeatAssignment assignment
             WHERE assignment.seat.id IN :seatIds
-              AND assignment.activeUntil > :now
+              AND COALESCE(assignment.verificationLeaseUntil, assignment.activeUntil) > :now
             """)
     boolean existsActiveBySeatIds(
             @Param("seatIds") List<Long> seatIds,
             @Param("now") LocalDateTime now
     );
 
+    List<CheckoutSeatAssignment> findByCheckoutIdOrderBySeatId(Long checkoutId);
+
     List<CheckoutSeatAssignment> findByCheckoutId(Long checkoutId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT assignment
+            FROM CheckoutSeatAssignment assignment
+            WHERE assignment.checkout.id = :checkoutId
+            ORDER BY assignment.seat.id
+            """)
+    List<CheckoutSeatAssignment> findByCheckoutIdWithLock(@Param("checkoutId") Long checkoutId);
 }

@@ -26,6 +26,13 @@ class CheckoutTest {
     void confirmedCheckoutCannotExpireOrBeConfirmedTwice() {
         Checkout checkout = checkout();
         Booking booking = new Booking();
+        checkout.beginPaymentVerification(
+                "payment-1",
+                "reservation-key-1",
+                "booking-fingerprint",
+                CREATED_AT.plusMinutes(4),
+                CREATED_AT.plusMinutes(5).plusSeconds(30)
+        );
         checkout.confirmReservation(booking);
 
         assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
@@ -33,6 +40,43 @@ class CheckoutTest {
         assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
         assertThatThrownBy(() -> checkout.confirmReservation(new Booking()))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void knownVerificationFailureRestoresReadyBeforeOriginalExpiry() {
+        Checkout checkout = checkout();
+        checkout.beginPaymentVerification(
+                "payment-1",
+                "reservation-key-1",
+                "booking-fingerprint",
+                CREATED_AT.plusMinutes(4),
+                CREATED_AT.plusMinutes(5).plusSeconds(30)
+        );
+
+        checkout.releasePaymentVerification(CREATED_AT.plusMinutes(4).plusSeconds(1));
+
+        assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(checkout.getVerificationPaymentId()).isNull();
+        assertThat(checkout.getVerificationDeadline()).isNull();
+    }
+
+    @Test
+    void ambiguousVerificationRetainsClaimMetadata() {
+        Checkout checkout = checkout();
+        LocalDateTime deadline = CREATED_AT.plusMinutes(5).plusSeconds(30);
+        checkout.beginPaymentVerification(
+                "payment-1",
+                "reservation-key-1",
+                "booking-fingerprint",
+                CREATED_AT.plusMinutes(4),
+                deadline
+        );
+
+        checkout.markPaymentVerificationUnknown();
+
+        assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(checkout.getVerificationPaymentId()).isEqualTo("payment-1");
+        assertThat(checkout.getVerificationDeadline()).isEqualTo(deadline);
     }
 
     @Test

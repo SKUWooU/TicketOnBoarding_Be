@@ -125,6 +125,7 @@ public class CheckoutPreparationTransactionService {
                                     assignedCheckout,
                                     seat,
                                     requestFingerprint,
+                                    seat.getHeldUntil(),
                                     assignedCheckout.getExpiresAt()
                             ))
                             .toList()

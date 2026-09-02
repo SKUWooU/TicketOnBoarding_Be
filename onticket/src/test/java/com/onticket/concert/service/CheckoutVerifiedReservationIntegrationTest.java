@@ -9,7 +9,6 @@ import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.PaymentStatus;
 import com.onticket.concert.domain.Seat;
-import com.onticket.concert.domain.SeatAvailability;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.dto.SeatHoldRequest;
@@ -73,7 +72,8 @@ import static org.mockito.Mockito.when;
         "spring.jpa.hibernate.ddl-auto=create",
         "spring.jpa.show-sql=false",
         "onticket.ticket.virtual-seat-unit-price=30000",
-        "onticket.ticket.seat-hold-duration=PT5M"
+        "onticket.ticket.seat-hold-duration=PT5M",
+        "onticket.ticket.checkout-payment-verification-grace-duration=PT30S"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
@@ -82,6 +82,7 @@ import static org.mockito.Mockito.when;
         CheckoutService.class,
         CheckoutPreparationTransactionService.class,
         CheckoutExpirationService.class,
+        CheckoutPaymentVerificationTransactionService.class,
         CheckoutVerifiedReservationService.class,
         VerifiedReservationTransactionService.class,
         VirtualTicketPricePolicy.class,
@@ -96,6 +97,8 @@ class CheckoutVerifiedReservationIntegrationTest {
     private static final String USERNAME = "checkout-reservation-user";
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2030, 1, 1, 12, 0);
     private static final AtomicReference<CheckoutAliasLockBarrier> CHECKOUT_ALIAS_LOCK_BARRIER =
+            new AtomicReference<>();
+    private static final AtomicReference<String> FINALIZATION_FAILURE_MERCHANT_UID =
             new AtomicReference<>();
 
     @Container
@@ -165,6 +168,7 @@ class CheckoutVerifiedReservationIntegrationTest {
     @BeforeEach
     void setUp() {
         CHECKOUT_ALIAS_LOCK_BARRIER.set(null);
+        FINALIZATION_FAILURE_MERCHANT_UID.set(null);
         paymentRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         checkoutSeatAssignmentRepository.deleteAllInBatch();
@@ -231,15 +235,15 @@ class CheckoutVerifiedReservationIntegrationTest {
     }
 
     @Test
-    void amountOrProviderMerchantMismatchLeavesCheckoutAndInventoryUnchanged() {
-        CheckoutResponse checkout = prepareCheckout("checkout-prepare-2", "A1");
+    void approvedPaymentMismatchMovesCheckoutToUnknownWithoutCreatingLocalPayment() {
+        CheckoutResponse amountCheckout = prepareCheckout("checkout-prepare-2", "A1");
         VerifiedReservRequest amountMismatch = verifiedRequest(
-                checkout.getMerchantUid(),
+                amountCheckout.getMerchantUid(),
                 "payment-wrong-amount",
                 "A1"
         );
         when(paymentVerificationPort.verify("payment-wrong-amount"))
-                .thenReturn(approved("payment-wrong-amount", checkout.getMerchantUid(), 100));
+                .thenReturn(approved("payment-wrong-amount", amountCheckout.getMerchantUid(), 100));
 
         assertThatThrownBy(() -> reservationService.reserve(
                 USERNAME,
@@ -249,10 +253,11 @@ class CheckoutVerifiedReservationIntegrationTest {
         )).isExactlyInstanceOf(InvalidPaymentException.class)
                 .hasMessageContaining("금액");
 
+        CheckoutResponse merchantCheckout = prepareCheckout("checkout-prepare-merchant", "A2");
         VerifiedReservRequest merchantMismatch = verifiedRequest(
-                checkout.getMerchantUid(),
+                merchantCheckout.getMerchantUid(),
                 "payment-wrong-merchant",
-                "A1"
+                "A2"
         );
         when(paymentVerificationPort.verify("payment-wrong-merchant"))
                 .thenReturn(approved("payment-wrong-merchant", "another-merchant", 30_000));
@@ -265,7 +270,20 @@ class CheckoutVerifiedReservationIntegrationTest {
         )).isExactlyInstanceOf(InvalidPaymentException.class)
                 .hasMessageContaining("고객사 주문 식별자");
 
-        assertReadySnapshot(checkout.getMerchantUid());
+        entityManager.clear();
+        assertThat(checkoutRepository.findByMerchantUid(amountCheckout.getMerchantUid()).orElseThrow())
+                .satisfies(checkout -> {
+                    assertThat(checkout.getStatus())
+                            .isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+                    assertThat(checkout.getVerificationPaymentId()).isEqualTo("payment-wrong-amount");
+                });
+        assertThat(checkoutRepository.findByMerchantUid(merchantCheckout.getMerchantUid()).orElseThrow())
+                .satisfies(checkout -> {
+                    assertThat(checkout.getStatus())
+                            .isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+                    assertThat(checkout.getVerificationPaymentId()).isEqualTo("payment-wrong-merchant");
+                });
+        assertEmptyReservationSnapshot(2);
     }
 
     @Test
@@ -311,8 +329,165 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertEmptyReservationSnapshot(2);
     }
 
+    @Test
+    void verificationClaimOneMicrosecondBeforeOriginalExpiryCanConfirm() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("checkout-boundary-prepare", "A1");
+        clock.set(checkout.getExpiresAt().minusNanos(1_000));
+        when(paymentVerificationPort.verify("payment-boundary"))
+                .thenReturn(approved("payment-boundary", checkout.getMerchantUid(), 30_000));
+
+        LocalDateTime createdAt = reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                verifiedRequest(checkout.getMerchantUid(), "payment-boundary", "A1"),
+                "reservation-boundary"
+        );
+
+        assertThat(createdAt).isEqualTo(checkout.getExpiresAt().minusNanos(1_000));
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
+    }
+
+    @Test
+    void knownPaymentRejectionRestoresReadyCheckoutAndOriginalSeatLease() {
+        CheckoutResponse checkout = prepareCheckout("checkout-rejected-prepare", "A1");
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-rejected",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-rejected"))
+                .thenReturn(new PaymentApproval(
+                        "payment-rejected",
+                        checkout.getMerchantUid(),
+                        USERNAME,
+                        30_000,
+                        false,
+                        null
+                ));
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request,
+                "reservation-rejected"
+        )).isExactlyInstanceOf(InvalidPaymentException.class);
+
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(stored.getVerificationPaymentId()).isNull();
+        assertThat(seat.getHeldUntil()).isEqualTo(checkout.getExpiresAt());
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> {
+                    assertThat(assignment.getOriginalHoldExpiresAt()).isEqualTo(checkout.getExpiresAt());
+                    assertThat(assignment.getVerificationLeaseUntil()).isNull();
+                });
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void unavailableVerificationAdapterRestoresReadyCheckout() {
+        CheckoutResponse checkout = prepareCheckout("checkout-unavailable-prepare", "A1");
+        when(paymentVerificationPort.verify("payment-unavailable"))
+                .thenThrow(new PaymentVerificationUnavailableException());
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                verifiedRequest(checkout.getMerchantUid(), "payment-unavailable", "A1"),
+                "reservation-unavailable"
+        )).isExactlyInstanceOf(PaymentVerificationUnavailableException.class);
+
+        assertReadySnapshot(checkout.getMerchantUid());
+        verify(paymentVerificationPort, times(1)).verify("payment-unavailable");
+    }
+
+    @Test
+    void knownRejectionAfterOriginalExpiryExpiresCheckoutAndRestoresOriginalLease() {
+        CheckoutResponse checkout = prepareCheckout("checkout-late-rejected-prepare", "A1");
+        when(paymentVerificationPort.verify("payment-late-rejected"))
+                .thenAnswer(invocation -> {
+                    clock.set(checkout.getExpiresAt());
+                    return new PaymentApproval(
+                            "payment-late-rejected",
+                            checkout.getMerchantUid(),
+                            USERNAME,
+                            30_000,
+                            false,
+                            null
+                    );
+                });
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                verifiedRequest(checkout.getMerchantUid(), "payment-late-rejected", "A1"),
+                "reservation-late-rejected"
+        )).isExactlyInstanceOf(InvalidPaymentException.class);
+
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(seat.getHeldUntil()).isEqualTo(checkout.getExpiresAt());
+        assertThat(seat.isHeldAt(checkout.getExpiresAt())).isFalse();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil()).isNull());
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void knownRejectionRestoresEachStaggeredSeatToItsOwnOriginalExpiry() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        LocalDateTime firstExpiry = BASE_TIME.plusMinutes(5);
+        clock.set(BASE_TIME.plusMinutes(1));
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A2"));
+        LocalDateTime secondExpiry = BASE_TIME.plusMinutes(6);
+        CheckoutResponse checkout = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-staggered-rejected-prepare"
+        );
+        when(paymentVerificationPort.verify("payment-staggered-rejected"))
+                .thenReturn(new PaymentApproval(
+                        "payment-staggered-rejected",
+                        checkout.getMerchantUid(),
+                        USERNAME,
+                        60_000,
+                        false,
+                        null
+                ));
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                verifiedRequest(
+                        checkout.getMerchantUid(),
+                        "payment-staggered-rejected",
+                        "A2",
+                        "A1"
+                ),
+                "reservation-staggered-rejected"
+        )).isExactlyInstanceOf(InvalidPaymentException.class);
+
+        entityManager.clear();
+        assertThat(seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1").getHeldUntil())
+                .isEqualTo(firstExpiry);
+        assertThat(seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2").getHeldUntil())
+                .isEqualTo(secondExpiry);
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(
+                checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow().getId()
+        )).extracting(assignment -> assignment.getOriginalHoldExpiresAt())
+                .containsExactlyInAnyOrder(firstExpiry, secondExpiry);
+        assertReadySnapshot(checkout.getMerchantUid());
+    }
+
     @RepeatedTest(3)
-    void approvalReturningAfterCheckoutExpiryLeavesNoLocalPaymentEvidence() throws Exception {
+    void approvalReturningInsideVerificationGraceConfirmsAfterOriginalCheckoutExpiry() throws Exception {
         CheckoutResponse checkout = prepareCheckout("checkout-expiry-race-prepare", "A1");
         VerifiedReservRequest request = verifiedRequest(
                 checkout.getMerchantUid(),
@@ -346,42 +521,164 @@ class CheckoutVerifiedReservationIntegrationTest {
             try {
                 assertThat(verificationStarted.await(5, TimeUnit.SECONDS)).isTrue();
                 clock.set(checkout.getExpiresAt());
-                assertThatThrownBy(() -> checkoutService.prepare(
+                CheckoutResponse verifying = checkoutService.prepare(
                         USERNAME,
                         CONCERT_ID,
                         checkoutRequest("A1"),
                         "checkout-expiry-race-prepare"
-                )).isExactlyInstanceOf(CheckoutExpiredException.class);
+                );
+                assertThat(verifying.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFYING);
+                assertThatThrownBy(() -> seatHoldService.hold(
+                        "another-user",
+                        CONCERT_ID,
+                        holdRequest("A1")
+                )).isExactlyInstanceOf(SeatHoldConflictException.class);
             } finally {
                 returnApproval.countDown();
             }
             result = reservation.get(10, TimeUnit.SECONDS);
         }
 
-        assertThat(result.success()).isFalse();
-        assertThat(result.exceptionType()).isEqualTo(CheckoutExpiredException.class.getSimpleName());
+        assertThat(result.success()).isTrue();
         verify(paymentVerificationPort, times(1)).verify("payment-expiry-race");
 
         entityManager.clear();
         Checkout storedCheckout = checkoutRepository.findByMerchantUid(checkout.getMerchantUid())
                 .orElseThrow();
         Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
-        assertThat(storedCheckout.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
-        assertThat(storedCheckout.getBooking()).isNull();
+        assertThat(storedCheckout.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
+        assertThat(storedCheckout.getBooking()).isNotNull();
         assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(storedCheckout.getId()))
                 .hasSize(1)
-                .allSatisfy(assignment ->
-                        assertThat(assignment.getActiveUntil()).isEqualTo(checkout.getExpiresAt()));
-        assertThat(checkoutSeatAssignmentRepository.existsActiveBySeatIds(
-                List.of(seat.getId()),
-                checkout.getExpiresAt()
-        )).isFalse();
+                .allSatisfy(assignment -> {
+                    assertThat(assignment.getActiveUntil()).isEqualTo(checkout.getExpiresAt());
+                    assertThat(assignment.getVerificationLeaseUntil()).isNull();
+                });
+        assertThat(seat.isReserved()).isTrue();
+        assertThat(seat.getHeldBy()).isNull();
+        assertThat(seat.getHeldUntil()).isNull();
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
+    }
+
+    @RepeatedTest(3)
+    void verificationDeadlineMovesCheckoutToUnknownAndStopsDuplicateProviderCall() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("checkout-timeout-prepare", "A1");
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-timeout",
+                "A1"
+        );
+        CountDownLatch verificationStarted = new CountDownLatch(1);
+        CountDownLatch returnApproval = new CountDownLatch(1);
+        when(paymentVerificationPort.verify("payment-timeout"))
+                .thenAnswer(invocation -> {
+                    verificationStarted.countDown();
+                    if (!returnApproval.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("mock 결제 승인 반환 대기 시간이 초과되었습니다.");
+                    }
+                    return approved("payment-timeout", checkout.getMerchantUid(), 30_000);
+                });
+
+        AttemptResult firstResult;
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<AttemptResult> first = executor.submit(() -> attempt(
+                    request,
+                    "reservation-timeout",
+                    start
+            ));
+            start.countDown();
+            assertThat(verificationStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+            LocalDateTime deadline = checkout.getExpiresAt().plusSeconds(30);
+            clock.set(deadline.minusNanos(1));
+            assertThatThrownBy(() -> seatHoldService.hold(
+                    "another-user",
+                    CONCERT_ID,
+                    holdRequest("A1")
+            )).isExactlyInstanceOf(SeatHoldConflictException.class);
+
+            clock.set(deadline);
+            assertThatThrownBy(() -> reservationService.reserve(
+                    USERNAME,
+                    CONCERT_ID,
+                    request,
+                    "reservation-timeout"
+            )).isExactlyInstanceOf(PaymentVerificationUnknownException.class);
+            seatHoldService.hold("another-user", CONCERT_ID, holdRequest("A1"));
+            CheckoutResponse replacementCheckout = checkoutService.prepare(
+                    "another-user",
+                    CONCERT_ID,
+                    checkoutRequest("A1"),
+                    "checkout-after-verification-timeout"
+            );
+            assertThat(replacementCheckout.getStatus()).isEqualTo(CheckoutStatus.READY);
+            returnApproval.countDown();
+            firstResult = first.get(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(firstResult.success()).isFalse();
+        assertThat(firstResult.exceptionType())
+                .isEqualTo(PaymentVerificationUnknownException.class.getSimpleName());
+        verify(paymentVerificationPort, times(1)).verify("payment-timeout");
+
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo("payment-timeout");
+        assertThat(stored.getVerificationDeadline()).isEqualTo(checkout.getExpiresAt().plusSeconds(30));
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                        .isEqualTo(stored.getVerificationDeadline()));
+        assertThat(seat.getHeldBy()).isEqualTo("another-user");
+        assertThat(seat.isHeldAt(stored.getVerificationDeadline())).isTrue();
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void finalReservationFailureRollsBackBusinessRowsThenPersistsUnknownClaim() {
+        CheckoutResponse checkout = prepareCheckout("checkout-final-failure-prepare", "A1");
+        when(paymentVerificationPort.verify("payment-final-failure"))
+                .thenReturn(approved(
+                        "payment-final-failure",
+                        checkout.getMerchantUid(),
+                        30_000
+                ));
+        FINALIZATION_FAILURE_MERCHANT_UID.set(checkout.getMerchantUid());
+
+        try {
+            assertThatThrownBy(() -> reservationService.reserve(
+                    USERNAME,
+                    CONCERT_ID,
+                    verifiedRequest(
+                            checkout.getMerchantUid(),
+                            "payment-final-failure",
+                            "A1"
+                    ),
+                    "reservation-final-failure"
+            )).isExactlyInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("최종 예약 실패 fixture");
+        } finally {
+            FINALIZATION_FAILURE_MERCHANT_UID.set(null);
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-final-failure");
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo("payment-final-failure");
+        assertThat(stored.getVerificationIdempotencyKey()).isEqualTo("reservation-final-failure");
+        assertThat(stored.getVerificationDeadline()).isEqualTo(checkout.getExpiresAt().plusSeconds(30));
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                        .isEqualTo(stored.getVerificationDeadline()));
+        assertThat(seat.isReserved()).isFalse();
         assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
-        assertThat(seat.getHeldUntil()).isEqualTo(checkout.getExpiresAt());
-        assertThat(seat.isHeldAt(checkout.getExpiresAt())).isFalse();
-        assertThat(seat.availabilityAt(checkout.getExpiresAt())).isEqualTo(SeatAvailability.AVAILABLE);
-        assertThat(seatRepository.countHoldRows(concertTimeId)).isEqualTo(1);
-        assertThat(seatRepository.countActiveHolds(concertTimeId, checkout.getExpiresAt())).isZero();
+        assertThat(seat.getHeldUntil()).isEqualTo(stored.getVerificationDeadline());
         assertEmptyReservationSnapshot(2);
     }
 
@@ -420,6 +717,7 @@ class CheckoutVerifiedReservationIntegrationTest {
                     .isEqualTo(CheckoutConflictException.class.getSimpleName());
         }
 
+        verify(paymentVerificationPort, times(1)).verify("payment-concurrent");
         assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
     }
 
@@ -530,6 +828,13 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     private CheckoutRequest checkoutRequest(String... seatNumbers) {
         CheckoutRequest request = new CheckoutRequest();
+        request.setConcertTimeId(concertTimeId);
+        request.setSeatNumberList(List.of(seatNumbers));
+        return request;
+    }
+
+    private SeatHoldRequest holdRequest(String... seatNumbers) {
+        SeatHoldRequest request = new SeatHoldRequest();
         request.setConcertTimeId(concertTimeId);
         request.setSeatNumberList(List.of(seatNumbers));
         return request;
@@ -684,7 +989,11 @@ class CheckoutVerifiedReservationIntegrationTest {
                                 (proxy, method, args) -> {
                                     Object result = invoke(checkoutRepository, method, args);
                                     CheckoutAliasLockBarrier barrier = CHECKOUT_ALIAS_LOCK_BARRIER.get();
-                                    if (barrier != null && method.getName().equals("findByMerchantUidWithLock")) {
+                                    if (barrier != null
+                                            && method.getName().equals("findByMerchantUidWithLock")
+                                            && result instanceof java.util.Optional<?> optional
+                                            && optional.orElse(null) instanceof Checkout checkout
+                                            && checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFYING) {
                                         barrier.checkoutLockAcquired();
                                     }
                                     return result;
@@ -706,6 +1015,30 @@ class CheckoutVerifiedReservationIntegrationTest {
                                         barrier.aliasKeySaveAttempted();
                                     }
                                     return invoke(checkoutRequestKeyRepository, method, args);
+                                }
+                        );
+                    }
+                    if (bean instanceof CheckoutSeatAssignmentRepository assignmentRepository) {
+                        return Proxy.newProxyInstance(
+                                CheckoutSeatAssignmentRepository.class.getClassLoader(),
+                                new Class<?>[]{CheckoutSeatAssignmentRepository.class},
+                                (proxy, method, args) -> {
+                                    Object result = invoke(assignmentRepository, method, args);
+                                    String targetMerchantUid = FINALIZATION_FAILURE_MERCHANT_UID.get();
+                                    if (targetMerchantUid != null
+                                            && method.getName().equals("findByCheckoutIdWithLock")
+                                            && result instanceof List<?> assignments
+                                            && !assignments.isEmpty()
+                                            && assignments.getFirst() instanceof com.onticket.concert.domain.CheckoutSeatAssignment assignment
+                                            && assignment.getCheckout().getStatus() == CheckoutStatus.PAYMENT_VERIFYING
+                                            && targetMerchantUid.equals(assignment.getCheckout().getMerchantUid())
+                                            && FINALIZATION_FAILURE_MERCHANT_UID.compareAndSet(
+                                            targetMerchantUid,
+                                            null
+                                    )) {
+                                        throw new IllegalStateException("최종 예약 실패 fixture");
+                                    }
+                                    return result;
                                 }
                         );
                     }
