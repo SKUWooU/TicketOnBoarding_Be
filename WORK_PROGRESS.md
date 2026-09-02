@@ -13,15 +13,15 @@
 
 ## 진행 중
 
+## 완료
+
 ### Backend Issue #79 — 결제 검증 중 Checkout 만료 경합 기준선
 
-- Branch: `test/79-checkout-verification-expiry-race-baseline`
-- 상태: 기준선 fixture·로컬 검증 완료, PR 준비
-- 검증: 결정적 경합 3회와 Backend 전체 165 tests 통과; 매회 mock 승인 응답 뒤 Checkout `EXPIRED`, Payment·Booking·Reservation 0
-- 범위: mock 결제 검증 대기 중 Checkout 만료를 고정하고 Checkout·결제·예약·좌석 최종 상태를 교차 검증
+- PR: [#80](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/80) / squash `d5dcc3e`
+- 결과: 결제 검증 대기 중 정확한 만료를 persisted한 뒤 mock 승인 응답이 반환돼도 최종 transaction은 만료로 거부되고 서버 Payment 증빙이 남지 않는 공백 재현
+- 검증: 결정적 경합 3회, Backend 165 tests·CI 통과; 매회 Checkout `EXPIRED`, Payment·Booking·Reservation 0, 최종 `MERGE_READY: YES`
+- 근거: [결제 검증 중 Checkout 만료 경합 기준선](docs/project-improvement/checkout-verification-expiry-race-baseline.md)
 - 제외: 운영 코드 변경, Checkout 취소 API, 실제 PG·KOPIS·SMS, Frontend, 성능 수치·분산 기술
-
-## 완료
 
 ### Backend Issue #76 — 활성 Checkout 좌석 귀속과 부분 중첩 차단
 
