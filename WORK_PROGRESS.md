@@ -13,15 +13,15 @@
 
 ## 진행 중
 
+## 완료
+
 ### Backend Issue #73 — 부분 중첩 좌석 Checkout 승인 충돌 기준선
 
-- Issue: [#73](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/73)
-- Branch: `test/73-partial-overlap-checkout-baseline`
-- 상태: Reviewer Blocking의 좌석별 snapshot 보강·전체 157 tests 재검증 완료, 재검토 대기
-- 범위: `A1`과 `A1+A2` Checkout의 순차·동시 mock 승인 및 최종 DB snapshot
-- 제외: 동작 변경, 실제 PG·취소·환불, Frontend, 신규 schema·분산 기술
-
-## 완료
+- PR: [#74](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/74) / squash `cd16d44`
+- 결과: `A1`과 `A1+A2`의 Checkout 2개·mock 승인 2회 이후 확정 1·좌석 충돌 1, 패자 Payment rollback·Checkout `READY` 공백 재현
+- 검증: 순차 2개·동시 3회 좌석별 hold·예약·Booking 연결, Backend 157 tests·CI 통과, Blocking 수정 후 `MERGE_READY: YES`
+- 근거: [부분 중첩 좌석 Checkout 승인 충돌 기준선](docs/project-improvement/partial-overlap-checkout-baseline.md)
+- 제외: 차단 구현, 실제 PG·취소·환불, Frontend, 신규 schema·분산 기술
 
 ### Backend Issue #70 — 동일 활성 hold의 Checkout 단일화
 
