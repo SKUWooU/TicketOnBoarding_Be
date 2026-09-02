@@ -32,6 +32,10 @@ import java.util.Objects;
                 @UniqueConstraint(
                         name = "uk_checkout_username_idempotency_key",
                         columnNames = {"username", "idempotency_key"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_checkout_hold_identity",
+                        columnNames = {"username", "request_fingerprint", "expires_at"}
                 )
         }
 )
