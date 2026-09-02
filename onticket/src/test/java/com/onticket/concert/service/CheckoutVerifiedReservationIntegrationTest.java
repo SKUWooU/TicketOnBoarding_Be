@@ -8,6 +8,8 @@ import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.PaymentStatus;
+import com.onticket.concert.domain.Reservation;
+import com.onticket.concert.domain.ReservationStatus;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
@@ -343,6 +345,190 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
     }
 
+    @Test
+    void smallerOverlapApprovalLeavesLargerApprovedMockWithoutLocalPayment() throws Exception {
+        OverlappingCheckouts checkouts = prepareOverlappingCheckouts();
+        assertDistinctReadyOverlappingCheckouts(checkouts);
+        VerifiedReservRequest smallerRequest = verifiedRequest(
+                checkouts.smaller().getMerchantUid(),
+                "payment-overlap-smaller-first",
+                "A1"
+        );
+        VerifiedReservRequest largerRequest = verifiedRequest(
+                checkouts.larger().getMerchantUid(),
+                "payment-overlap-larger-second",
+                "A1",
+                "A2"
+        );
+        when(paymentVerificationPort.verify("payment-overlap-smaller-first"))
+                .thenReturn(approved(
+                        "payment-overlap-smaller-first",
+                        checkouts.smaller().getMerchantUid(),
+                        30_000
+                ));
+        when(paymentVerificationPort.verify("payment-overlap-larger-second"))
+                .thenReturn(approved(
+                        "payment-overlap-larger-second",
+                        checkouts.larger().getMerchantUid(),
+                        60_000
+                ));
+
+        reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                smallerRequest,
+                "reservation-overlap-smaller-first"
+        );
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                largerRequest,
+                "reservation-overlap-larger-second"
+        )).isExactlyInstanceOf(SeatReservationConflictException.class)
+                .hasMessageContaining("이미 예약된 좌석");
+
+        verify(paymentVerificationPort, times(1)).verify("payment-overlap-smaller-first");
+        verify(paymentVerificationPort, times(1)).verify("payment-overlap-larger-second");
+        assertOverlapResult(
+                checkouts.smaller(),
+                checkouts.larger(),
+                "payment-overlap-smaller-first",
+                1,
+                List.of("A1"),
+                List.of("A2")
+        );
+    }
+
+    @Test
+    void largerOverlapApprovalLeavesSmallerApprovedMockWithoutLocalPayment() throws Exception {
+        OverlappingCheckouts checkouts = prepareOverlappingCheckouts();
+        assertDistinctReadyOverlappingCheckouts(checkouts);
+        VerifiedReservRequest largerRequest = verifiedRequest(
+                checkouts.larger().getMerchantUid(),
+                "payment-overlap-larger-first",
+                "A1",
+                "A2"
+        );
+        VerifiedReservRequest smallerRequest = verifiedRequest(
+                checkouts.smaller().getMerchantUid(),
+                "payment-overlap-smaller-second",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-overlap-larger-first"))
+                .thenReturn(approved(
+                        "payment-overlap-larger-first",
+                        checkouts.larger().getMerchantUid(),
+                        60_000
+                ));
+        when(paymentVerificationPort.verify("payment-overlap-smaller-second"))
+                .thenReturn(approved(
+                        "payment-overlap-smaller-second",
+                        checkouts.smaller().getMerchantUid(),
+                        30_000
+                ));
+
+        reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                largerRequest,
+                "reservation-overlap-larger-first"
+        );
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                smallerRequest,
+                "reservation-overlap-smaller-second"
+        )).isExactlyInstanceOf(SeatReservationConflictException.class)
+                .hasMessageContaining("이미 예약된 좌석");
+
+        verify(paymentVerificationPort, times(1)).verify("payment-overlap-larger-first");
+        verify(paymentVerificationPort, times(1)).verify("payment-overlap-smaller-second");
+        assertOverlapResult(
+                checkouts.larger(),
+                checkouts.smaller(),
+                "payment-overlap-larger-first",
+                0,
+                List.of("A1", "A2"),
+                List.of()
+        );
+    }
+
+    @RepeatedTest(3)
+    void concurrentOverlapApprovalsConfirmOneAndLeaveOneReady() throws Exception {
+        OverlappingCheckouts checkouts = prepareOverlappingCheckouts();
+        assertDistinctReadyOverlappingCheckouts(checkouts);
+        VerifiedReservRequest smallerRequest = verifiedRequest(
+                checkouts.smaller().getMerchantUid(),
+                "payment-overlap-concurrent-smaller",
+                "A1"
+        );
+        VerifiedReservRequest largerRequest = verifiedRequest(
+                checkouts.larger().getMerchantUid(),
+                "payment-overlap-concurrent-larger",
+                "A1",
+                "A2"
+        );
+        when(paymentVerificationPort.verify("payment-overlap-concurrent-smaller"))
+                .thenReturn(approved(
+                        "payment-overlap-concurrent-smaller",
+                        checkouts.smaller().getMerchantUid(),
+                        30_000
+                ));
+        when(paymentVerificationPort.verify("payment-overlap-concurrent-larger"))
+                .thenReturn(approved(
+                        "payment-overlap-concurrent-larger",
+                        checkouts.larger().getMerchantUid(),
+                        60_000
+                ));
+
+        CountDownLatch start = new CountDownLatch(1);
+        AttemptResult smallerResult;
+        AttemptResult largerResult;
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AttemptResult> smaller = executor.submit(() -> attempt(
+                    smallerRequest,
+                    "reservation-overlap-concurrent-smaller",
+                    start
+            ));
+            Future<AttemptResult> larger = executor.submit(() -> attempt(
+                    largerRequest,
+                    "reservation-overlap-concurrent-larger",
+                    start
+            ));
+            start.countDown();
+            smallerResult = smaller.get(10, TimeUnit.SECONDS);
+            largerResult = larger.get(10, TimeUnit.SECONDS);
+        }
+
+        List<AttemptResult> results = List.of(smallerResult, largerResult);
+        assertThat(results).filteredOn(AttemptResult::success).hasSize(1);
+        assertThat(results).filteredOn(result -> !result.success()).singleElement()
+                .extracting(AttemptResult::exceptionType)
+                .isEqualTo(SeatReservationConflictException.class.getSimpleName());
+        verify(paymentVerificationPort, times(1)).verify("payment-overlap-concurrent-smaller");
+        verify(paymentVerificationPort, times(1)).verify("payment-overlap-concurrent-larger");
+
+        if (smallerResult.success()) {
+            assertOverlapResult(
+                    checkouts.smaller(),
+                    checkouts.larger(),
+                    "payment-overlap-concurrent-smaller",
+                    1,
+                    List.of("A1"),
+                    List.of("A2")
+            );
+        } else {
+            assertOverlapResult(
+                    checkouts.larger(),
+                    checkouts.smaller(),
+                    "payment-overlap-concurrent-larger",
+                    0,
+                    List.of("A1", "A2"),
+                    List.of()
+            );
+        }
+    }
+
     @RepeatedTest(3)
     void aliasKeyBindingAfterSeatTransactionDoesNotDeadlockWithReservationConfirmation() throws Exception {
         CheckoutResponse checkout = prepareCheckout("checkout-lock-order-first", "A1");
@@ -414,6 +600,91 @@ class CheckoutVerifiedReservationIntegrationTest {
         checkoutRequest.setConcertTimeId(concertTimeId);
         checkoutRequest.setSeatNumberList(List.of(seatNumbers));
         return checkoutService.prepare(USERNAME, CONCERT_ID, checkoutRequest, idempotencyKey);
+    }
+
+    private OverlappingCheckouts prepareOverlappingCheckouts() {
+        SeatHoldRequest holdRequest = new SeatHoldRequest();
+        holdRequest.setConcertTimeId(concertTimeId);
+        holdRequest.setSeatNumberList(List.of("A1", "A2"));
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest);
+
+        CheckoutResponse smaller = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-overlap-smaller"
+        );
+        CheckoutResponse larger = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-overlap-larger"
+        );
+        return new OverlappingCheckouts(smaller, larger);
+    }
+
+    private void assertDistinctReadyOverlappingCheckouts(OverlappingCheckouts checkouts) {
+        assertThat(checkouts.smaller().getMerchantUid())
+                .isNotEqualTo(checkouts.larger().getMerchantUid());
+        assertThat(checkouts.smaller().getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(checkouts.larger().getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+    }
+
+    private void assertOverlapResult(
+            CheckoutResponse winner,
+            CheckoutResponse loser,
+            String persistedPaymentId,
+            int remaining,
+            List<String> reservedSeatNumbers,
+            List<String> heldSeatNumbers
+    ) {
+        entityManager.clear();
+        Checkout winnerCheckout = checkoutRepository.findByMerchantUid(winner.getMerchantUid()).orElseThrow();
+        Checkout loserCheckout = checkoutRepository.findByMerchantUid(loser.getMerchantUid()).orElseThrow();
+        assertThat(winnerCheckout.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
+        assertThat(winnerCheckout.getBooking()).isNotNull();
+        assertThat(loserCheckout.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(loserCheckout.getBooking()).isNull();
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+        assertThat(bookingRepository.count()).isEqualTo(1);
+        assertThat(paymentRepository.count()).isEqualTo(1);
+        Payment payment = paymentRepository.findAll().getFirst();
+        assertThat(payment.getProviderPaymentId()).isEqualTo(persistedPaymentId);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.RESERVATION_CONFIRMED);
+        assertThat(payment.getBooking().getId()).isEqualTo(winnerCheckout.getBooking().getId());
+
+        List<Reservation> reservations = reservationRepository.findAll();
+        assertThat(reservations)
+                .extracting(Reservation::getSeatNumber)
+                .containsExactlyInAnyOrderElementsOf(reservedSeatNumbers);
+        assertThat(reservations).allSatisfy(reservation -> {
+            assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.PAYMENT_COMPLETED);
+            assertThat(reservation.getSeat()).isNotNull();
+            assertThat(reservation.getSeat().getSeatNumber()).isEqualTo(reservation.getSeatNumber());
+            assertThat(reservation.getBooking().getId()).isEqualTo(winnerCheckout.getBooking().getId());
+        });
+        assertThat(seatRepository.countByConcertTimeIdAndReservedTrue(concertTimeId))
+                .isEqualTo(reservedSeatNumbers.size());
+        List<Seat> seats = seatRepository.findByConcertTimeId(concertTimeId);
+        assertThat(seats).hasSize(2).allSatisfy(seat -> {
+            if (reservedSeatNumbers.contains(seat.getSeatNumber())) {
+                assertThat(seat.isReserved()).isTrue();
+                assertThat(seat.getHeldBy()).isNull();
+                assertThat(seat.getHeldUntil()).isNull();
+                return;
+            }
+            assertThat(heldSeatNumbers).contains(seat.getSeatNumber());
+            assertThat(seat.isReserved()).isFalse();
+            assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+            assertThat(seat.getHeldUntil()).isEqualTo(BASE_TIME.plusMinutes(5));
+            assertThat(seat.isHeldBy(USERNAME, BASE_TIME)).isTrue();
+        });
+        assertThat(concertTimeRepository.findById(concertTimeId).orElseThrow().getSeatAmount())
+                .isEqualTo(remaining);
+        assertThat(remaining + reservations.size()).isEqualTo(2);
     }
 
     private CheckoutRequest checkoutRequest(String... seatNumbers) {
@@ -515,6 +786,9 @@ class CheckoutVerifiedReservationIntegrationTest {
         static AttemptResult failure(String exceptionType, String message) {
             return new AttemptResult(false, exceptionType, message);
         }
+    }
+
+    private record OverlappingCheckouts(CheckoutResponse smaller, CheckoutResponse larger) {
     }
 
     private static final class CheckoutAliasLockBarrier {
