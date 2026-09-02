@@ -13,16 +13,15 @@
 
 ## 진행 중
 
-### Backend Issue #70 — 동일 좌석 점유의 중복 READY Checkout 생성 방지
-
-- Issue: [#70](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/70)
-- Branch: `fix/70-single-active-checkout`
-- PR: [#71](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/71)
-- 상태: 두 차례 Reviewer Blocking 수정·전체 검증 완료, Reviewer 재검토 대기
-- 범위: 동일 hold·다른 멱등 키의 Checkout 단일화, 수락 키 귀속과 만료 후 재생성
-- 제외: Frontend, 실제 PG·환불, 운영 migration, 분산 기술
-
 ## 완료
+
+### Backend Issue #70 — 동일 활성 hold의 Checkout 단일화
+
+- PR: [#71](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/71) / squash `6ee2b67`
+- 결과: 같은 hold의 Checkout·merchantUid를 하나로 수렴시키고 모든 수락 키를 귀속했으며, 후속 키 저장을 좌석 transaction 밖으로 분리해 FK lock 역순을 제거
+- 검증: Backend 152 tests·CI 통과, lock 교차 3회 deadlock 0, 두 차례 Blocking 수정 후 `MERGE_READY: YES`
+- 근거: [동일 활성 hold의 Checkout 단일화](docs/project-improvement/single-checkout-per-active-hold.md)
+- 제외: Frontend, 부분 중첩 payload, 실제 PG·환불, 운영 migration, 분산 기술
 
 ### Backend Issue #67 — 서버 소유 결제 요청과 예약 검증 경계
 
