@@ -51,6 +51,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -567,6 +568,19 @@ class ReservationControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(seatHoldService).release(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class));
+    }
+
+    @Test
+    void activeCheckoutSeatReleaseReturnsHttp409() throws Exception {
+        doThrow(new SeatHoldConflictException("결제 준비 중인 좌석은 임시 점유를 해제할 수 없습니다."))
+                .when(seatHoldService)
+                .release(eq(USERNAME), eq(CONCERT_ID), any(SeatHoldRequest.class));
+
+        mockMvc.perform(delete("/main/detail/{concertId}/seat-holds", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isConflict());
     }
 
     @Test

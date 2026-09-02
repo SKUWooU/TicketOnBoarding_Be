@@ -1,6 +1,7 @@
 package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Checkout;
+import com.onticket.concert.domain.CheckoutSeatAssignment;
 import com.onticket.concert.domain.CheckoutStatus;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertTime;
@@ -10,6 +11,7 @@ import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.dto.SeatHoldRequest;
 import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutRequestKeyRepository;
+import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.SeatRepository;
@@ -101,6 +103,9 @@ class CheckoutIntegrationTest {
     private CheckoutRequestKeyRepository checkoutRequestKeyRepository;
 
     @Autowired
+    private CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
+
+    @Autowired
     private SeatRepository seatRepository;
 
     @Autowired
@@ -119,6 +124,7 @@ class CheckoutIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        checkoutSeatAssignmentRepository.deleteAllInBatch();
         checkoutRequestKeyRepository.deleteAllInBatch();
         checkoutRepository.deleteAllInBatch();
         seatRepository.deleteAllInBatch();
@@ -147,6 +153,7 @@ class CheckoutIntegrationTest {
         assertThat(response.getExpiresAt()).isEqualTo(BASE_TIME.plusMinutes(5));
         assertThat(response.getStatus()).isEqualTo(CheckoutStatus.READY);
         assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
     }
 
     @Test
@@ -200,6 +207,7 @@ class CheckoutIntegrationTest {
         assertThat(second.getExpiresAt()).isEqualTo(first.getExpiresAt());
         assertThat(checkoutRepository.count()).isEqualTo(1);
         assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
 
         CheckoutResponse secondRetry = checkoutService.prepare(
                 USERNAME,
@@ -251,6 +259,7 @@ class CheckoutIntegrationTest {
 
         assertThat(checkoutRepository.count()).isEqualTo(1);
         assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -272,6 +281,161 @@ class CheckoutIntegrationTest {
 
         assertThat(second.getMerchantUid()).isNotEqualTo(first.getMerchantUid());
         assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void activeCheckoutRejectsASecondCheckoutThatAddsAnAssignedSeat() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-overlap-small-first"
+        );
+
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-overlap-large-second"
+        )).isExactlyInstanceOf(CheckoutConflictException.class)
+                .hasMessageContaining("활성 결제 요청");
+
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(1);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
+        assertThat(checkoutRepository.findByMerchantUid(first.getMerchantUid())).isPresent();
+    }
+
+    @Test
+    void activeCheckoutRejectsASecondCheckoutThatRemovesAnAssignedSeat() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-overlap-large-first"
+        );
+
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-overlap-small-second"
+        )).isExactlyInstanceOf(CheckoutConflictException.class)
+                .hasMessageContaining("활성 결제 요청");
+
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(1);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
+        assertThat(checkoutRepository.findByMerchantUid(first.getMerchantUid())).isPresent();
+    }
+
+    @RepeatedTest(3)
+    void concurrentPartiallyOverlappingCheckoutsAllowOnlyOneWinner() throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CheckoutAttempt> first = executor.submit(() -> checkoutAttempt(
+                    start,
+                    checkoutRequest("A1"),
+                    "checkout-overlap-concurrent-small"
+            ));
+            Future<CheckoutAttempt> second = executor.submit(() -> checkoutAttempt(
+                    start,
+                    checkoutRequest("A1", "A2"),
+                    "checkout-overlap-concurrent-large"
+            ));
+            start.countDown();
+
+            List<CheckoutAttempt> attempts = List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            );
+            assertThat(attempts).filteredOn(CheckoutAttempt::successful).hasSize(1);
+            assertThat(attempts).filteredOn(attempt ->
+                    CheckoutConflictException.class.equals(attempt.failureType())).hasSize(1);
+
+            CheckoutAttempt winner = attempts.stream()
+                    .filter(CheckoutAttempt::successful)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(winner.seatCount());
+        }
+
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void activeCheckoutPreventsExplicitHoldRelease() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse checkout = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-active-release"
+        );
+
+        assertThatThrownBy(() -> seatHoldService.release(
+                USERNAME,
+                CONCERT_ID,
+                holdRequest("A1")
+        )).isExactlyInstanceOf(SeatHoldConflictException.class)
+                .hasMessageContaining("결제 준비 중");
+
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+        assertThat(seat.getHeldUntil()).isEqualTo(BASE_TIME.plusMinutes(5));
+        assertThat(checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow().getStatus())
+                .isEqualTo(CheckoutStatus.READY);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void earliestCheckoutExpiryEndsEveryAssignmentForStaggeredSeatHolds() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        clock.advanceSeconds(60);
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A2"));
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-staggered-holds"
+        );
+        Checkout storedFirst = checkoutRepository.findByMerchantUid(first.getMerchantUid()).orElseThrow();
+
+        assertThat(first.getExpiresAt()).isEqualTo(BASE_TIME.plusMinutes(5));
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(storedFirst.getId()))
+                .hasSize(2)
+                .allSatisfy(assignment ->
+                        assertThat(assignment.getActiveUntil()).isEqualTo(first.getExpiresAt()));
+
+        clock.set(first.getExpiresAt());
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-staggered-holds"
+        )).isExactlyInstanceOf(CheckoutExpiredException.class);
+        seatHoldService.release(USERNAME, CONCERT_ID, holdRequest("A2"));
+        Seat released = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2");
+        assertThat(released.getHeldBy()).isNull();
+        assertThat(released.getHeldUntil()).isNull();
+
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A2"));
+        CheckoutResponse second = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2"),
+                "checkout-staggered-holds-renewed"
+        );
+
+        assertThat(second.getExpiresAt()).isEqualTo(BASE_TIME.plusMinutes(10));
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(3);
     }
 
     @Test
@@ -307,6 +471,7 @@ class CheckoutIntegrationTest {
                 .isEqualTo(CheckoutStatus.EXPIRED);
         assertThat(checkoutRepository.findByMerchantUid(second.getMerchantUid()).orElseThrow().getStatus())
                 .isEqualTo(CheckoutStatus.READY);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
     }
 
     @Test
@@ -339,6 +504,39 @@ class CheckoutIntegrationTest {
         assertThatThrownBy(() -> checkoutRepository.saveAndFlush(duplicate))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(checkoutRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void databaseConstraintRejectsDuplicateSeatAssignmentForTheSameHoldWindow() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-assignment-constraint-first"
+        );
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        Checkout duplicate = checkoutRepository.saveAndFlush(Checkout.ready(
+                "ticket_assignment_duplicate",
+                USERNAME,
+                "checkout-assignment-constraint-second",
+                CONCERT_ID,
+                concertTimeId,
+                "d".repeat(64),
+                30_000,
+                BASE_TIME,
+                seat.getHeldUntil()
+        ));
+
+        assertThatThrownBy(() -> checkoutSeatAssignmentRepository.saveAndFlush(
+                CheckoutSeatAssignment.assign(
+                        duplicate,
+                        seat,
+                        "d".repeat(64),
+                        seat.getHeldUntil()
+                )
+        )).isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -414,6 +612,25 @@ class CheckoutIntegrationTest {
         return request;
     }
 
+    private CheckoutAttempt checkoutAttempt(
+            CountDownLatch start,
+            CheckoutRequest request,
+            String idempotencyKey
+    ) throws InterruptedException {
+        start.await(5, TimeUnit.SECONDS);
+        try {
+            CheckoutResponse response = checkoutService.prepare(
+                    USERNAME,
+                    CONCERT_ID,
+                    request,
+                    idempotencyKey
+            );
+            return new CheckoutAttempt(true, request.getSeatNumberList().size(), response, null);
+        } catch (RuntimeException exception) {
+            return new CheckoutAttempt(false, request.getSeatNumberList().size(), null, exception.getClass());
+        }
+    }
+
     private Long createFixture() {
         Concert concert = new Concert();
         concert.setConcertId(CONCERT_ID);
@@ -483,5 +700,13 @@ class CheckoutIntegrationTest {
         public Instant instant() {
             return instant.get();
         }
+    }
+
+    private record CheckoutAttempt(
+            boolean successful,
+            int seatCount,
+            CheckoutResponse response,
+            Class<? extends RuntimeException> failureType
+    ) {
     }
 }
