@@ -28,8 +28,8 @@ import java.util.Objects;
                         columnNames = {"checkout_id", "seat_id"}
                 ),
                 @UniqueConstraint(
-                        name = "uk_checkout_seat_assignment_seat_hold",
-                        columnNames = {"seat_id", "hold_expires_at"}
+                        name = "uk_checkout_seat_assignment_seat_active_until",
+                        columnNames = {"seat_id", "active_until"}
                 )
         }
 )
@@ -50,14 +50,14 @@ public class CheckoutSeatAssignment {
     @Column(name = "request_fingerprint", nullable = false, length = 64)
     private String requestFingerprint;
 
-    @Column(name = "hold_expires_at", nullable = false)
-    private LocalDateTime holdExpiresAt;
+    @Column(name = "active_until", nullable = false)
+    private LocalDateTime activeUntil;
 
     public static CheckoutSeatAssignment assign(
             Checkout checkout,
             Seat seat,
             String requestFingerprint,
-            LocalDateTime holdExpiresAt
+            LocalDateTime activeUntil
     ) {
         if (requestFingerprint == null || requestFingerprint.isBlank()) {
             throw new IllegalArgumentException("Checkout 좌석 귀속 fingerprint가 필요합니다.");
@@ -67,9 +67,9 @@ public class CheckoutSeatAssignment {
         assignment.checkout = Objects.requireNonNull(checkout, "귀속할 Checkout이 필요합니다.");
         assignment.seat = Objects.requireNonNull(seat, "귀속할 좌석이 필요합니다.");
         assignment.requestFingerprint = requestFingerprint;
-        assignment.holdExpiresAt = Objects.requireNonNull(
-                holdExpiresAt,
-                "귀속할 좌석 hold 만료 시각이 필요합니다."
+        assignment.activeUntil = Objects.requireNonNull(
+                activeUntil,
+                "Checkout 좌석 귀속의 활성 종료 시각이 필요합니다."
         );
         return assignment;
     }

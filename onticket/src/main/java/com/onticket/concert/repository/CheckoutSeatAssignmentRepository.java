@@ -18,7 +18,7 @@ public interface CheckoutSeatAssignmentRepository
             SELECT assignment
             FROM CheckoutSeatAssignment assignment
             WHERE assignment.seat.id IN :seatIds
-              AND assignment.holdExpiresAt > :now
+              AND assignment.activeUntil > :now
             ORDER BY assignment.seat.id
             """)
     List<CheckoutSeatAssignment> findActiveBySeatIdsWithLock(
@@ -30,7 +30,7 @@ public interface CheckoutSeatAssignmentRepository
             SELECT CASE WHEN COUNT(assignment) > 0 THEN true ELSE false END
             FROM CheckoutSeatAssignment assignment
             WHERE assignment.seat.id IN :seatIds
-              AND assignment.holdExpiresAt > :now
+              AND assignment.activeUntil > :now
             """)
     boolean existsActiveBySeatIds(
             @Param("seatIds") List<Long> seatIds,

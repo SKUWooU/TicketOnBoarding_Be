@@ -27,15 +27,15 @@ Issue #73의 MariaDB fixture에서는 같은 사용자가 동일한 hold로 `A1`
 ```text
 Checkout 1 ── N CheckoutSeatAssignment N ── 1 Seat
                     ├─ requestFingerprint
-                    └─ holdExpiresAt
+                    └─ activeUntil (= Checkout.expiresAt)
 ```
 
 관계 table에는 두 unique 제약을 둔다.
 
 - `(checkout_id, seat_id)`: 한 Checkout 안의 같은 좌석 중복 방지
-- `(seat_id, hold_expires_at)`: 같은 좌석·같은 hold 구간의 복수 Checkout 귀속에 대한 DB 최종 방어선
+- `(seat_id, active_until)`: 같은 좌석·같은 Checkout 활성 구간의 복수 귀속에 대한 DB 최종 방어선
 
-`hold_expires_at`을 포함하므로 이전 hold 이력은 보존하면서 만료 후 새 hold의 Checkout을 만들 수 있다. 운영 중인 기존 DB에 이 schema를 반영하는 versioned migration은 전체 schema baseline과 함께 별도 Issue로 둔다.
+`active_until`은 개별 좌석의 만료 시각이 아니라 복수 좌석 중 가장 이른 `Checkout.expiresAt`으로 통일한다. Checkout이 결제 불가능해진 뒤 늦게 만료되는 좌석 귀속만 남아 release나 새 Checkout을 막지 않게 하기 위함이다. 이전 귀속 이력은 보존하면서 만료 후 새 활성 종료 시각의 Checkout을 만들 수 있다. 운영 중인 기존 DB에 이 schema를 반영하는 versioned migration은 전체 schema baseline과 함께 별도 Issue로 둔다.
 
 ## 4. Checkout 준비 transaction
 
@@ -84,10 +84,11 @@ Checkout 준비 뒤 사용자가 좌석 hold를 명시적으로 해제하면 `AV
 - 겹치지 않는 `A1`, `A2`는 독립 Checkout 허용
 - 활성 Checkout 좌석의 명시적 release 409와 hold·상태 보존
 - 정확한 만료 경계 뒤 재점유·새 Checkout 허용
+- 서로 다른 좌석 hold 만료 시각에서 최단 Checkout 만료 뒤 남은 좌석 release·재Checkout 허용
 - 관계 table 직접 중복 insert의 `DataIntegrityViolationException`
 - 충돌 요청의 Payment 검증 미호출과 Payment·Booking·Reservation 0건
 - Controller Checkout·release 충돌 HTTP 409
-- Backend 전체 161 tests: failures 0, errors 0, skipped 0
+- Backend 전체 162 tests: failures 0, errors 0, skipped 0
 - `docker compose config --quiet` 통과
 - `git diff --check` 통과
 

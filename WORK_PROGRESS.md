@@ -17,7 +17,7 @@
 
 - Branch: `fix/76-active-checkout-seat-assignment`
 - 상태: 구현·로컬 검증 완료, PR 준비
-- 검증: 부분 중첩 순차 양방향·동시 3회, 결제 미호출, release·만료·DB unique·HTTP 409, Backend 161 tests, Compose config, diff check 통과
+- 검증: 부분 중첩 순차 양방향·동시 3회, 결제 미호출, 시차 hold·release·만료·DB unique·HTTP 409, Backend 162 tests, Compose config, diff check 통과
 - 범위: Checkout별 좌석 귀속, 부분 중첩 409, 동일 payload 재사용, 활성 Checkout의 hold 해제 차단, 만료 후 재사용, MariaDB 경합 회귀 테스트
 - 제외: 실제 PG·KOPIS·운영 DB migration, Frontend, Redis·분산 lock·대기열·브로커
 

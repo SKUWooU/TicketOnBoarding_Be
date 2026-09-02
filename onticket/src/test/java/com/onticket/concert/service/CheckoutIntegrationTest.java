@@ -395,6 +395,50 @@ class CheckoutIntegrationTest {
     }
 
     @Test
+    void earliestCheckoutExpiryEndsEveryAssignmentForStaggeredSeatHolds() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        clock.advanceSeconds(60);
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A2"));
+        CheckoutResponse first = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-staggered-holds"
+        );
+        Checkout storedFirst = checkoutRepository.findByMerchantUid(first.getMerchantUid()).orElseThrow();
+
+        assertThat(first.getExpiresAt()).isEqualTo(BASE_TIME.plusMinutes(5));
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(storedFirst.getId()))
+                .hasSize(2)
+                .allSatisfy(assignment ->
+                        assertThat(assignment.getActiveUntil()).isEqualTo(first.getExpiresAt()));
+
+        clock.set(first.getExpiresAt());
+        assertThatThrownBy(() -> checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-staggered-holds"
+        )).isExactlyInstanceOf(CheckoutExpiredException.class);
+        seatHoldService.release(USERNAME, CONCERT_ID, holdRequest("A2"));
+        Seat released = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2");
+        assertThat(released.getHeldBy()).isNull();
+        assertThat(released.getHeldUntil()).isNull();
+
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A2"));
+        CheckoutResponse second = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2"),
+                "checkout-staggered-holds-renewed"
+        );
+
+        assertThat(second.getExpiresAt()).isEqualTo(BASE_TIME.plusMinutes(10));
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(3);
+    }
+
+    @Test
     void newHoldAfterExpiryCreatesANewCheckout() {
         seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
         CheckoutResponse first = checkoutService.prepare(
