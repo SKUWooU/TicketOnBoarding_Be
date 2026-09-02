@@ -2,11 +2,13 @@ package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Checkout;
 import com.onticket.concert.domain.CheckoutRequestKey;
+import com.onticket.concert.domain.CheckoutSeatAssignment;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutRequestKeyRepository;
+import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.SeatRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -26,6 +31,7 @@ public class CheckoutPreparationTransactionService {
 
     private final CheckoutRepository checkoutRepository;
     private final CheckoutRequestKeyRepository checkoutRequestKeyRepository;
+    private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final ConcertTimeRepository concertTimeRepository;
     private final SeatRepository seatRepository;
     private final Clock clock;
@@ -50,6 +56,7 @@ public class CheckoutPreparationTransactionService {
 
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
         LocalDateTime earliestExpiry = null;
+        List<Seat> lockedSeats = new ArrayList<>();
         for (String seatNumber : seatNumbers) {
             Seat seat = seatRepository.findByConcertTimeIdAndSeatNumberWithLock(
                             request.getConcertTimeId(),
@@ -66,6 +73,7 @@ public class CheckoutPreparationTransactionService {
             if (earliestExpiry == null || seat.getHeldUntil().isBefore(earliestExpiry)) {
                 earliestExpiry = seat.getHeldUntil();
             }
+            lockedSeats.add(seat);
         }
 
         Checkout checkout = checkoutRepository
@@ -77,6 +85,24 @@ public class CheckoutPreparationTransactionService {
                 .orElse(null);
         if (checkout != null) {
             return checkout;
+        }
+
+        List<CheckoutSeatAssignment> activeAssignments = checkoutSeatAssignmentRepository
+                .findActiveBySeatIdsWithLock(
+                        lockedSeats.stream().map(Seat::getId).toList(),
+                        now
+                );
+        if (!activeAssignments.isEmpty()) {
+            Set<Long> checkoutIds = activeAssignments.stream()
+                    .map(assignment -> assignment.getCheckout().getId())
+                    .collect(Collectors.toSet());
+            boolean exactConcurrentReuse = activeAssignments.size() == lockedSeats.size()
+                    && checkoutIds.size() == 1
+                    && activeAssignments.stream().allMatch(assignment ->
+                    assignment.getRequestFingerprint().equals(requestFingerprint));
+            throw new CheckoutSeatAssignmentConflictException(
+                    exactConcurrentReuse ? checkoutIds.iterator().next() : null
+            );
         }
 
         try {
@@ -92,6 +118,17 @@ public class CheckoutPreparationTransactionService {
                     earliestExpiry
             );
             checkout = checkoutRepository.saveAndFlush(checkout);
+            Checkout assignedCheckout = checkout;
+            checkoutSeatAssignmentRepository.saveAllAndFlush(
+                    lockedSeats.stream()
+                            .map(seat -> CheckoutSeatAssignment.assign(
+                                    assignedCheckout,
+                                    seat,
+                                    requestFingerprint,
+                                    seat.getHeldUntil()
+                            ))
+                            .toList()
+            );
             checkoutRequestKeyRepository.saveAndFlush(CheckoutRequestKey.bind(
                     username,
                     idempotencyKey,
@@ -104,6 +141,8 @@ public class CheckoutPreparationTransactionService {
                     username,
                     requestFingerprint,
                     earliestExpiry,
+                    lockedSeats.stream().map(Seat::getId).toList(),
+                    now,
                     exception
             );
         }

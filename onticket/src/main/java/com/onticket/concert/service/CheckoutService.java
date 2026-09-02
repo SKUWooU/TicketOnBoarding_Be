@@ -6,6 +6,7 @@ import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutRequestKeyRepository;
+import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ public class CheckoutService {
 
     private final CheckoutRepository checkoutRepository;
     private final CheckoutRequestKeyRepository checkoutRequestKeyRepository;
+    private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final CheckoutPreparationTransactionService transactionService;
     private final CheckoutExpirationService expirationService;
     private final VirtualTicketPricePolicy pricePolicy;
@@ -82,6 +84,20 @@ public class CheckoutService {
                     idempotencyKey,
                     requestFingerprint
             );
+        } catch (CheckoutSeatAssignmentConflictException exception) {
+            if (exception.getReusableCheckoutId() != null) {
+                Checkout concurrent = checkoutRepository.findById(exception.getReusableCheckoutId())
+                        .orElseThrow(() -> new CheckoutConflictException(
+                                "활성 결제 요청에 이미 귀속된 좌석입니다."
+                        ));
+                return bindPreparedRequestKey(
+                        concurrent,
+                        username,
+                        idempotencyKey,
+                        requestFingerprint
+                );
+            }
+            throw new CheckoutConflictException("활성 결제 요청에 이미 귀속된 좌석입니다.");
         } catch (CheckoutHoldIdentityConflictException exception) {
             Optional<CheckoutRequestKey> concurrentRequestKey = checkoutRequestKeyRepository
                     .findByUsernameAndIdempotencyKey(username, idempotencyKey);
@@ -112,6 +128,12 @@ public class CheckoutService {
                         concurrentIdempotentCheckout.get(),
                         requestFingerprint
                 );
+            }
+            if (checkoutSeatAssignmentRepository.existsActiveBySeatIds(
+                    exception.getSeatIds(),
+                    exception.getCheckedAt()
+            )) {
+                throw new CheckoutConflictException("활성 결제 요청에 이미 귀속된 좌석입니다.");
             }
             throw exception.getDataIntegrityViolation();
         } catch (DataIntegrityViolationException exception) {

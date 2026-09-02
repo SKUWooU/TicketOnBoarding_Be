@@ -5,6 +5,7 @@ import com.onticket.concert.domain.Seat;
 import com.onticket.concert.dto.SeatHoldRequest;
 import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.repository.ConcertTimeRepository;
+import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.SeatRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,17 +23,20 @@ public class SeatHoldService {
 
     private final SeatRepository seatRepository;
     private final ConcertTimeRepository concertTimeRepository;
+    private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final Clock clock;
     private final Duration holdDuration;
 
     public SeatHoldService(
             SeatRepository seatRepository,
             ConcertTimeRepository concertTimeRepository,
+            CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository,
             Clock clock,
             @Value("${onticket.ticket.seat-hold-duration:PT5M}") Duration holdDuration
     ) {
         this.seatRepository = seatRepository;
         this.concertTimeRepository = concertTimeRepository;
+        this.checkoutSeatAssignmentRepository = checkoutSeatAssignmentRepository;
         this.clock = clock;
         if (holdDuration == null || holdDuration.isZero() || holdDuration.isNegative()) {
             throw new IllegalArgumentException("좌석 점유 시간은 0보다 커야 합니다.");
@@ -75,6 +79,7 @@ public class SeatHoldService {
         validateConcertTime(concertId, request);
         List<String> seatNumbers = canonicalSeatNumbers(request);
         LocalDateTime now = LocalDateTime.now(clock);
+        List<Seat> lockedSeats = new ArrayList<>();
 
         for (String seatNumber : seatNumbers) {
             Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
@@ -85,6 +90,17 @@ public class SeatHoldService {
             if (!seat.isHeldBy(username, now)) {
                 throw new SeatHoldConflictException("다른 사용자의 임시 점유는 해제할 수 없습니다.");
             }
+            lockedSeats.add(seat);
+        }
+
+        if (!lockedSeats.isEmpty() && !checkoutSeatAssignmentRepository.findActiveBySeatIdsWithLock(
+                lockedSeats.stream().map(Seat::getId).toList(),
+                now
+        ).isEmpty()) {
+            throw new SeatHoldConflictException("결제 준비 중인 좌석은 임시 점유를 해제할 수 없습니다.");
+        }
+
+        for (Seat seat : lockedSeats) {
             seat.clearHold();
         }
     }
