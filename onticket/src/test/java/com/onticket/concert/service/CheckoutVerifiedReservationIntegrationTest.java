@@ -9,6 +9,7 @@ import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.PaymentStatus;
 import com.onticket.concert.domain.Seat;
+import com.onticket.concert.domain.SeatAvailability;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.dto.SeatHoldRequest;
@@ -307,6 +308,80 @@ class CheckoutVerifiedReservationIntegrationTest {
         entityManager.clear();
         assertThat(checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow().getStatus())
                 .isEqualTo(CheckoutStatus.EXPIRED);
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @RepeatedTest(3)
+    void approvalReturningAfterCheckoutExpiryLeavesNoLocalPaymentEvidence() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("checkout-expiry-race-prepare", "A1");
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-expiry-race",
+                "A1"
+        );
+        CountDownLatch verificationStarted = new CountDownLatch(1);
+        CountDownLatch returnApproval = new CountDownLatch(1);
+        when(paymentVerificationPort.verify("payment-expiry-race"))
+                .thenAnswer(invocation -> {
+                    verificationStarted.countDown();
+                    if (!returnApproval.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("mock 결제 승인 반환 대기 시간이 초과되었습니다.");
+                    }
+                    return approved(
+                            "payment-expiry-race",
+                            checkout.getMerchantUid(),
+                            30_000
+                    );
+                });
+
+        AttemptResult result;
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<AttemptResult> reservation = executor.submit(() -> attempt(
+                    request,
+                    "reservation-expiry-race",
+                    start
+            ));
+            start.countDown();
+            try {
+                assertThat(verificationStarted.await(5, TimeUnit.SECONDS)).isTrue();
+                clock.set(checkout.getExpiresAt());
+                assertThatThrownBy(() -> checkoutService.prepare(
+                        USERNAME,
+                        CONCERT_ID,
+                        checkoutRequest("A1"),
+                        "checkout-expiry-race-prepare"
+                )).isExactlyInstanceOf(CheckoutExpiredException.class);
+            } finally {
+                returnApproval.countDown();
+            }
+            result = reservation.get(10, TimeUnit.SECONDS);
+        }
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.exceptionType()).isEqualTo(CheckoutExpiredException.class.getSimpleName());
+        verify(paymentVerificationPort, times(1)).verify("payment-expiry-race");
+
+        entityManager.clear();
+        Checkout storedCheckout = checkoutRepository.findByMerchantUid(checkout.getMerchantUid())
+                .orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(storedCheckout.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(storedCheckout.getBooking()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(storedCheckout.getId()))
+                .hasSize(1)
+                .allSatisfy(assignment ->
+                        assertThat(assignment.getActiveUntil()).isEqualTo(checkout.getExpiresAt()));
+        assertThat(checkoutSeatAssignmentRepository.existsActiveBySeatIds(
+                List.of(seat.getId()),
+                checkout.getExpiresAt()
+        )).isFalse();
+        assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+        assertThat(seat.getHeldUntil()).isEqualTo(checkout.getExpiresAt());
+        assertThat(seat.isHeldAt(checkout.getExpiresAt())).isFalse();
+        assertThat(seat.availabilityAt(checkout.getExpiresAt())).isEqualTo(SeatAvailability.AVAILABLE);
+        assertThat(seatRepository.countHoldRows(concertTimeId)).isEqualTo(1);
+        assertThat(seatRepository.countActiveHolds(concertTimeId, checkout.getExpiresAt())).isZero();
         assertEmptyReservationSnapshot(2);
     }
 
