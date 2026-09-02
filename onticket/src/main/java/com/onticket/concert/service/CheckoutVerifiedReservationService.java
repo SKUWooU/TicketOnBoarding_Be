@@ -1,18 +1,15 @@
 package com.onticket.concert.service;
 
 import com.onticket.concert.domain.Booking;
-import com.onticket.concert.domain.Checkout;
-import com.onticket.concert.domain.CheckoutStatus;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
-import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -24,12 +21,10 @@ public class CheckoutVerifiedReservationService {
     private static final int MAX_PROVIDER_IDENTIFIER_LENGTH = 100;
 
     private final BookingRepository bookingRepository;
-    private final CheckoutRepository checkoutRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentVerificationPort paymentVerificationPort;
+    private final CheckoutPaymentVerificationTransactionService verificationTransactionService;
     private final VerifiedReservationTransactionService transactionService;
-    private final CheckoutExpirationService expirationService;
-    private final Clock clock;
 
     public LocalDateTime reserve(
             String username,
@@ -41,6 +36,7 @@ public class CheckoutVerifiedReservationService {
 
         String checkoutFingerprint;
         String bookingFingerprint;
+        List<String> canonicalSeatNumbers;
         try {
             checkoutFingerprint = ReservationRequestCanonicalizer.fingerprint(concertId, request);
             bookingFingerprint = ReservationRequestCanonicalizer.checkoutVerifiedFingerprint(
@@ -49,6 +45,7 @@ public class CheckoutVerifiedReservationService {
                     request.getPaymentId(),
                     request.getMerchantUid()
             );
+            canonicalSeatNumbers = ReservationRequestCanonicalizer.canonicalSeatNumbers(request);
         } catch (IllegalArgumentException exception) {
             throw new InvalidCheckoutRequestException(exception.getMessage());
         }
@@ -60,18 +57,40 @@ public class CheckoutVerifiedReservationService {
             return resultForMatchingBooking(existingBooking.get(), bookingFingerprint);
         }
 
-        Checkout checkout = checkoutRepository.findByMerchantUid(request.getMerchantUid())
-                .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
-        validateCheckoutBeforeVerification(
-                checkout,
+        CheckoutPaymentVerificationClaim claim = verificationTransactionService.claim(
                 username,
                 concertId,
                 request,
-                checkoutFingerprint
+                canonicalSeatNumbers,
+                idempotencyKey,
+                checkoutFingerprint,
+                bookingFingerprint
         );
+        if (claim.isCompleted()) {
+            return claim.existingReservationCreatedAt();
+        }
 
-        PaymentApproval approval = paymentVerificationPort.verify(request.getPaymentId());
-        validateApproval(request, checkout, approval);
+        PaymentApproval approval;
+        try {
+            approval = paymentVerificationPort.verify(request.getPaymentId());
+        } catch (PaymentVerificationUnavailableException exception) {
+            releaseKnownFailure(username, request, canonicalSeatNumbers, idempotencyKey, bookingFingerprint);
+            throw exception;
+        } catch (RuntimeException exception) {
+            markUnknown(username, request, idempotencyKey, bookingFingerprint);
+            throw exception;
+        }
+
+        if (approval == null || !approval.approved()) {
+            releaseKnownFailure(username, request, canonicalSeatNumbers, idempotencyKey, bookingFingerprint);
+            throw new InvalidPaymentException("승인된 결제가 아닙니다.");
+        }
+        try {
+            validateApprovedPayment(request, claim.expectedAmount(), approval);
+        } catch (InvalidPaymentException exception) {
+            markUnknown(username, request, idempotencyKey, bookingFingerprint);
+            throw exception;
+        }
 
         try {
             return transactionService.reserveWithCheckout(
@@ -84,58 +103,54 @@ public class CheckoutVerifiedReservationService {
                     approval
             );
         } catch (DataIntegrityViolationException exception) {
-            Optional<Booking> concurrentBooking = bookingRepository
-                    .findByUsernameAndIdempotencyKey(username, idempotencyKey);
-            if (concurrentBooking.isPresent()) {
-                return resultForMatchingBooking(concurrentBooking.get(), bookingFingerprint);
-            }
+            markUnknown(username, request, idempotencyKey, bookingFingerprint);
             if (paymentRepository.existsByProviderPaymentId(request.getPaymentId())) {
                 throw new PaymentAlreadyUsedException();
             }
             throw exception;
+        } catch (Exception exception) {
+            markUnknown(username, request, idempotencyKey, bookingFingerprint);
+            throw exception;
         }
     }
 
-    private void validateCheckoutBeforeVerification(
-            Checkout checkout,
+    private void releaseKnownFailure(
             String username,
-            String concertId,
             VerifiedReservRequest request,
-            String checkoutFingerprint
+            List<String> canonicalSeatNumbers,
+            String idempotencyKey,
+            String bookingFingerprint
     ) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        if (checkout.expireIfNeeded(now)) {
-            expirationService.expire(checkout.getMerchantUid(), now);
-            throw new CheckoutExpiredException();
-        }
-        if (checkout.getStatus() != CheckoutStatus.READY) {
-            throw new CheckoutConflictException("이미 사용되었거나 사용할 수 없는 결제 요청입니다.");
-        }
-        if (!checkout.getUsername().equals(username)) {
-            throw new CheckoutConflictException("다른 사용자의 결제 요청입니다.");
-        }
-        if (!checkout.getConcertId().equals(concertId)
-                || !checkout.getConcertTimeId().equals(request.getConcertTimeId())
-                || !checkout.getRequestFingerprint().equals(checkoutFingerprint)) {
-            throw new CheckoutConflictException("결제 요청과 예약 payload가 일치하지 않습니다.");
-        }
+        verificationTransactionService.releaseKnownFailure(
+                request.getMerchantUid(), username, request.getConcertTimeId(),
+                canonicalSeatNumbers, request.getPaymentId(), idempotencyKey, bookingFingerprint
+        );
     }
 
-    private void validateApproval(
+    private void markUnknown(
+            String username,
             VerifiedReservRequest request,
-            Checkout checkout,
+            String idempotencyKey,
+            String bookingFingerprint
+    ) {
+        verificationTransactionService.markUnknown(
+                request.getMerchantUid(), username, request.getPaymentId(),
+                idempotencyKey, bookingFingerprint
+        );
+    }
+
+    private void validateApprovedPayment(
+            VerifiedReservRequest request,
+            long expectedAmount,
             PaymentApproval approval
     ) {
-        if (approval == null || !approval.approved()) {
-            throw new InvalidPaymentException("승인된 결제가 아닙니다.");
-        }
         if (!request.getPaymentId().equals(approval.paymentId())) {
             throw new InvalidPaymentException("결제 식별자가 일치하지 않습니다.");
         }
         if (!request.getMerchantUid().equals(approval.merchantUid())) {
             throw new InvalidPaymentException("고객사 주문 식별자가 일치하지 않습니다.");
         }
-        if (approval.approvedAmount() != checkout.getExpectedAmount()) {
+        if (approval.approvedAmount() != expectedAmount) {
             throw new InvalidPaymentException("서버 주문 금액과 승인 금액이 일치하지 않습니다.");
         }
         if (approval.approvedAt() == null) {
@@ -143,10 +158,7 @@ public class CheckoutVerifiedReservationService {
         }
     }
 
-    private LocalDateTime resultForMatchingBooking(
-            Booking booking,
-            String bookingFingerprint
-    ) {
+    private LocalDateTime resultForMatchingBooking(Booking booking, String bookingFingerprint) {
         if (!Objects.equals(booking.getRequestFingerprint(), bookingFingerprint)) {
             throw new IdempotencyKeyConflictException();
         }

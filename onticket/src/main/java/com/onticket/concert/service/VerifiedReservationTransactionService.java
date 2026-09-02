@@ -7,6 +7,7 @@ import com.onticket.concert.domain.Payment;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.CheckoutRepository;
+import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ public class VerifiedReservationTransactionService {
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
     private final CheckoutRepository checkoutRepository;
+    private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final SeatReservationService seatReservationService;
     private final Clock clock;
 
@@ -58,7 +60,7 @@ public class VerifiedReservationTransactionService {
 
     @Transactional(
             rollbackFor = Exception.class,
-            noRollbackFor = CheckoutExpiredException.class
+            noRollbackFor = PaymentVerificationUnknownException.class
     )
     public LocalDateTime reserveWithCheckout(
             String username,
@@ -72,16 +74,25 @@ public class VerifiedReservationTransactionService {
         Checkout checkout = checkoutRepository.findByMerchantUidWithLock(request.getMerchantUid())
                 .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
-        if (checkout.expireIfNeeded(now)) {
-            throw new CheckoutExpiredException();
+        if (checkout.isPaymentVerificationTimedOut(now)) {
+            checkout.markPaymentVerificationUnknown();
+            throw new PaymentVerificationUnknownException();
         }
         validateCheckout(checkout, username, concertId, request, checkoutFingerprint);
 
         if (checkout.getStatus() == CheckoutStatus.RESERVATION_CONFIRMED) {
             return existingCheckoutResult(checkout, username, idempotencyKey, bookingFingerprint);
         }
-        if (checkout.getStatus() != CheckoutStatus.READY) {
-            throw new CheckoutConflictException("예약을 확정할 수 없는 결제 요청 상태입니다.");
+        if (checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN) {
+            throw new PaymentVerificationUnknownException();
+        }
+        if (checkout.getStatus() != CheckoutStatus.PAYMENT_VERIFYING
+                || !checkout.matchesPaymentVerification(
+                request.getPaymentId(),
+                idempotencyKey,
+                bookingFingerprint
+        )) {
+            throw new CheckoutConflictException("결제 검증 claim과 예약 확정 요청이 일치하지 않습니다.");
         }
 
         Booking booking = new Booking();
@@ -102,6 +113,9 @@ public class VerifiedReservationTransactionService {
 
         seatReservationService.reserveSeat(username, concertId, request, booking);
         payment.confirmReservation();
+        checkoutSeatAssignmentRepository.findByCheckoutIdWithLock(checkout.getId())
+                .forEach(assignment ->
+                        assignment.clearVerificationLease(checkout.getVerificationDeadline()));
         checkout.confirmReservation(booking);
         return booking.getCreatedAt();
     }

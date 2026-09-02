@@ -86,6 +86,34 @@ public class Seat {
         heldUntil = null;
     }
 
+    public void extendOwnedHoldUntil(
+            String username,
+            LocalDateTime now,
+            LocalDateTime extendedUntil
+    ) {
+        if (!isHeldBy(username, now)) {
+            throw new IllegalStateException("활성 좌석 점유의 소유자만 기한을 연장할 수 있습니다.");
+        }
+        Objects.requireNonNull(extendedUntil, "연장할 좌석 점유 기한이 필요합니다.");
+        if (!extendedUntil.isAfter(heldUntil)) {
+            throw new IllegalArgumentException("연장할 좌석 점유 기한은 현재 기한 이후여야 합니다.");
+        }
+        heldUntil = extendedUntil;
+    }
+
+    public boolean restoreOwnedHoldUntil(
+            String username,
+            LocalDateTime expectedCurrentExpiry,
+            LocalDateTime restoredUntil
+    ) {
+        if (!Objects.equals(heldBy, username)
+                || !Objects.equals(heldUntil, expectedCurrentExpiry)) {
+            return false;
+        }
+        heldUntil = Objects.requireNonNull(restoredUntil, "복원할 좌석 점유 기한이 필요합니다.");
+        return true;
+    }
+
     public void markReserved() {
         reserved = true;
         clearHold();

@@ -589,3 +589,23 @@ distributed는 150 RPS까지, hot 경합은 200 RPS까지 목표 도달률 100%�
 ### 링크
 
 - [Backend Issue #65](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/65)
+
+## Issue #82 — 외부 I/O를 잠그지 않고 결제 검증 시도를 claim하기
+
+### row lock의 지속 시간과 업무 상태의 지속 시간을 분리하기
+
+결제 검증 전체를 transaction으로 감싸면 중복 진입은 막지만 네트워크가 느린 동안 DB connection과 Checkout·좌석 lock을 계속 점유한다. 대신 짧은 transaction에서 `PAYMENT_VERIFYING`과 deadline을 commit한 뒤 lock을 놓고 mock 검증을 호출한다. 업무상 소유권은 DB 상태와 bounded lease가 유지하고, 물리 row lock은 상태 전이 순간에만 사용한다.
+
+### 명확한 실패와 결과 불명을 같은 rollback으로 처리하지 않기
+
+`approved=false`와 미구성 adapter는 검증 성공이 아니므로 원래 만료 기준 READY/EXPIRED로 복구할 수 있다. 반면 `approved=true`인데 식별자·금액이 다르거나 최종 예약이 실패한 경우에는 외부 금전 상태를 서버가 단정할 수 없다. 이 경로는 좌석을 즉시 반환하지 않고 UNKNOWN과 paymentId·deadline을 남긴다. “예외가 났다”는 사실보다 “외부 결과를 확정할 수 있는가”가 상태 전이 기준이다.
+
+### 복수 좌석의 원래 시간을 잃지 않기
+
+Checkout은 선택 좌석 중 가장 이른 hold 만료를 사용하지만 다른 좌석은 더 늦게 만료될 수 있다. 하나의 Checkout 만료로 모든 Seat를 복구하면 원래 상태를 훼손한다. 귀속 row에 좌석별 `originalHoldExpiresAt`과 별도 `verificationLeaseUntil`을 두고, 알려진 실패 때 검증 기한과 정확히 일치하는 Seat만 조건부 복구했다.
+
+상세 상태표·잠금 순서·fixture와 한계는 [Checkout 결제 검증 claim과 bounded 좌석 lease](checkout-payment-verification-claim.md), 도입·보류 판단은 [ADR-0002](adr/0002-bounded-checkout-payment-verification-claim.md)에 기록한다.
+
+### 링크
+
+- [Backend Issue #82](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/82)

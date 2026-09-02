@@ -76,6 +76,21 @@ public class Checkout {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    @Column(name = "verification_payment_id", length = 100)
+    private String verificationPaymentId;
+
+    @Column(name = "verification_idempotency_key", length = 100)
+    private String verificationIdempotencyKey;
+
+    @Column(name = "verification_request_fingerprint", length = 64)
+    private String verificationRequestFingerprint;
+
+    @Column(name = "verification_started_at")
+    private LocalDateTime verificationStartedAt;
+
+    @Column(name = "verification_deadline")
+    private LocalDateTime verificationDeadline;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", unique = true)
     private Booking booking;
@@ -138,11 +153,82 @@ public class Checkout {
         return status == CheckoutStatus.EXPIRED;
     }
 
-    public void confirmReservation(Booking confirmedBooking) {
+    public void beginPaymentVerification(
+            String paymentId,
+            String idempotencyKey,
+            String requestFingerprint,
+            LocalDateTime startedAt,
+            LocalDateTime deadline
+    ) {
         if (status != CheckoutStatus.READY) {
-            throw new IllegalStateException("준비된 결제 요청만 예약을 확정할 수 있습니다.");
+            throw new IllegalStateException("준비된 Checkout만 결제 검증을 시작할 수 있습니다.");
+        }
+        if (paymentId == null || paymentId.isBlank()
+                || idempotencyKey == null || idempotencyKey.isBlank()
+                || requestFingerprint == null || requestFingerprint.isBlank()) {
+            throw new IllegalArgumentException("결제 검증 요청 식별 정보가 필요합니다.");
+        }
+        Objects.requireNonNull(startedAt, "결제 검증 시작 시각이 필요합니다.");
+        Objects.requireNonNull(deadline, "결제 검증 기한이 필요합니다.");
+        if (!startedAt.isBefore(expiresAt) || !deadline.isAfter(expiresAt)) {
+            throw new IllegalArgumentException("결제 검증은 Checkout 만료 전에 시작하고 이후의 기한을 가져야 합니다.");
+        }
+
+        verificationPaymentId = paymentId;
+        verificationIdempotencyKey = idempotencyKey;
+        verificationRequestFingerprint = requestFingerprint;
+        verificationStartedAt = startedAt;
+        verificationDeadline = deadline;
+        status = CheckoutStatus.PAYMENT_VERIFYING;
+    }
+
+    public boolean matchesPaymentVerification(
+            String paymentId,
+            String idempotencyKey,
+            String requestFingerprint
+    ) {
+        return Objects.equals(verificationPaymentId, paymentId)
+                && Objects.equals(verificationIdempotencyKey, idempotencyKey)
+                && Objects.equals(verificationRequestFingerprint, requestFingerprint);
+    }
+
+    public boolean isPaymentVerificationTimedOut(LocalDateTime now) {
+        Objects.requireNonNull(now, "결제 검증 기한 확인 시각이 필요합니다.");
+        return status == CheckoutStatus.PAYMENT_VERIFYING
+                && verificationDeadline != null
+                && !now.isBefore(verificationDeadline);
+    }
+
+    public void releasePaymentVerification(LocalDateTime now) {
+        Objects.requireNonNull(now, "결제 검증 해제 시각이 필요합니다.");
+        if (status != CheckoutStatus.PAYMENT_VERIFYING) {
+            throw new IllegalStateException("진행 중인 결제 검증만 해제할 수 있습니다.");
+        }
+        status = now.isBefore(expiresAt) ? CheckoutStatus.READY : CheckoutStatus.EXPIRED;
+        clearPaymentVerification();
+    }
+
+    public void markPaymentVerificationUnknown() {
+        if (status != CheckoutStatus.PAYMENT_VERIFYING) {
+            throw new IllegalStateException("진행 중인 결제 검증만 결과 불명으로 전이할 수 있습니다.");
+        }
+        status = CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN;
+    }
+
+    public void confirmReservation(Booking confirmedBooking) {
+        if (status != CheckoutStatus.PAYMENT_VERIFYING) {
+            throw new IllegalStateException("결제 검증 중인 Checkout만 예약을 확정할 수 있습니다.");
         }
         booking = Objects.requireNonNull(confirmedBooking, "확정된 예약 요청이 필요합니다.");
         status = CheckoutStatus.RESERVATION_CONFIRMED;
+        clearPaymentVerification();
+    }
+
+    private void clearPaymentVerification() {
+        verificationPaymentId = null;
+        verificationIdempotencyKey = null;
+        verificationRequestFingerprint = null;
+        verificationStartedAt = null;
+        verificationDeadline = null;
     }
 }
