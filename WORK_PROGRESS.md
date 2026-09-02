@@ -6,23 +6,24 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `fa604e783e62c90952a533086a60d2c55bb3f6fc` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `d45fedeaa91ddb85aa81168b4da8f5f580f27e69` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
-### Backend Issue #82 — Checkout 결제 검증 claim과 만료 경합 해소
-
-- Branch: `fix/82-checkout-payment-verification-claim`
-- 상태: 구현·로컬 검증 완료, PR·Reviewer 검토 대기
-- 범위: `PAYMENT_VERIFYING` claim, bounded 좌석 lease, 승인·명확한 실패·결과 불명 상태 전이와 MariaDB 경합 검증
-- 검증: Backend 177 tests, Compose config, diff check 통과
-- 근거: [Checkout 결제 검증 claim과 bounded 좌석 lease](docs/project-improvement/checkout-payment-verification-claim.md), [ADR-0002](docs/project-improvement/adr/0002-bounded-checkout-payment-verification-claim.md)
-- 제외: 실제 PG·자동 보상·Checkout 취소·Frontend·운영 migration·분산 기술
+- 없음
 
 ## 완료
+
+### Backend Issue #82 — Checkout 결제 검증 claim과 만료 경합 해소
+
+- PR: [#83](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/83) / squash `d45fede`
+- 결과: 짧은 `PAYMENT_VERIFYING` claim과 30초 bounded 좌석 lease로 동일 Checkout의 외부 검증 진입을 1회로 제한하고, 승인·명확한 실패·결과 불명의 상태 경계를 분리
+- 검증: Backend 177 tests·CI·Compose·diff check 통과; deadline 후 재선택 정책과 최종 transaction rollback Blocking 수정 후 `MERGE_READY: YES`
+- 근거: [Checkout 결제 검증 claim과 bounded 좌석 lease](docs/project-improvement/checkout-payment-verification-claim.md), [ADR-0002](docs/project-improvement/adr/0002-bounded-checkout-payment-verification-claim.md)
+- 제외: 실제 PG·자동 환불·UNKNOWN reconciliation·Checkout 취소·Frontend·운영 migration·분산 기술
 
 ### Backend Issue #79 — 결제 검증 중 Checkout 만료 경합 기준선
 
