@@ -6,16 +6,24 @@
 
 | 구분 | 저장소 | 기준 Branch | 조사 기준 commit |
 | --- | --- | --- | --- |
-| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `d45fedeaa91ddb85aa81168b4da8f5f580f27e69` |
+| Backend | [TicketOnBoarding_Be](https://github.com/SKUWooU/TicketOnBoarding_Be) | `main` | `669f24868cd43ba6ad5ec17039a371985db2b0cf` |
 | Frontend | [TicketOnBoarding_Fe](https://github.com/SKUWooU/TicketOnBoarding_Fe) | `main` | `1f9678be7a3a66ec610c6ef4ea335e9d6f5cbafd` |
 
 두 저장소는 독립된 Issue와 PR을 사용합니다. 교차 변경은 각 작업의 링크를 양쪽 Issue 또는 PR에 남깁니다.
 
 ## 진행 중
 
-- Backend Issue #85: 가상 공연장 layout·구역별 좌석 API 계약 구현 및 검증
+- 없음
 
 ## 완료
+
+### Backend Issue #85 — 가상 공연장 layout·구역별 좌석 API 계약
+
+- PR: [#86](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/86) / squash `669f248`
+- 결과: 서버 소유 versioned layout과 구역 요약·상세 API를 구성하고 24석·2,000석 fixture를 동일 계약으로 연결
+- 검증: Backend 186 tests·CI·MariaDB Testcontainers·HTTP 404/409·diff check 통과, `MERGE_READY: YES`
+- 근거: [가상 좌석 레이아웃 API](docs/project-improvement/virtual-seat-layout-api.md), [ADR-0003](docs/project-improvement/adr/0003-server-owned-virtual-seat-layout.md)
+- 제외: 실제 좌석도·운영 migration·Frontend·WebSocket·대기열·브로커
 
 ### Backend Issue #82 — Checkout 결제 검증 claim과 만료 경합 해소
 
