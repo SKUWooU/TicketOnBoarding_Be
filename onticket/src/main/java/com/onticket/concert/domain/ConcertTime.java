@@ -30,6 +30,9 @@ public class ConcertTime {
     //좌석수
     private int seatAmount;
 
+    @Column(name = "seat_layout_version", length = 50)
+    private String seatLayoutVersion;
+
     @ManyToOne
     @JoinColumn(name = "concertId")
     private Concert concert;

@@ -9,6 +9,7 @@ import com.onticket.concert.batch.dto.KopisPlaceDetailDto;
 import com.onticket.concert.batch.dto.KopisPlaceDto;
 import com.onticket.concert.domain.*;
 import com.onticket.concert.repository.*;
+import com.onticket.concert.service.VirtualSeatLayoutFactory;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -39,6 +40,7 @@ public class KopisService {
     private final PlaceRepository placeRepository;
     private final KopisApi kopisApi;
     private final ConcertRepository concertRepository;
+    private final VirtualSeatLayoutFactory seatLayoutFactory;
     WebClient webClient;
 ///////////////////////////////-----------Concert   테이블-------------//////////////////////////////////
 
@@ -266,6 +268,7 @@ public class KopisService {
                     concertTime.setDayOfWeek(day+"요일");
                     concertTime.setStartTime(startTime);
                     concertTime.setSeatAmount(24);
+                    concertTime.setSeatLayoutVersion(VirtualSeatLayoutFactory.STANDARD_VERSION);
                     concertTime.setConcert(concert);
 
                     concertTime=concertTimeRepository.save(concertTime);
@@ -289,17 +292,20 @@ public class KopisService {
             List<Seat> seatList=new ArrayList<>();
 
             //좌석초기화
-            for(int i=0;i<3;i++) {
-                String[] a={"A","B","C"};
-                for(int j=1;j<=8;j++) {
-                    Seat seat = new Seat();
-                    seat.setSeatNumber(a[i]+j);
-                    seat.setReserved(false);
-                    seat.setConcertTime(concertTime);
-                    seatRepository.save(seat);
-                    seatList.add(seat);
-                }
+            VirtualSeatLayoutFactory.LayoutDefinition layout = seatLayoutFactory.standardLayout();
+            concertTime.setSeatLayoutVersion(layout.version());
+            for (VirtualSeatLayoutFactory.SeatPosition position : layout.positions()) {
+                Seat seat = new Seat();
+                seat.setSeatNumber(position.seatNumber());
+                seat.setReserved(false);
+                seat.setConcertTime(concertTime);
+                seat.assignLayout(
+                        position.sectionCode(), position.sectionName(), position.sectionOrder(),
+                        position.rowLabel(), position.rowOrder(), position.seatIndex()
+                );
+                seatList.add(seat);
             }
+            seatRepository.saveAll(seatList);
             concertTime.setSeats(seatList);
             concertTimeRepository.save(concertTime);
         }

@@ -7,6 +7,8 @@ import com.onticket.concert.domain.Seat;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.PaymentRepository;
 import com.onticket.concert.repository.SeatRepository;
+import com.onticket.concert.service.SeatLayoutQueryService;
+import com.onticket.concert.service.VirtualSeatLayoutFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -31,7 +33,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("loadtest")
-@Import({LoadTestFixtureService.class, SeatHoldConfiguration.class})
+@Import({
+        LoadTestFixtureService.class,
+        SeatHoldConfiguration.class,
+        VirtualSeatLayoutFactory.class,
+        SeatLayoutQueryService.class
+})
 @Testcontainers
 class LoadTestFixtureIntegrationTest {
 
@@ -61,6 +68,9 @@ class LoadTestFixtureIntegrationTest {
     @Autowired
     private SeatRepository seatRepository;
 
+    @Autowired
+    private SeatLayoutQueryService seatLayoutQueryService;
+
     @Test
     void createsTwoThousandSeatsAndKeepsInitializationIdempotent() {
         LoadTestFixtureService.FixtureMetadata first = fixtureService.initialize("run-a");
@@ -76,6 +86,14 @@ class LoadTestFixtureIntegrationTest {
         assertThat(snapshot.reservedSeats()).isZero();
         assertThat(snapshot.reservations()).isZero();
         assertThat(snapshot.invariantSatisfied()).isTrue();
+        assertThat(seatLayoutQueryService.getSectionSummary(first.concertId(), first.concertTimeId()).sections())
+                .hasSize(10)
+                .allSatisfy(section -> {
+                    assertThat(section.totalSeats()).isEqualTo(200);
+                    assertThat(section.availableSeats()).isEqualTo(200);
+                });
+        assertThat(seatLayoutQueryService.getSection(first.concertId(), first.concertTimeId(), "S01").seats())
+                .hasSize(200);
     }
 
     @Test

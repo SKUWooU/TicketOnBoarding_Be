@@ -609,3 +609,17 @@ Checkout은 선택 좌석 중 가장 이른 hold 만료를 사용하지만 다�
 ### 링크
 
 - [Backend Issue #82](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/82)
+
+## Issue #85 - 좌석 번호와 좌석 레이아웃을 구분하기
+
+좌석 번호는 예약 재고를 식별하지만 화면의 구역·행·순서를 충분히 표현하지 않는다. 프론트에서
+번호 문자열을 파싱하면 서버와 UI에 규칙이 중복되므로, 서버가 versioned layout metadata를
+소유하고 구역 요약과 선택 구역 상세를 분리했다. 2,000석은 전체 응답하지 않고 10개 구역의
+집계 후 구역당 200석만 탐색한다. 이는 실제 공연장 모델이 아니라 가상 fixture 계약이다.
+
+상세 개념·코드 경로·검증·한계는 [가상 공연장 layout·구역별 좌석 API 계약](virtual-seat-layout-api.md)과
+[ADR-0003](adr/0003-server-owned-virtual-seat-layout.md)에 기록했다.
+
+### 링크
+
+- [Backend Issue #85](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/85)

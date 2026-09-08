@@ -65,4 +65,39 @@ public interface SeatRepository extends JpaRepository<Seat, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Seat s WHERE s.concertTime.id = :concertTimeId AND s.seatNumber = :seatNumber")
     Optional<Seat> findByConcertTimeIdAndSeatNumberWithLock(@Param("concertTimeId") Long concertTimeId, @Param("seatNumber") String seatNumber);
+
+    @Query("""
+            SELECT s.layoutSectionCode AS sectionCode,
+                   s.layoutSectionName AS sectionName,
+                   s.layoutSectionOrder AS sectionOrder,
+                   COUNT(s) AS totalSeats,
+                   SUM(CASE WHEN s.reserved = true THEN 1 ELSE 0 END) AS reservedSeats,
+                   SUM(CASE WHEN s.reserved = false
+                                  AND s.heldBy IS NOT NULL
+                                  AND s.heldUntil > :now
+                            THEN 1 ELSE 0 END) AS heldSeats
+            FROM Seat s
+            WHERE s.concertTime.id = :concertTimeId
+              AND s.layoutSectionCode IS NOT NULL
+            GROUP BY s.layoutSectionCode, s.layoutSectionName, s.layoutSectionOrder
+            ORDER BY s.layoutSectionOrder
+            """)
+    List<SeatSectionInventoryProjection> summarizeLayoutSections(
+            @Param("concertTimeId") Long concertTimeId,
+            @Param("now") LocalDateTime now
+    );
+
+    List<Seat> findByConcertTimeIdAndLayoutSectionCodeOrderByLayoutRowOrderAscLayoutSeatIndexAscIdAsc(
+            Long concertTimeId,
+            String layoutSectionCode
+    );
+
+    interface SeatSectionInventoryProjection {
+        String getSectionCode();
+        String getSectionName();
+        Integer getSectionOrder();
+        Long getTotalSeats();
+        Long getReservedSeats();
+        Long getHeldSeats();
+    }
 }
