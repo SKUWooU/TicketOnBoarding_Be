@@ -37,5 +37,7 @@ ADR은 기술을 도입하거나 보류한 이유와 재검토 조건을 기록�
 ## 현재 상태
 
 - [ADR-0001: 전체 schema baseline 전까지 Flyway 운영 활성화 보류](0001-schema-migration-ownership.md) — 보류
+- [ADR-0002: bounded Checkout 결제 검증 claim](0002-bounded-checkout-payment-verification-claim.md) — 승인
+- [ADR-0003: 서버 소유 가상 좌석 레이아웃](0003-server-owned-virtual-seat-layout.md) — 승인
 
 대기열, outbox와 메시지 브로커는 재현 근거가 생기기 전까지 BACKLOG 후보이며 ADR 결정으로 취급하지 않습니다.

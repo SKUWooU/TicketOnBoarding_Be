@@ -29,6 +29,12 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 - 외부 KOPIS·SMS·OAuth·결제 호출 비활성화
 - 개선 구현은 재현 결과가 나온 다음 Issue로 분리
 
+## Phase 9 - 서버 소유 가상 좌석 레이아웃
+
+- Backend Issue #85: 24석·2,000석 fixture의 구역·행·순서 계약과 구역 요약/상세 API
+- 후속: Frontend API 연동, 반응형 구역 탐색, 브라우저 원본 측정 결과 보존
+- 보류: 실제 공연장 좌석도, 운영 migration, WebSocket·대기열·브로커, 근거 없는 virtualization
+
 ## 기술 도입 조건
 
 - 대기열: 순간 요청량을 DB가 직접 수용하지 못하거나 공정한 진입 순서가 필요하다는 근거

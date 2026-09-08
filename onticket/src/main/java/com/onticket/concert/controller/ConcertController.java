@@ -4,6 +4,7 @@ import com.onticket.concert.domain.*;
 import com.onticket.concert.dto.*;
 import com.onticket.concert.service.ConcertService;
 import com.onticket.concert.service.SeatReservationService;
+import com.onticket.concert.service.SeatLayoutQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +18,7 @@ import java.util.*;
 public class ConcertController {
     private final ConcertService concertService;
     private final SeatReservationService seatReservationService;
+    private final SeatLayoutQueryService seatLayoutQueryService;
     //메인페이지
     @GetMapping("/main")
     public ResponseEntity<Map<String, List<MainDto>>> getMainPage() {
@@ -49,6 +51,23 @@ public class ConcertController {
     @GetMapping("/main/detail/{concertId}/calendar/{timeId}")
     public ResponseEntity<List<SeatDto>> getSeat(@PathVariable("concertId") String concertId, @PathVariable("timeId")Long timeId) {
         return ResponseEntity.ok(seatReservationService.getSeatsByConcertTimeId(timeId));
+    }
+
+    @GetMapping("/main/detail/{concertId}/calendar/{timeId}/seat-sections")
+    public ResponseEntity<SeatLayoutSummaryDto> getSeatSections(
+            @PathVariable String concertId,
+            @PathVariable Long timeId
+    ) {
+        return ResponseEntity.ok(seatLayoutQueryService.getSectionSummary(concertId, timeId));
+    }
+
+    @GetMapping("/main/detail/{concertId}/calendar/{timeId}/seat-sections/{sectionCode}")
+    public ResponseEntity<SeatSectionDetailDto> getSeatSection(
+            @PathVariable String concertId,
+            @PathVariable Long timeId,
+            @PathVariable String sectionCode
+    ) {
+        return ResponseEntity.ok(seatLayoutQueryService.getSection(concertId, timeId, sectionCode));
     }
 
     //장르별 공연페이지

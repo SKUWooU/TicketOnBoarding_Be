@@ -14,6 +14,7 @@ import java.util.Optional;
 
 public interface ConcertTimeRepository extends JpaRepository<ConcertTime,Long> {
     List<ConcertTime> findByConcert_ConcertId(String concertId);
+    Optional<ConcertTime> findByIdAndConcert_ConcertId(Long id, String concertId);
     Optional<ConcertTime> findByDateAndStartTimeAndConcert(LocalDate date, LocalTime startTime, Concert concert);
     @Query("SELECT ct.id FROM ConcertTime ct WHERE ct.concert.concertId = :concertId")
     List<Long> findConcertTimeIdsByConcertId(@Param("concertId") String concertId);

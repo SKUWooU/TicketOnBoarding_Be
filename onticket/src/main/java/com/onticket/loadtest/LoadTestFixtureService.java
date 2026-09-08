@@ -10,6 +10,7 @@ import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.PaymentRepository;
 import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
+import com.onticket.concert.service.VirtualSeatLayoutFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -39,6 +40,7 @@ public class LoadTestFixtureService {
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
     private final Clock clock;
+    private final VirtualSeatLayoutFactory seatLayoutFactory;
     private final int rows;
     private final int seatsPerRow;
 
@@ -50,6 +52,7 @@ public class LoadTestFixtureService {
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
             Clock clock,
+            VirtualSeatLayoutFactory seatLayoutFactory,
             @Value("${onticket.loadtest.fixture.rows:50}") int rows,
             @Value("${onticket.loadtest.fixture.seats-per-row:40}") int seatsPerRow
     ) {
@@ -63,6 +66,7 @@ public class LoadTestFixtureService {
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
         this.clock = clock;
+        this.seatLayoutFactory = seatLayoutFactory;
         this.rows = rows;
         this.seatsPerRow = seatsPerRow;
     }
@@ -97,17 +101,22 @@ public class LoadTestFixtureService {
         concertTime.setDayOfWeek("THURSDAY");
         concertTime.setStartTime(LocalTime.of(19, 0));
         concertTime.setSeatAmount(totalSeats());
+        VirtualSeatLayoutFactory.LayoutDefinition layout =
+                seatLayoutFactory.loadTestLayout(rows, seatsPerRow);
+        concertTime.setSeatLayoutVersion(layout.version());
         concertTime = concertTimeRepository.saveAndFlush(concertTime);
 
         List<Seat> seats = new ArrayList<>(totalSeats());
-        for (int row = 1; row <= rows; row++) {
-            for (int number = 1; number <= seatsPerRow; number++) {
-                Seat seat = new Seat();
-                seat.setSeatNumber(seatNumber(row, number));
-                seat.setReserved(false);
-                seat.setConcertTime(concertTime);
-                seats.add(seat);
-            }
+        for (VirtualSeatLayoutFactory.SeatPosition position : layout.positions()) {
+            Seat seat = new Seat();
+            seat.setSeatNumber(position.seatNumber());
+            seat.setReserved(false);
+            seat.setConcertTime(concertTime);
+            seat.assignLayout(
+                    position.sectionCode(), position.sectionName(), position.sectionOrder(),
+                    position.rowLabel(), position.rowOrder(), position.seatIndex()
+            );
+            seats.add(seat);
         }
         seatRepository.saveAllAndFlush(seats);
         return metadata(normalizedRunId, concertTime.getId());
@@ -199,7 +208,7 @@ public class LoadTestFixtureService {
     }
 
     static String seatNumber(int row, int number) {
-        return "R%03d-S%03d".formatted(row, number);
+        return VirtualSeatLayoutFactory.loadTestSeatNumber(row, number);
     }
 
     static String usernamePrefix(String runId) {
