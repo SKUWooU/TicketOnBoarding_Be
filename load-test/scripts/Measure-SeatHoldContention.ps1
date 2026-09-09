@@ -62,6 +62,8 @@ $issue65Health = Invoke-RestMethod -Uri "$ManagementBaseUrl/actuator/health" -Me
 if ($issue65Health.status -ne 'UP') {
     throw "Backend health is not UP: $($issue65Health.status)"
 }
+$issue91BeforePrometheus = Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get
+$issue91DomainBefore = ConvertFrom-PrometheusSeatHoldDomainMetrics -Text $issue91BeforePrometheus.Content
 
 $issue65FixturePreparationStartedAt = (Get-Date).ToUniversalTime()
 $issue65FixtureStopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -171,6 +173,9 @@ try {
     $issue65K6Summary = New-SeatHoldRunSummary -Result $issue65RawResult -DurationSeconds $DurationSeconds
     $issue65Snapshot = ConvertFrom-SeatHoldFinalSnapshot -Text $issue65CombinedOutput
     Assert-SeatHoldFinalState -Summary $issue65K6Summary -Snapshot $issue65Snapshot | Out-Null
+    $issue91AfterPrometheus = Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get
+    $issue91DomainAfter = ConvertFrom-PrometheusSeatHoldDomainMetrics -Text $issue91AfterPrometheus.Content
+    $issue91DomainDelta = Assert-SeatHoldDomainMetricDelta -Before $issue91DomainBefore -After $issue91DomainAfter -K6Summary $issue65K6Summary
     $issue65MetricSummary = New-ContentionMetricsSummary -Samples $issue65Samples.ToArray()
     $issue65Samples | Export-Csv -LiteralPath $issue65SamplesPath -NoTypeInformation -Encoding UTF8
 
@@ -203,6 +208,7 @@ try {
             StderrFile = [IO.Path]::GetFileName($issue65StderrPath)
         }
         Metrics = $issue65MetricSummary
+        DomainMetrics = $issue91DomainDelta
         SamplesFile = [IO.Path]::GetFileName($issue65SamplesPath)
     }
     $issue65Summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $issue65SummaryPath -Encoding UTF8
