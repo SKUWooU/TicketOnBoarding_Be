@@ -10,6 +10,9 @@ import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.SeatRepository;
 import jakarta.persistence.EntityManager;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +65,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Import({
         SeatHoldService.class,
         SeatHoldIntegrationTest.ClockConfiguration.class,
-        SeatHoldIntegrationTest.SeatLockBarrierConfiguration.class
+        SeatHoldIntegrationTest.SeatLockBarrierConfiguration.class,
+        SeatHoldIntegrationTest.MetricsConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -105,10 +109,14 @@ class SeatHoldIntegrationTest {
     @Autowired
     private MutableClock clock;
 
+    @Autowired
+    private SimpleMeterRegistry meterRegistry;
+
     private Long concertTimeId;
 
     @BeforeEach
     void setUp() {
+        meterRegistry.clear();
         SEAT_LOCK_BARRIER.set(null);
         SEAT_LOCK_COUNT.set(0);
         seatRepository.deleteAllInBatch();
@@ -133,6 +141,9 @@ class SeatHoldIntegrationTest {
                 .extracting(SeatHoldResponse.HeldSeat::getExpiresAt)
                 .isEqualTo(BASE_TIME.plusMinutes(5));
         assertSeat("A1", "user-a", BASE_TIME.plusMinutes(5), SeatAvailability.HELD);
+        assertRequestCount("hold", "success", 2);
+        assertTransitionCount("hold", "acquired", 1);
+        assertTransitionCount("hold", "reused", 1);
     }
 
     @Test
@@ -151,6 +162,10 @@ class SeatHoldIntegrationTest {
                 .extracting(SeatHoldResponse.HeldSeat::getExpiresAt)
                 .isEqualTo(BASE_TIME.plusMinutes(10));
         assertSeat("A1", "user-b", BASE_TIME.plusMinutes(10), SeatAvailability.HELD);
+        assertRequestCount("hold", "success", 2);
+        assertRequestCount("hold", "conflict", 1);
+        assertTransitionCount("hold", "acquired", 1);
+        assertTransitionCount("hold", "reclaimed", 1);
     }
 
     @Test
@@ -167,6 +182,9 @@ class SeatHoldIntegrationTest {
         seatHoldService.release("user-a", CONCERT_ID, request("A2", "A1"));
         assertSeat("A1", null, null, SeatAvailability.AVAILABLE);
         assertSeat("A2", null, null, SeatAvailability.AVAILABLE);
+        assertRequestCount("release", "conflict", 1);
+        assertRequestCount("release", "success", 1);
+        assertTransitionCount("release", "released", 2);
     }
 
     @Test
@@ -178,6 +196,23 @@ class SeatHoldIntegrationTest {
 
         assertSeat("A1", null, null, SeatAvailability.AVAILABLE);
         assertSeat("A2", "user-b", BASE_TIME.plusMinutes(5), SeatAvailability.HELD);
+        assertRequestCount("hold", "success", 1);
+        assertRequestCount("hold", "conflict", 1);
+        assertTransitionCount("hold", "acquired", 1);
+    }
+
+    @Test
+    void metricsUseOnlyBoundedOperationOutcomeAndTransitionTags() {
+        seatHoldService.hold("user-a", CONCERT_ID, request("A1"));
+
+        assertThatThrownBy(() -> seatHoldService.hold(" ", CONCERT_ID, request("A2")))
+                .isExactlyInstanceOf(InvalidSeatHoldRequestException.class);
+
+        assertRequestCount("hold", "success", 1);
+        assertRequestCount("hold", "invalid", 1);
+        assertThat(meterRegistry.getMeters())
+                .filteredOn(meter -> meter.getId().getName().startsWith("onticket.seat.hold."))
+                .allSatisfy(this::assertBoundedMetricTags);
     }
 
     @Test
@@ -233,6 +268,30 @@ class SeatHoldIntegrationTest {
         request.setConcertTimeId(concertTimeId);
         request.setSeatNumberList(List.of(seatNumbers));
         return request;
+    }
+
+    private void assertRequestCount(String operation, String outcome, double expected) {
+        assertThat(meterRegistry.get(SeatHoldMetrics.REQUEST_METRIC)
+                .tags("operation", operation, "outcome", outcome)
+                .timer()
+                .count()).isEqualTo((long) expected);
+    }
+
+    private void assertTransitionCount(String operation, String transition, double expected) {
+        Counter counter = meterRegistry.find(SeatHoldMetrics.TRANSITION_METRIC)
+                .tags("operation", operation, "transition", transition)
+                .counter();
+        assertThat(counter).isNotNull();
+        assertThat(counter.count()).isEqualTo(expected);
+    }
+
+    private void assertBoundedMetricTags(Meter meter) {
+        assertThat(meter.getId().getTags())
+                .extracting(tag -> tag.getKey())
+                .allMatch(tag -> tag.equals("operation")
+                        || tag.equals("outcome")
+                        || tag.equals("transition")
+                        || tag.equals("le"));
     }
 
     private void assertSeat(
@@ -292,6 +351,15 @@ class SeatHoldIntegrationTest {
         @Primary
         MutableClock mutableClock() {
             return new MutableClock(BASE_TIME.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        }
+    }
+
+    @TestConfiguration
+    static class MetricsConfiguration {
+
+        @Bean
+        SimpleMeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 

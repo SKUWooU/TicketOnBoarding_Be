@@ -8,6 +8,8 @@ import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.SeatRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,18 +28,21 @@ public class SeatHoldService {
     private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final Clock clock;
     private final Duration holdDuration;
+    private final SeatHoldMetrics metrics;
 
     public SeatHoldService(
             SeatRepository seatRepository,
             ConcertTimeRepository concertTimeRepository,
             CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository,
             Clock clock,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
             @Value("${onticket.ticket.seat-hold-duration:PT5M}") Duration holdDuration
     ) {
         this.seatRepository = seatRepository;
         this.concertTimeRepository = concertTimeRepository;
         this.checkoutSeatAssignmentRepository = checkoutSeatAssignmentRepository;
         this.clock = clock;
+        this.metrics = new SeatHoldMetrics(meterRegistryProvider.getIfAvailable());
         if (holdDuration == null || holdDuration.isZero() || holdDuration.isNegative()) {
             throw new IllegalArgumentException("좌석 점유 시간은 0보다 커야 합니다.");
         }
@@ -46,63 +51,94 @@ public class SeatHoldService {
 
     @Transactional(rollbackFor = Exception.class)
     public SeatHoldResponse hold(String username, String concertId, SeatHoldRequest request) {
-        validateUsername(username);
-        validateConcertTime(concertId, request);
-        List<String> seatNumbers = canonicalSeatNumbers(request);
-        LocalDateTime now = LocalDateTime.now(clock);
-        LocalDateTime requestedExpiry = now.plus(holdDuration);
-        List<SeatHoldResponse.HeldSeat> heldSeats = new ArrayList<>();
+        SeatHoldMetrics.Tracker tracker = metrics.start(SeatHoldMetrics.Operation.HOLD);
+        try {
+            validateUsername(username);
+            validateConcertTime(concertId, request);
+            List<String> seatNumbers = canonicalSeatNumbers(request);
+            LocalDateTime now = LocalDateTime.now(clock);
+            LocalDateTime requestedExpiry = now.plus(holdDuration);
+            List<SeatHoldResponse.HeldSeat> heldSeats = new ArrayList<>();
 
-        for (String seatNumber : seatNumbers) {
-            Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
-            seat.clearExpiredHold(now);
-            if (seat.isReserved()) {
-                throw new SeatHoldConflictException("이미 예약된 좌석입니다.");
-            }
-            if (seat.isHeldAt(now)) {
-                if (!seat.isHeldBy(username, now)) {
-                    throw new SeatHoldConflictException("다른 사용자가 임시 점유한 좌석입니다.");
+            for (String seatNumber : seatNumbers) {
+                Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
+                boolean expiredHold = hasExpiredHold(seat, now);
+                seat.clearExpiredHold(now);
+                if (seat.isReserved()) {
+                    throw new SeatHoldConflictException("이미 예약된 좌석입니다.");
                 }
-                heldSeats.add(new SeatHoldResponse.HeldSeat(seatNumber, seat.getHeldUntil()));
-                continue;
+                if (seat.isHeldAt(now)) {
+                    if (!seat.isHeldBy(username, now)) {
+                        throw new SeatHoldConflictException("다른 사용자가 임시 점유한 좌석입니다.");
+                    }
+                    tracker.transition(SeatHoldMetrics.Transition.REUSED);
+                    heldSeats.add(new SeatHoldResponse.HeldSeat(seatNumber, seat.getHeldUntil()));
+                    continue;
+                }
+                seat.holdFor(username, now, requestedExpiry);
+                tracker.transition(expiredHold
+                        ? SeatHoldMetrics.Transition.RECLAIMED
+                        : SeatHoldMetrics.Transition.ACQUIRED);
+                heldSeats.add(new SeatHoldResponse.HeldSeat(seatNumber, requestedExpiry));
             }
-            seat.holdFor(username, now, requestedExpiry);
-            heldSeats.add(new SeatHoldResponse.HeldSeat(seatNumber, requestedExpiry));
-        }
 
-        return new SeatHoldResponse(List.copyOf(heldSeats));
+            tracker.succeed();
+            return new SeatHoldResponse(List.copyOf(heldSeats));
+        } catch (RuntimeException exception) {
+            tracker.fail(exception);
+            throw exception;
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void release(String username, String concertId, SeatHoldRequest request) {
-        validateUsername(username);
-        validateConcertTime(concertId, request);
-        List<String> seatNumbers = canonicalSeatNumbers(request);
-        LocalDateTime now = LocalDateTime.now(clock);
-        List<Seat> lockedSeats = new ArrayList<>();
+        SeatHoldMetrics.Tracker tracker = metrics.start(SeatHoldMetrics.Operation.RELEASE);
+        try {
+            validateUsername(username);
+            validateConcertTime(concertId, request);
+            List<String> seatNumbers = canonicalSeatNumbers(request);
+            LocalDateTime now = LocalDateTime.now(clock);
+            List<Seat> lockedSeats = new ArrayList<>();
 
-        for (String seatNumber : seatNumbers) {
-            Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
-            seat.clearExpiredHold(now);
-            if (!seat.isHeldAt(now)) {
-                continue;
+            for (String seatNumber : seatNumbers) {
+                Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
+                boolean expiredHold = hasExpiredHold(seat, now);
+                seat.clearExpiredHold(now);
+                if (!seat.isHeldAt(now)) {
+                    if (expiredHold) {
+                        tracker.transition(SeatHoldMetrics.Transition.EXPIRED_CLEARED);
+                    }
+                    continue;
+                }
+                if (!seat.isHeldBy(username, now)) {
+                    throw new SeatHoldConflictException("다른 사용자의 임시 점유는 해제할 수 없습니다.");
+                }
+                lockedSeats.add(seat);
             }
-            if (!seat.isHeldBy(username, now)) {
-                throw new SeatHoldConflictException("다른 사용자의 임시 점유는 해제할 수 없습니다.");
+
+            if (!lockedSeats.isEmpty() && !checkoutSeatAssignmentRepository.findActiveBySeatIdsWithLock(
+                    lockedSeats.stream().map(Seat::getId).toList(),
+                    now
+            ).isEmpty()) {
+                throw new SeatHoldConflictException("결제 준비 중인 좌석은 임시 점유를 해제할 수 없습니다.");
             }
-            lockedSeats.add(seat);
-        }
 
-        if (!lockedSeats.isEmpty() && !checkoutSeatAssignmentRepository.findActiveBySeatIdsWithLock(
-                lockedSeats.stream().map(Seat::getId).toList(),
-                now
-        ).isEmpty()) {
-            throw new SeatHoldConflictException("결제 준비 중인 좌석은 임시 점유를 해제할 수 없습니다.");
+            for (Seat seat : lockedSeats) {
+                seat.clearHold();
+                tracker.transition(SeatHoldMetrics.Transition.RELEASED);
+            }
+            tracker.succeed();
+        } catch (RuntimeException exception) {
+            tracker.fail(exception);
+            throw exception;
         }
+    }
 
-        for (Seat seat : lockedSeats) {
-            seat.clearHold();
-        }
+    private boolean hasExpiredHold(Seat seat, LocalDateTime now) {
+        return !seat.isReserved()
+                && seat.getHeldBy() != null
+                && seat.getHeldUntil() != null
+                && !now.isBefore(seat.getHeldUntil());
     }
 
     private void validateConcertTime(String concertId, SeatHoldRequest request) {

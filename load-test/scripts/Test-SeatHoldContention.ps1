@@ -114,6 +114,23 @@ Assert-Issue65Equal $issue65Snapshot.activeHeldSeats 100 'snapshot held parser'
 Assert-Issue65True $issue65Snapshot.invariantSatisfied 'snapshot invariant parser'
 Assert-Issue65Throws { ConvertFrom-SeatHoldFinalSnapshot -Text 'missing' } 'missing snapshot must fail'
 
+$issue91Before = ConvertFrom-PrometheusSeatHoldDomainMetrics -Text '# no seat-hold metrics yet'
+$issue91After = ConvertFrom-PrometheusSeatHoldDomainMetrics -Text @'
+onticket_seat_hold_request_seconds_count{application="onticket-loadtest",operation="hold",outcome="success",} 40
+onticket_seat_hold_request_seconds_count{application="onticket-loadtest",operation="hold",outcome="conflict",} 60
+onticket_seat_hold_transitions_total{application="onticket-loadtest",operation="hold",transition="acquired",} 20
+onticket_seat_hold_transitions_total{application="onticket-loadtest",operation="hold",transition="reused",} 20
+'@
+$issue91K6 = New-SeatHoldRunSummary -Result (ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario hot-section -Success 40 -Contention 60)) -DurationSeconds 10
+$issue91Delta = Assert-SeatHoldDomainMetricDelta -Before $issue91Before -After $issue91After -K6Summary $issue91K6
+Assert-Issue65Equal $issue91Delta.HoldSuccess 40 'server success delta'
+Assert-Issue65Equal $issue91Delta.HoldConflict 60 'server conflict delta'
+Assert-Issue65Equal $issue91Delta.HoldAcquired 20 'committed acquired delta'
+Assert-Issue65Equal $issue91Delta.HoldReused 20 'committed reused delta'
+Assert-Issue65Throws {
+    Assert-SeatHoldDomainMetricDelta -Before $issue91Before -After (ConvertFrom-PrometheusSeatHoldDomainMetrics -Text 'onticket_seat_hold_request_seconds_count{operation="hold",outcome="success",} 39') -K6Summary $issue91K6
+} 'server and k6 outcome mismatch'
+
 Assert-Issue65True (Assert-SeatHoldRunIdentity -Result $issue65Raw -Scenario distributed -Rate 10 -DurationSeconds 10 -ThresholdsEnforced $false) 'identity accepts exact request'
 Assert-Issue65Throws { Assert-SeatHoldRunIdentity -Result $issue65Raw -Scenario hot-seat -Rate 10 -DurationSeconds 10 -ThresholdsEnforced $false } 'scenario mismatch'
 Assert-Issue65Throws { Assert-SeatHoldRunIdentity -Result $issue65Raw -Scenario distributed -Rate 20 -DurationSeconds 10 -ThresholdsEnforced $false } 'rate mismatch'

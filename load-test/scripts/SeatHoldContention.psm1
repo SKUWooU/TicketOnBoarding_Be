@@ -258,6 +258,91 @@ function Get-Issue65Median {
     ([double]$issue65Sorted[$issue65Middle - 1] + [double]$issue65Sorted[$issue65Middle]) / 2.0
 }
 
+function ConvertFrom-PrometheusSeatHoldDomainMetrics {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $issue91Values = [ordered]@{
+        HoldSuccess = 0.0
+        HoldConflict = 0.0
+        HoldInvalid = 0.0
+        HoldError = 0.0
+        HoldAcquired = 0.0
+        HoldReused = 0.0
+        HoldReclaimed = 0.0
+        ReleaseSuccess = 0.0
+        ReleaseConflict = 0.0
+        ReleaseInvalid = 0.0
+        ReleaseError = 0.0
+        Released = 0.0
+        ExpiredCleared = 0.0
+    }
+
+    foreach ($issue91Line in ($Text -split "`r?`n")) {
+        if ($issue91Line -notmatch '^(onticket_seat_hold_request_seconds_count|onticket_seat_hold_transitions_total)\{([^}]*)\}\s+([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*$') {
+            continue
+        }
+        $issue91MetricName = $Matches[1]
+        $issue91Labels = $Matches[2]
+        $issue91Value = [double]::Parse($Matches[3], [Globalization.CultureInfo]::InvariantCulture)
+
+        if ($issue91MetricName -eq 'onticket_seat_hold_request_seconds_count') {
+            $issue91Prefix = if ($issue91Labels -match 'operation="hold"') { 'Hold' } elseif ($issue91Labels -match 'operation="release"') { 'Release' } else { '' }
+            $issue91Outcome = if ($issue91Labels -match 'outcome="success"') { 'Success' } elseif ($issue91Labels -match 'outcome="conflict"') { 'Conflict' } elseif ($issue91Labels -match 'outcome="invalid"') { 'Invalid' } elseif ($issue91Labels -match 'outcome="error"') { 'Error' } else { '' }
+            if ($issue91Prefix -and $issue91Outcome) {
+                $issue91Values["$issue91Prefix$issue91Outcome"] += $issue91Value
+            }
+            continue
+        }
+
+        if ($issue91Labels -notmatch 'operation="hold"' -and $issue91Labels -notmatch 'operation="release"') {
+            continue
+        }
+        if ($issue91Labels -match 'transition="acquired"') { $issue91Values.HoldAcquired += $issue91Value }
+        elseif ($issue91Labels -match 'transition="reused"') { $issue91Values.HoldReused += $issue91Value }
+        elseif ($issue91Labels -match 'transition="reclaimed"') { $issue91Values.HoldReclaimed += $issue91Value }
+        elseif ($issue91Labels -match 'transition="released"') { $issue91Values.Released += $issue91Value }
+        elseif ($issue91Labels -match 'transition="expired_cleared"') { $issue91Values.ExpiredCleared += $issue91Value }
+    }
+
+    [pscustomobject]$issue91Values
+}
+
+function Assert-SeatHoldDomainMetricDelta {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object]$Before,
+        [Parameter(Mandatory = $true)][object]$After,
+        [Parameter(Mandatory = $true)][object]$K6Summary
+    )
+
+    $issue91Delta = [ordered]@{}
+    foreach ($issue91Property in $Before.PSObject.Properties.Name) {
+        $issue91BeforeValue = [double]$Before.$issue91Property
+        $issue91AfterValue = [double]$After.$issue91Property
+        if ($issue91AfterValue -lt $issue91BeforeValue) {
+            throw "Seat-hold domain metric decreased: $issue91Property"
+        }
+        $issue91Delta[$issue91Property] = $issue91AfterValue - $issue91BeforeValue
+    }
+
+    if ([long]$issue91Delta.HoldSuccess -ne [long]$K6Summary.HoldSuccess) {
+        throw "Server hold success metric does not match k6: server=$($issue91Delta.HoldSuccess) k6=$($K6Summary.HoldSuccess)"
+    }
+    if ([long]$issue91Delta.HoldConflict -ne [long]$K6Summary.ExpectedContention) {
+        throw "Server hold conflict metric does not match k6: server=$($issue91Delta.HoldConflict) k6=$($K6Summary.ExpectedContention)"
+    }
+    if ([long]$issue91Delta.HoldInvalid -ne 0 -or [long]$issue91Delta.HoldError -ne 0) {
+        throw "Seat-hold measurement contains invalid or error outcomes: invalid=$($issue91Delta.HoldInvalid) error=$($issue91Delta.HoldError)"
+    }
+    $issue91CommittedTransitions = [long]$issue91Delta.HoldAcquired + [long]$issue91Delta.HoldReused + [long]$issue91Delta.HoldReclaimed
+    if ($issue91CommittedTransitions -ne [long]$issue91Delta.HoldSuccess) {
+        throw "Committed hold transitions do not match successful one-seat requests: transitions=$issue91CommittedTransitions success=$($issue91Delta.HoldSuccess)"
+    }
+
+    [pscustomobject]$issue91Delta
+}
+
 function New-Issue65Range {
     param([double[]]$Values)
     [pscustomobject]@{
@@ -305,6 +390,8 @@ Export-ModuleMember -Function @(
     'Assert-SeatHoldRunIdentity',
     'New-SeatHoldRunSummary',
     'Assert-SeatHoldFinalState',
+    'ConvertFrom-PrometheusSeatHoldDomainMetrics',
+    'Assert-SeatHoldDomainMetricDelta',
     'New-SeatHoldBaselinePlan',
     'Get-SeatHoldBaselineStopReasons',
     'New-SeatHoldBaselineAggregate'
