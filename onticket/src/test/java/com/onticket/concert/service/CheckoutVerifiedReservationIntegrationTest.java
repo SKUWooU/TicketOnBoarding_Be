@@ -126,6 +126,9 @@ class CheckoutVerifiedReservationIntegrationTest {
     private PaymentUnknownReconciliationService reconciliationService;
 
     @Autowired
+    private CheckoutPaymentVerificationTransactionService verificationTransactionService;
+
+    @Autowired
     private SeatHoldService seatHoldService;
 
     @Autowired
@@ -626,6 +629,43 @@ class CheckoutVerifiedReservationIntegrationTest {
         )).isExactlyInstanceOf(PaymentVerificationUnavailableException.class);
 
         assertUnknownReconciliationSnapshot(fixture);
+    }
+
+    @Test
+    void reconciliationReclaimsStaleClaimAtExactDeadline() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-stale-claim",
+                "payment-reconcile-stale-claim",
+                "reservation-reconcile-stale-claim"
+        );
+        PaymentUnknownReconciliationPreparation abandoned = verificationTransactionService
+                .claimUnknownForReconciliation(fixture.checkout().getMerchantUid());
+        assertThat(abandoned.isCompleted()).isFalse();
+        entityManager.clear();
+        assertThat(checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow().getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFYING);
+
+        clock.set(fixture.deadline());
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.rejected());
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.PAYMENT_REJECTED);
+        verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(stored.getVerificationPaymentId()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil()).isNull());
+        assertEmptyReservationSnapshot(2);
     }
 
     @Test

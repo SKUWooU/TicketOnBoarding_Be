@@ -153,7 +153,11 @@ public class CheckoutPaymentVerificationTransactionService {
             );
         }
         if (checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFYING) {
-            throw new CheckoutConflictException("결제 검증 또는 대조가 진행 중인 Checkout입니다.");
+            LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+            if (!checkout.isPaymentVerificationTimedOut(now)) {
+                throw new CheckoutConflictException("결제 검증 또는 대조가 진행 중인 Checkout입니다.");
+            }
+            checkout.markPaymentVerificationUnknown();
         }
         if (checkout.getStatus() != CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN) {
             throw new CheckoutConflictException("결제 결과를 대조할 수 없는 Checkout 상태입니다.");

@@ -26,7 +26,8 @@ PAYMENT_VERIFICATION_UNKNOWN
        ├─ UNKNOWN → PAYMENT_VERIFYING claim commit
        ├─ 이미 RESERVATION_CONFIRMED → 기존 결과 반환
        ├─ READY/EXPIRED → NO_ACTION_REQUIRED
-       └─ 처리 중 → conflict
+       ├─ deadline 전 처리 중 → conflict
+       └─ deadline에 도달한 stale claim → UNKNOWN 회수 후 재claim
 
 transaction 밖 PaymentReconciliationPort.lookup(paymentId)
   ├─ UNRESOLVED → UNKNOWN 복원
@@ -62,7 +63,7 @@ transaction 밖 PaymentReconciliationPort.lookup(paymentId)
 3. 기존 paymentId·예약 멱등 key·fingerprint·deadline을 지우지 않은 채 `PAYMENT_VERIFYING`으로 되돌린다.
 4. immutable claim을 반환하고 commit한다.
 
-별도 `PAYMENT_RECONCILING` 상태나 새 DB column을 만들지 않았다. reconciliation도 결제 상태를 조회 중이라는 의미에서 기존 `PAYMENT_VERIFYING` claim을 재사용하며, 프로세스가 조회 도중 중단되어도 기존 verification deadline 접근 시 다시 UNKNOWN으로 격리된다.
+별도 `PAYMENT_RECONCILING` 상태나 새 DB column을 만들지 않았다. reconciliation도 결제 상태를 조회 중이라는 의미에서 기존 `PAYMENT_VERIFYING` claim을 재사용한다. claim commit 직후 프로세스가 중단되면 deadline 전 재호출은 conflict로 중복 조회를 막고, 정확한 deadline부터 stale claim을 UNKNOWN으로 회수한 뒤 같은 호출에서 다시 claim한다. 따라서 수동 단건 command만으로도 영구 정체 없이 재시도할 수 있다.
 
 ### provider 조회
 
@@ -106,12 +107,13 @@ provider 조회는 claim commit 뒤 transaction 밖에서 수행한다. 네트�
 - deadline 전 승인: Checkout `RESERVATION_CONFIRMED`, Booking·Payment·Reservation 각 1, reserved seat 1, 잔여 1, assignment lease 정리
 - deadline 전 거절: Checkout `READY`, 원래 hold 기한 복원, business row 0, 잔여 2
 - 미확정 및 조회 예외: Checkout UNKNOWN과 paymentId·deadline·assignment lease 보존
+- claim commit 직후 중단: deadline 전 중복 command 차단, 정확한 deadline에서 stale claim 회수·provider 재조회·거절 수렴
 - 승인 정보 금액 불일치: `MANUAL_REVIEW_REQUIRED`, 예약·결제 row 0
 - deadline 이후 승인과 다른 사용자 A1 Checkout 공존: `COMPENSATION_REQUIRED`, 원래 UNKNOWN 유지, 대체 READY Checkout·점유 보존, 예약·결제 row 0
 - deadline 이후 거절과 다른 사용자 A1 Checkout 공존: 원래 Checkout `EXPIRED` 및 lease 정리, 대체 READY Checkout·점유 보존
 - 동시 단건 command: 3회 모두 provider 조회 1회, 예약 확정 1회, 다른 요청은 처리 중 conflict, deadlock 관찰 0
-- 대상 Checkout 도메인 7 tests와 Checkout 통합 33 test invocations가 failures·errors·skipped 0으로 통과
-- 전체 Backend 204 tests가 failures·errors·skipped 0으로 통과
+- 대상 Checkout 도메인 7 tests와 Checkout 통합 34 test invocations가 failures·errors·skipped 0으로 통과
+- 전체 Backend 205 tests가 failures·errors·skipped 0으로 통과
 
 위 결과는 2석 로컬 기능 fixture의 정합성 검증이다. TPS, 운영 PG 안정성, 실제 환불 성공 또는 운영 규모 성능을 의미하지 않는다.
 
