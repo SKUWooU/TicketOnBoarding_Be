@@ -3,11 +3,14 @@ package com.onticket.loadtest;
 import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
+import com.onticket.concert.domain.Place;
 import com.onticket.concert.domain.Seat;
 import com.onticket.concert.repository.BookingRepository;
+import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.PaymentRepository;
+import com.onticket.concert.repository.PlaceRepository;
 import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
 import com.onticket.concert.service.VirtualSeatLayoutFactory;
@@ -20,6 +23,7 @@ import java.time.LocalDate;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -34,7 +38,9 @@ public class LoadTestFixtureService {
     public static final String IDEMPOTENCY_KEY_PREFIX = "lt-";
 
     private final ConcertRepository concertRepository;
+    private final ConcertDetailRepository concertDetailRepository;
     private final ConcertTimeRepository concertTimeRepository;
+    private final PlaceRepository placeRepository;
     private final SeatRepository seatRepository;
     private final ReservationRepository reservationRepository;
     private final BookingRepository bookingRepository;
@@ -46,7 +52,9 @@ public class LoadTestFixtureService {
 
     public LoadTestFixtureService(
             ConcertRepository concertRepository,
+            ConcertDetailRepository concertDetailRepository,
             ConcertTimeRepository concertTimeRepository,
+            PlaceRepository placeRepository,
             SeatRepository seatRepository,
             ReservationRepository reservationRepository,
             BookingRepository bookingRepository,
@@ -60,7 +68,9 @@ public class LoadTestFixtureService {
             throw new IllegalArgumentException("loadtest fixture 좌석 수는 1~10,000 범위여야 합니다.");
         }
         this.concertRepository = concertRepository;
+        this.concertDetailRepository = concertDetailRepository;
         this.concertTimeRepository = concertTimeRepository;
+        this.placeRepository = placeRepository;
         this.seatRepository = seatRepository;
         this.reservationRepository = reservationRepository;
         this.bookingRepository = bookingRepository;
@@ -77,8 +87,11 @@ public class LoadTestFixtureService {
         String concertId = concertId(normalizedRunId);
         List<Long> existingTimeIds = concertTimeRepository.findConcertTimeIdsByConcertId(concertId);
         if (!existingTimeIds.isEmpty()) {
+            repairDetailPlace(normalizedRunId, concertId);
             return metadata(normalizedRunId, existingTimeIds.get(0));
         }
+
+        Place place = createOrGetPlace(normalizedRunId);
 
         Concert concert = new Concert();
         concert.setConcertId(concertId);
@@ -86,12 +99,19 @@ public class LoadTestFixtureService {
         concert.setPosterUrl("https://example.invalid/loadtest-poster.jpg");
         concert.setStartDate(LocalDate.of(2030, 1, 1));
         concert.setEndDate(LocalDate.of(2030, 1, 31));
+        concert.setGenre("가상 부하 테스트");
 
         ConcertDetail detail = new ConcertDetail();
         detail.setConcertId(concertId);
         detail.setConcert(concert);
         detail.setPlace("가상 부하 공연장");
+        detail.setPlaceId(place.getPlaceId());
+        detail.setAge("전체 관람가");
         detail.setPrice("가상 좌석 30,000원");
+        detail.setStartTime("19:00");
+        detail.setPerformers("가상 fixture");
+        detail.setCrew("가상 fixture");
+        detail.setCompany("가상 fixture");
         concert.setConcertDetail(detail);
         concertRepository.saveAndFlush(concert);
 
@@ -120,6 +140,31 @@ public class LoadTestFixtureService {
         }
         seatRepository.saveAllAndFlush(seats);
         return metadata(normalizedRunId, concertTime.getId());
+    }
+
+    private Place createOrGetPlace(String runId) {
+        String placeId = placeId(runId);
+        return placeRepository.findById(placeId).orElseGet(() -> {
+            Place place = new Place();
+            place.setPlaceId(placeId);
+            place.setPlaceName("가상 부하 공연장");
+            place.setSido("가상시");
+            place.setGugun("부하구");
+            place.setAddr("가상시 부하구 " + runId + " fixture");
+            place.setLatitude(new BigDecimal("37.5665000"));
+            place.setLongitude(new BigDecimal("126.9780000"));
+            return placeRepository.save(place);
+        });
+    }
+
+    private void repairDetailPlace(String runId, String concertId) {
+        ConcertDetail detail = concertDetailRepository.findById(concertId)
+                .orElseThrow(() -> new IllegalStateException("loadtest fixture 상세 정보가 없습니다."));
+        String placeId = createOrGetPlace(runId).getPlaceId();
+        if (!placeId.equals(detail.getPlaceId())) {
+            detail.setPlaceId(placeId);
+            concertDetailRepository.save(detail);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -233,6 +278,10 @@ public class LoadTestFixtureService {
 
     private static String concertId(String runId) {
         return CONCERT_ID_PREFIX + validateRunId(runId);
+    }
+
+    private static String placeId(String runId) {
+        return CONCERT_ID_PREFIX + "PLACE-" + validateRunId(runId);
     }
 
     private static String validateRunId(String runId) {

@@ -4,9 +4,13 @@ import com.onticket.concert.config.SeatHoldConfiguration;
 import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Payment;
 import com.onticket.concert.domain.Seat;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onticket.concert.repository.BookingRepository;
+import com.onticket.concert.repository.ConcertDetailRepository;
 import com.onticket.concert.repository.PaymentRepository;
+import com.onticket.concert.repository.PlaceRepository;
 import com.onticket.concert.repository.SeatRepository;
+import com.onticket.concert.service.ConcertService;
 import com.onticket.concert.service.SeatLayoutQueryService;
 import com.onticket.concert.service.VirtualSeatLayoutFactory;
 import org.junit.jupiter.api.Test;
@@ -17,6 +21,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -37,7 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         LoadTestFixtureService.class,
         SeatHoldConfiguration.class,
         VirtualSeatLayoutFactory.class,
-        SeatLayoutQueryService.class
+        SeatLayoutQueryService.class,
+        ConcertService.class
 })
 @Testcontainers
 class LoadTestFixtureIntegrationTest {
@@ -71,6 +79,18 @@ class LoadTestFixtureIntegrationTest {
     @Autowired
     private SeatLayoutQueryService seatLayoutQueryService;
 
+    @Autowired
+    private ConcertService concertService;
+
+    @Autowired
+    private PlaceRepository placeRepository;
+
+    @Autowired
+    private ConcertDetailRepository concertDetailRepository;
+
+    @Autowired
+    private EntityManager entityManager;
+
     @Test
     void createsTwoThousandSeatsAndKeepsInitializationIdempotent() {
         LoadTestFixtureService.FixtureMetadata first = fixtureService.initialize("run-a");
@@ -94,6 +114,15 @@ class LoadTestFixtureIntegrationTest {
                 });
         assertThat(seatLayoutQueryService.getSection(first.concertId(), first.concertTimeId(), "S01").seats())
                 .hasSize(200);
+        assertThat(concertService.getConcertDetail(first.concertId()))
+                .satisfies(detail -> {
+                    assertThat(detail.getPlaceName()).isEqualTo("가상 부하 공연장");
+                    assertThat(detail.getAddr()).contains("run-a fixture");
+                    assertThat(detail.getLa()).isEqualByComparingTo("37.5665000");
+                    assertThat(detail.getLo()).isEqualByComparingTo("126.9780000");
+                    assertThat(detail.getReviewList()).isEmpty();
+                });
+        assertThat(placeRepository.findByPlaceId("LOAD-TEST-PLACE-run-a")).isNotNull();
     }
 
     @Test
@@ -107,6 +136,40 @@ class LoadTestFixtureIntegrationTest {
         assertThat(fixtureService.snapshot("run-two").actualSeatCount()).isEqualTo(2_000);
         assertThat(fixtureService.snapshot("run-one").invariantSatisfied()).isTrue();
         assertThat(fixtureService.snapshot("run-two").invariantSatisfied()).isTrue();
+    }
+
+    @Test
+    void repairsAnExistingFixtureThatWasCreatedWithoutPlaceMetadata() {
+        LoadTestFixtureService.FixtureMetadata fixture = fixtureService.initialize("legacy-run");
+        concertDetailRepository.findById(fixture.concertId()).orElseThrow().setPlaceId(null);
+        entityManager.flush();
+        placeRepository.deleteAll();
+        entityManager.flush();
+
+        LoadTestFixtureService.FixtureMetadata repaired = fixtureService.initialize("legacy-run");
+
+        assertThat(repaired).isEqualTo(fixture);
+        assertThat(concertService.getConcertDetail(fixture.concertId()))
+                .satisfies(detail -> {
+                    assertThat(detail.getPlaceName()).isEqualTo("가상 부하 공연장");
+                    assertThat(detail.getAddr()).contains("legacy-run fixture");
+                });
+        assertThat(placeRepository.findByPlaceId("LOAD-TEST-PLACE-legacy-run")).isNotNull();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void serializesFixtureDetailAfterTheServiceTransactionEnds() throws Exception {
+        LoadTestFixtureService.FixtureMetadata fixture = fixtureService.initialize("http-detail-run");
+
+        String json = new ObjectMapper().writeValueAsString(
+                concertService.getConcertDetail(fixture.concertId())
+        );
+
+        assertThat(json)
+                .contains("가상 부하 공연장")
+                .contains("http-detail-run fixture")
+                .contains("\"reviewList\":[]");
     }
 
     @Test

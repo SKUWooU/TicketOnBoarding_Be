@@ -4,6 +4,7 @@ import com.onticket.concert.domain.Concert;
 import com.onticket.concert.domain.ConcertDetail;
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Place;
+import com.onticket.concert.domain.Review;
 import com.onticket.concert.dto.DetailDto;
 import com.onticket.concert.dto.MainDto;
 import com.onticket.concert.repository.ConcertDetailRepository;
@@ -166,6 +167,7 @@ public class ConcertService {
     }
 
     //공연상세정보+리뷰 반환
+    @Transactional(readOnly = true)
     public DetailDto getConcertDetail(String concertId) {
         DateTimeFormatter formatter= DateTimeFormatter.ofPattern("yyyy-MM-dd");
         Concert concert = concertRepository.findByConcertId(concertId);
@@ -188,7 +190,8 @@ public class ConcertService {
         detailDto.setAddr(place.getAddr());
         detailDto.setLa(place.getLatitude());
         detailDto.setLo(place.getLongitude());
-        detailDto.setReviewList(concert.getConcertDetail().getReviews());
+        List<Review> reviews = concert.getConcertDetail().getReviews();
+        detailDto.setReviewList(reviews == null ? List.of() : new ArrayList<>(reviews));
         return detailDto;
     }
 
