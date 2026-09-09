@@ -25,8 +25,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -111,6 +113,9 @@ class SeatHoldIntegrationTest {
 
     @Autowired
     private SimpleMeterRegistry meterRegistry;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private Long concertTimeId;
 
@@ -213,6 +218,25 @@ class SeatHoldIntegrationTest {
         assertThat(meterRegistry.getMeters())
                 .filteredOn(meter -> meter.getId().getName().startsWith("onticket.seat.hold."))
                 .allSatisfy(this::assertBoundedMetricTags);
+    }
+
+    @Test
+    void outerTransactionRollbackRecordsErrorWithoutCommittedTransition() {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        transaction.executeWithoutResult(status -> {
+            seatHoldService.hold("user-a", CONCERT_ID, request("A1"));
+            status.setRollbackOnly();
+        });
+
+        assertSeat("A1", null, null, SeatAvailability.AVAILABLE);
+        assertRequestCount("hold", "error", 1);
+        assertThat(meterRegistry.find(SeatHoldMetrics.REQUEST_METRIC)
+                .tags("operation", "hold", "outcome", "success")
+                .timer()).isNull();
+        assertThat(meterRegistry.find(SeatHoldMetrics.TRANSITION_METRIC)
+                .tags("operation", "hold", "transition", "acquired")
+                .counter()).isNull();
     }
 
     @Test

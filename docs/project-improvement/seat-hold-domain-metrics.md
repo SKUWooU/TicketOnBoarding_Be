@@ -73,10 +73,11 @@ Prometheus에서는 `_seconds_count`, `_seconds_sum`, `_seconds_max`와 5·10·2
 - 다른 사용자 충돌 뒤 정확한 만료 경계에서 재획득
 - 타인 release 충돌과 소유자 복수 좌석 release
 - A1 변경 뒤 A2 충돌 시 전체 rollback 및 A1 transition 미집계
+- Service 성공 뒤 외부 transaction 강제 rollback 시 DB·success·acquired 미반영과 error 기록
 - 잘못된 요청의 `invalid` 분류
 - 애플리케이션 태그가 제한된 집합인지 확인
 
-전체 Backend 189 tests가 통과했다.
+전체 Backend 190 tests가 통과했다.
 
 ### PowerShell 측정 gate
 
