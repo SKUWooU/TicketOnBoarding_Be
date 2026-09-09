@@ -13,15 +13,17 @@
 
 ## 진행 중
 
-### Backend Issue #91 — 좌석 점유 도메인 메트릭
-
-- Branch: `feat/91-seat-hold-domain-metrics`
-- 상태: 구현·로컬 검증 완료, PR 준비
-- 검증: Backend 190 tests, PowerShell 44 assertions, hot-seat 100 RPS·10초에서 k6/server success 2·conflict 998 일치
-- 범위: hold/release 요청 결과·처리 시간, commit된 좌석 transition, 2,000석 fixture·k6 교차 검증
-- 제외: 식별자 태그, Grafana·Redis·대기열·브로커, 실제 KOPIS·PG 호출, 운영 성능 주장
+- 없음
 
 ## 완료
+
+### Backend Issue #91 — 좌석 점유 도메인 메트릭
+
+- PR: [#92](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/92) / squash `f157e6f`
+- 결과: transaction 완료 기준 요청 Timer와 commit된 좌석 transition Counter를 추가하고 k6-Prometheus 결과 교차 gate 구성
+- 검증: Backend 190 tests·PowerShell 44 assertions·CI, hot-seat 100 RPS 10초의 k6/server success 2·conflict 998 일치, `MERGE_READY: YES`
+- 근거: [좌석 점유 도메인 메트릭](docs/project-improvement/seat-hold-domain-metrics.md)
+- 제외: 식별자 태그, Grafana·Redis·대기열·브로커, 실제 외부 호출, 운영 성능 주장
 
 ### Backend Issue #88 — loadtest fixture 공연 상세 조회 계약 복구
 
