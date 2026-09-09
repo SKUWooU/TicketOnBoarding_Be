@@ -84,6 +84,7 @@ import static org.mockito.Mockito.when;
         CheckoutExpirationService.class,
         CheckoutPaymentVerificationTransactionService.class,
         CheckoutVerifiedReservationService.class,
+        PaymentUnknownReconciliationService.class,
         VerifiedReservationTransactionService.class,
         VirtualTicketPricePolicy.class,
         CheckoutVerifiedReservationIntegrationTest.ClockConfiguration.class,
@@ -120,6 +121,9 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @Autowired
     private CheckoutVerifiedReservationService reservationService;
+
+    @Autowired
+    private PaymentUnknownReconciliationService reconciliationService;
 
     @Autowired
     private SeatHoldService seatHoldService;
@@ -159,6 +163,9 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @MockBean
     private PaymentVerificationPort paymentVerificationPort;
+
+    @MockBean
+    private PaymentReconciliationPort paymentReconciliationPort;
 
     @MockBean
     private JwtUtil jwtUtil;
@@ -536,6 +543,270 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertThat(checkoutRepository.count()).isEqualTo(1);
         assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
         assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void approvedUnknownCheckoutReconciliationConfirmsProtectedReservation() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-approved",
+                "payment-reconcile-approved",
+                "reservation-reconcile-approved"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.approved(
+                        reconciledApproval(fixture, 30_000)
+                ));
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.RESERVATION_CONFIRMED);
+        assertThat(result.reservationCreatedAt()).isNotNull();
+        PaymentReconciliationResult repeated = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+        assertThat(repeated).isEqualTo(result);
+        verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+        assertConfirmedSnapshot(fixture.checkout().getMerchantUid(), 1, 1);
+        Checkout stored = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        assertThat(stored.getVerificationPaymentId()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil()).isNull());
+    }
+
+    @Test
+    void rejectedUnknownCheckoutReconciliationRestoresOriginalHold() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-rejected",
+                "payment-reconcile-rejected",
+                "reservation-reconcile-rejected"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.rejected());
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.PAYMENT_REJECTED);
+        assertThat(reconciliationService.reconcile(fixture.checkout().getMerchantUid()).outcome())
+                .isEqualTo(PaymentReconciliationOutcome.NO_ACTION_REQUIRED);
+        verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(stored.getVerificationPaymentId()).isNull();
+        assertThat(seat.isHeldBy(USERNAME, LocalDateTime.now(clock))).isTrue();
+        assertThat(seat.getHeldUntil()).isEqualTo(fixture.checkout().getExpiresAt());
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil()).isNull());
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void unavailableUnknownCheckoutReconciliationRestoresUnknownBeforePropagating() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-unavailable",
+                "payment-reconcile-unavailable",
+                "reservation-reconcile-unavailable"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenThrow(new PaymentVerificationUnavailableException());
+
+        assertThatThrownBy(() -> reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        )).isExactlyInstanceOf(PaymentVerificationUnavailableException.class);
+
+        assertUnknownReconciliationSnapshot(fixture);
+    }
+
+    @Test
+    void unresolvedUnknownCheckoutReconciliationKeepsUnknownAndLease() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-unresolved",
+                "payment-reconcile-unresolved",
+                "reservation-reconcile-unresolved"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.unresolved());
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.STILL_UNRESOLVED);
+        verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo(fixture.paymentId());
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                        .isEqualTo(fixture.deadline()));
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void approvedUnknownCheckoutAfterDeadlineRequiresCompensationWithoutOverwritingSeat() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-late-approved",
+                "payment-reconcile-late-approved",
+                "reservation-reconcile-late-approved"
+        );
+        clock.set(fixture.deadline());
+        seatHoldService.hold("replacement-user", CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse replacement = checkoutService.prepare(
+                "replacement-user",
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-reconcile-replacement"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.approved(
+                        reconciledApproval(fixture, 30_000)
+                ));
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.COMPENSATION_REQUIRED);
+        verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+        entityManager.clear();
+        Checkout original = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        Checkout storedReplacement = checkoutRepository.findByMerchantUid(
+                replacement.getMerchantUid()
+        ).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(original.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(storedReplacement.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(seat.isHeldBy("replacement-user", LocalDateTime.now(clock))).isTrue();
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void rejectedUnknownCheckoutAfterDeadlineDoesNotOverwriteReplacementHold() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-late-rejected",
+                "payment-reconcile-late-rejected",
+                "reservation-reconcile-late-rejected"
+        );
+        clock.set(fixture.deadline());
+        seatHoldService.hold("replacement-user", CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse replacement = checkoutService.prepare(
+                "replacement-user",
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-reconcile-rejected-replacement"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.rejected());
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.PAYMENT_REJECTED);
+        entityManager.clear();
+        Checkout original = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        Checkout storedReplacement = checkoutRepository.findByMerchantUid(
+                replacement.getMerchantUid()
+        ).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(original.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(original.getVerificationPaymentId()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(original.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil()).isNull());
+        assertThat(storedReplacement.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(seat.isHeldBy("replacement-user", LocalDateTime.now(clock))).isTrue();
+        assertThat(seat.getHeldUntil()).isEqualTo(replacement.getExpiresAt());
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void mismatchedApprovedUnknownCheckoutRequiresManualReview() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-mismatch",
+                "payment-reconcile-mismatch",
+                "reservation-reconcile-mismatch"
+        );
+        when(paymentReconciliationPort.lookup(fixture.paymentId()))
+                .thenReturn(PaymentReconciliationSnapshot.approved(
+                        reconciledApproval(fixture, 60_000)
+                ));
+
+        PaymentReconciliationResult result = reconciliationService.reconcile(
+                fixture.checkout().getMerchantUid()
+        );
+
+        assertThat(result.outcome()).isEqualTo(PaymentReconciliationOutcome.MANUAL_REVIEW_REQUIRED);
+        assertUnknownReconciliationSnapshot(fixture);
+    }
+
+    @RepeatedTest(3)
+    void concurrentUnknownCheckoutReconciliationCallsProviderOnce() throws Exception {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-reconcile-concurrent",
+                "payment-reconcile-concurrent",
+                "reservation-reconcile-concurrent"
+        );
+        CountDownLatch providerEntered = new CountDownLatch(1);
+        CountDownLatch releaseProvider = new CountDownLatch(1);
+        when(paymentReconciliationPort.lookup(fixture.paymentId())).thenAnswer(invocation -> {
+            providerEntered.countDown();
+            if (!releaseProvider.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("reconciliation provider release timeout");
+            }
+            return PaymentReconciliationSnapshot.approved(reconciledApproval(fixture, 30_000));
+        });
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<AttemptResult> first = executor.submit(() ->
+                    reconciliationAttempt(fixture.checkout().getMerchantUid(), ready, start));
+            Future<AttemptResult> second = executor.submit(() ->
+                    reconciliationAttempt(fixture.checkout().getMerchantUid(), ready, start));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            assertThat(providerEntered.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(awaitAnyCompleted(first, second)).isTrue();
+            releaseProvider.countDown();
+
+            List<AttemptResult> results = List.of(
+                    first.get(5, TimeUnit.SECONDS),
+                    second.get(5, TimeUnit.SECONDS)
+            );
+            assertThat(results).filteredOn(AttemptResult::success).hasSize(1);
+            assertThat(results).filteredOn(result -> !result.success()).singleElement()
+                    .extracting(AttemptResult::exceptionType)
+                    .isEqualTo(CheckoutConflictException.class.getSimpleName());
+            verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+            assertConfirmedSnapshot(fixture.checkout().getMerchantUid(), 1, 1);
+        } finally {
+            releaseProvider.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     @Test
@@ -945,6 +1216,95 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    private AttemptResult reconciliationAttempt(
+            String merchantUid,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) {
+        try {
+            ready.countDown();
+            if (!start.await(5, TimeUnit.SECONDS)) {
+                return AttemptResult.failure("Timeout", "start latch timeout");
+            }
+            reconciliationService.reconcile(merchantUid);
+            return AttemptResult.succeeded();
+        } catch (Exception exception) {
+            return AttemptResult.failure(exception.getClass().getSimpleName(), exception.getMessage());
+        }
+    }
+
+    private boolean awaitAnyCompleted(
+            Future<AttemptResult> first,
+            Future<AttemptResult> second
+    ) throws InterruptedException {
+        long timeoutAt = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < timeoutAt) {
+            if (first.isDone() || second.isDone()) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
+    }
+
+    private UnknownCheckoutFixture createUnknownCheckout(
+            String checkoutIdempotencyKey,
+            String paymentId,
+            String reservationIdempotencyKey
+    ) {
+        CheckoutResponse checkout = prepareCheckout(checkoutIdempotencyKey, "A1");
+        VerifiedReservRequest request = verifiedRequest(checkout.getMerchantUid(), paymentId, "A1");
+        when(paymentVerificationPort.verify(paymentId))
+                .thenThrow(new IllegalStateException("mock provider response lost"));
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request,
+                reservationIdempotencyKey
+        )).isExactlyInstanceOf(IllegalStateException.class);
+
+        LocalDateTime deadline = checkout.getExpiresAt().plusSeconds(30);
+        entityManager.clear();
+        assertThat(checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow().getStatus())
+                .isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        return new UnknownCheckoutFixture(
+                checkout,
+                paymentId,
+                reservationIdempotencyKey,
+                deadline
+        );
+    }
+
+    private PaymentApproval reconciledApproval(
+            UnknownCheckoutFixture fixture,
+            long amount
+    ) {
+        return new PaymentApproval(
+                fixture.paymentId(),
+                fixture.checkout().getMerchantUid(),
+                USERNAME,
+                amount,
+                true,
+                BASE_TIME.plusMinutes(1)
+        );
+    }
+
+    private void assertUnknownReconciliationSnapshot(UnknownCheckoutFixture fixture) {
+        verify(paymentReconciliationPort, times(1)).lookup(fixture.paymentId());
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo(fixture.paymentId());
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                        .isEqualTo(fixture.deadline()));
+        assertEmptyReservationSnapshot(2);
+    }
+
     private CheckoutResponse prepareCheckout(
             String idempotencyKey,
             String... seatNumbers
@@ -1066,6 +1426,14 @@ class CheckoutVerifiedReservationIntegrationTest {
         static AttemptResult failure(String exceptionType, String message) {
             return new AttemptResult(false, exceptionType, message);
         }
+    }
+
+    private record UnknownCheckoutFixture(
+            CheckoutResponse checkout,
+            String paymentId,
+            String reservationIdempotencyKey,
+            LocalDateTime deadline
+    ) {
     }
 
     private static final class CheckoutAliasLockBarrier {
