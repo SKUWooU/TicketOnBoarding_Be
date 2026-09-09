@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음
+- [#88](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/88): loadtest fixture 공연 상세 조회 계약 복구
 
 ## 완료
 

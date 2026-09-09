@@ -32,7 +32,8 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 ## Phase 9 - 서버 소유 가상 좌석 레이아웃
 
 - Backend Issue #85: 24석·2,000석 fixture의 구역·행·순서 계약과 구역 요약/상세 API
-- 후속: Frontend API 연동, 반응형 구역 탐색, 브라우저 원본 측정 결과 보존
+- Backend Issue #88: loadtest fixture의 공연 상세·장소 계약과 lazy review 직렬화 복구
+- 후속: Frontend가 상세 envelope mock 없이 local E2E를 재검증
 - 보류: 실제 공연장 좌석도, 운영 migration, WebSocket·대기열·브로커, 근거 없는 virtualization
 
 ## 기술 도입 조건
