@@ -13,7 +13,13 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #94 — 결제 검증 UNKNOWN 복구 부재 기준선
+
+- Branch: `test/94-payment-unknown-recovery-baseline`
+- 상태: 기준선 구현·로컬 검증 완료, PR 준비
+- 검증: 대상 23 tests·전체 Backend 192 tests·diff check 통과
+- 범위: mock provider 불명 결과 이후 재시도·deadline·좌석 재선택·최종 DB snapshot
+- 제외: 실제 PG 호출, reconciliation 구현, PaymentAttempt·scheduler·outbox·브로커
 
 ## 완료
 

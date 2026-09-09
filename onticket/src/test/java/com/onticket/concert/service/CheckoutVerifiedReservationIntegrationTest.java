@@ -405,6 +405,122 @@ class CheckoutVerifiedReservationIntegrationTest {
     }
 
     @Test
+    void unknownCheckoutDoesNotObserveApprovalAvailableOnLaterProviderLookup() {
+        CheckoutResponse checkout = prepareCheckout("checkout-unknown-approved-prepare", "A1");
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-unknown-approved",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-unknown-approved"))
+                .thenThrow(new IllegalStateException("mock provider response lost"))
+                .thenReturn(approved(
+                        "payment-unknown-approved",
+                        checkout.getMerchantUid(),
+                        30_000
+                ));
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request,
+                "reservation-unknown-approved"
+        )).isExactlyInstanceOf(IllegalStateException.class);
+
+        for (int attempt = 0; attempt < 3; attempt += 1) {
+            assertThatThrownBy(() -> reservationService.reserve(
+                    USERNAME,
+                    CONCERT_ID,
+                    request,
+                    "reservation-unknown-approved"
+            )).isExactlyInstanceOf(PaymentVerificationUnknownException.class);
+        }
+
+        LocalDateTime deadline = checkout.getExpiresAt().plusSeconds(30);
+        clock.set(deadline);
+        seatHoldService.hold("replacement-user", CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse replacement = checkoutService.prepare(
+                "replacement-user",
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-after-unknown-approved"
+        );
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request,
+                "reservation-unknown-approved"
+        )).isExactlyInstanceOf(PaymentVerificationUnknownException.class);
+
+        verify(paymentVerificationPort, times(1)).verify("payment-unknown-approved");
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo("payment-unknown-approved");
+        assertThat(stored.getVerificationDeadline()).isEqualTo(deadline);
+        assertThat(replacement.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(replacement.getMerchantUid()).isNotEqualTo(checkout.getMerchantUid());
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(seat.isHeldBy("replacement-user", deadline)).isTrue();
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void unknownCheckoutDoesNotObserveRejectionAvailableOnLaterProviderLookup() {
+        CheckoutResponse checkout = prepareCheckout("checkout-unknown-rejected-prepare", "A1");
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-unknown-rejected",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-unknown-rejected"))
+                .thenThrow(new IllegalStateException("mock provider response lost"))
+                .thenReturn(new PaymentApproval(
+                        "payment-unknown-rejected",
+                        checkout.getMerchantUid(),
+                        USERNAME,
+                        30_000,
+                        false,
+                        null
+                ));
+
+        assertThatThrownBy(() -> reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request,
+                "reservation-unknown-rejected"
+        )).isExactlyInstanceOf(IllegalStateException.class);
+
+        LocalDateTime deadline = checkout.getExpiresAt().plusSeconds(30);
+        clock.set(deadline.plusMinutes(1));
+        for (int attempt = 0; attempt < 3; attempt += 1) {
+            assertThatThrownBy(() -> reservationService.reserve(
+                    USERNAME,
+                    CONCERT_ID,
+                    request,
+                    "reservation-unknown-rejected"
+            )).isExactlyInstanceOf(PaymentVerificationUnknownException.class);
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-unknown-rejected");
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo("payment-unknown-rejected");
+        assertThat(stored.getVerificationDeadline()).isEqualTo(deadline);
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                        .isEqualTo(deadline));
+        assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+        assertThat(seat.getHeldUntil()).isEqualTo(deadline);
+        assertThat(seat.isHeldAt(LocalDateTime.now(clock))).isFalse();
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
     void knownRejectionAfterOriginalExpiryExpiresCheckoutAndRestoresOriginalLease() {
         CheckoutResponse checkout = prepareCheckout("checkout-late-rejected-prepare", "A1");
         when(paymentVerificationPort.verify("payment-late-rejected"))
