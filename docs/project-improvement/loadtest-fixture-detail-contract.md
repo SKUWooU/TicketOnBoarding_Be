@@ -1,5 +1,7 @@
 # loadtest fixture 공연 상세 계약 복구
 
+연결: [Issue #88](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/88), [PR #89](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/89)
+
 ## 문제
 
 `local,loadtest`의 2,000석 fixture는 `ConcertDetail.place` 문자열만 만들고 `placeId`와 `Place` 행을 만들지 않았다. `GET /main/detail/{concertId}`는 `placeId`로 장소를 조회한 뒤 역참조하므로 loadtest 공연 상세가 500으로 실패했다.

@@ -13,9 +13,17 @@
 
 ## 진행 중
 
-- [#88](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/88): loadtest fixture 공연 상세 조회 계약 복구
+- 없음
 
 ## 완료
+
+### Backend Issue #88 — loadtest fixture 공연 상세 조회 계약 복구
+
+- PR: [#89](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/89) / squash `afa3840`
+- 결과: 가상 장소가 누락된 기존·신규 2,000석 fixture를 보정하고, 상세 DTO의 lazy review 직렬화 500을 방지
+- 검증: Backend 188 tests·CI·MariaDB Testcontainers·로컬 HTTP 200·diff check 통과, `MERGE_READY: YES`
+- 근거: [loadtest fixture 공연 상세 계약](docs/project-improvement/loadtest-fixture-detail-contract.md)
+- 제외: 실제 KOPIS 장소·PG·SMS, 운영 성능 주장, Frontend browser E2E
 
 ### Backend Issue #85 — 가상 공연장 layout·구역별 좌석 API 계약
 
