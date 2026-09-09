@@ -455,13 +455,29 @@ class CheckoutVerifiedReservationIntegrationTest {
         verify(paymentVerificationPort, times(1)).verify("payment-unknown-approved");
         entityManager.clear();
         Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Checkout storedReplacement = checkoutRepository.findByMerchantUid(replacement.getMerchantUid()).orElseThrow();
         Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
         assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
         assertThat(stored.getVerificationPaymentId()).isEqualTo("payment-unknown-approved");
         assertThat(stored.getVerificationDeadline()).isEqualTo(deadline);
-        assertThat(replacement.getStatus()).isEqualTo(CheckoutStatus.READY);
-        assertThat(replacement.getMerchantUid()).isNotEqualTo(checkout.getMerchantUid());
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> {
+                    assertThat(assignment.getSeat().getId()).isEqualTo(seat.getId());
+                    assertThat(assignment.getVerificationLeaseUntil()).isEqualTo(deadline);
+                });
+        assertThat(storedReplacement.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(storedReplacement.getMerchantUid()).isNotEqualTo(checkout.getMerchantUid());
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(storedReplacement.getId()))
+                .singleElement()
+                .satisfies(assignment -> {
+                    assertThat(assignment.getSeat().getId()).isEqualTo(seat.getId());
+                    assertThat(assignment.getActiveUntil()).isEqualTo(replacement.getExpiresAt());
+                    assertThat(assignment.getOriginalHoldExpiresAt()).isEqualTo(replacement.getExpiresAt());
+                    assertThat(assignment.getVerificationLeaseUntil()).isNull();
+                });
         assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
         assertThat(seat.isHeldBy("replacement-user", deadline)).isTrue();
         assertEmptyReservationSnapshot(2);
     }
@@ -517,6 +533,8 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
         assertThat(seat.getHeldUntil()).isEqualTo(deadline);
         assertThat(seat.isHeldAt(LocalDateTime.now(clock))).isFalse();
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
         assertEmptyReservationSnapshot(2);
     }
 

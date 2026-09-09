@@ -63,13 +63,14 @@ mock provider는 같은 paymentId에 대해 다음 순서로 동작하게 했다
 - provider 총 호출은 1회였다. 준비된 두 번째 승인 결과는 읽히지 않았다.
 - 원래 Checkout은 UNKNOWN, paymentId와 verification deadline을 그대로 보존했다.
 - 정확한 deadline에 다른 사용자가 A1을 점유하고 별도 READY Checkout을 만들었다.
-- 최종 Checkout 2개, Payment·Booking·Reservation 0개, reserved seat 0개, 회차 잔여 2였다.
+- 원래 UNKNOWN assignment는 deadline lease를 보존하고, 대체 READY Checkout은 같은 A1에 별도 assignment와 새 활성 기한을 가졌다.
+- 최종 Checkout 2개·assignment 2개, Payment·Booking·Reservation 0개, reserved seat 0개, 회차 잔여 2였다.
 
 ### 다음 조회가 거절인 경우
 
 - 첫 조회 뒤 UNKNOWN으로 전이하고 deadline 1분 뒤 같은 요청을 3회 재시도했다.
 - provider 총 호출은 여전히 1회였으며 준비된 거절 결과는 읽히지 않았다.
-- UNKNOWN과 verification 식별 정보, assignment verification lease row가 유지됐다.
+- UNKNOWN과 verification 식별 정보, 단일 assignment verification lease row가 유지됐고 Checkout·assignment는 각각 1개였다.
 - Seat의 `heldBy/heldUntil` 값도 남아 있지만 deadline 이후 `isHeldAt`은 false였다.
 - Payment·Booking·Reservation은 모두 0개이고 회차 잔여는 2였다.
 
