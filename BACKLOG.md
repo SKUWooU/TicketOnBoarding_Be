@@ -32,7 +32,7 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 ## Phase 9 - 서버 소유 가상 좌석 레이아웃
 
 - Backend Issue #85: 24석·2,000석 fixture의 구역·행·순서 계약과 구역 요약/상세 API
-- Backend Issue #88: loadtest fixture의 공연 상세·장소 계약과 lazy review 직렬화 복구
+- Backend Issue #88: loadtest fixture의 공연 상세·장소 계약과 lazy review 직렬화 복구 완료 ([#88](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/88), [PR #89](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/89))
 - 후속: Frontend가 상세 envelope mock 없이 local E2E를 재검증
 - 보류: 실제 공연장 좌석도, 운영 migration, WebSocket·대기열·브로커, 근거 없는 virtualization
 
