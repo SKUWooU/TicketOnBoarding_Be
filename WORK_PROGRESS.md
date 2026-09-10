@@ -13,15 +13,17 @@
 
 ## 진행 중
 
-### Backend Issue #97 — 결제 UNKNOWN 수동 단건 reconciliation 경계
-
-- Branch: `refactor/97-payment-unknown-reconciliation`
-- 상태: 구현·로컬 검증 완료, PR 준비
-- 검증: 대상 41 tests·전체 Backend 205 tests·diff check 통과
-- 범위: provider 중립 단건 조회, UNKNOWN claim, 승인·거절·미확정·보상 필요 전이와 동시성 검증
-- 제외: 실제 PG·환불, 공개 운영자 API, scheduler·webhook·PaymentAttempt·outbox·브로커
+- 없음
 
 ## 완료
+
+### Backend Issue #97 — 결제 UNKNOWN 수동 단건 reconciliation 경계
+
+- PR: [#98](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/98) / squash `8a7819b`
+- 결과: provider 중립 단건 조회와 bounded exclusive claim으로 UNKNOWN의 승인·거절·미확정·보상 필요 상태 수렴 경계를 구성
+- 검증: 대상 41 tests·전체 Backend 205 tests·CI·diff check 통과, stale claim Blocking 수정 후 Reviewer `MERGE_READY: YES`
+- 근거: [결제 UNKNOWN 수동 단건 reconciliation](docs/project-improvement/payment-unknown-manual-reconciliation.md)
+- 제외: 실제 PG·환불, 공개 운영자 API, scheduler·webhook·PaymentAttempt·outbox·브로커
 
 ### Backend Issue #94 — 결제 검증 UNKNOWN 복구 부재 기준선
 
