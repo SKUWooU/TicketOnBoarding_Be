@@ -13,7 +13,13 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #100 — Checkout 점유 해제와 결제 검증 진입 경합 기준선
+
+- Branch: `test/100-checkout-release-verification-race`
+- 상태: 구현·로컬 검증 완료, PR 준비
+- 범위: release·verification 선행 순서, 복수 좌석 역순, 정확한 deadline과 전체 DB snapshot
+- 검증: Checkout 통합 41 invocations·전체 Backend 212 tests, 실패·오류·skip 0
+- 제외: Checkout 취소 구현, 실제 PG·환불, Frontend, scheduler·webhook·메시지 인프라
 
 ## 완료
 

@@ -59,6 +59,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -100,6 +101,8 @@ class CheckoutVerifiedReservationIntegrationTest {
     private static final AtomicReference<CheckoutAliasLockBarrier> CHECKOUT_ALIAS_LOCK_BARRIER =
             new AtomicReference<>();
     private static final AtomicReference<String> FINALIZATION_FAILURE_MERCHANT_UID =
+            new AtomicReference<>();
+    private static final AtomicReference<CheckoutReleaseBarrier> CHECKOUT_RELEASE_BARRIER =
             new AtomicReference<>();
 
     @Container
@@ -179,6 +182,7 @@ class CheckoutVerifiedReservationIntegrationTest {
     void setUp() {
         CHECKOUT_ALIAS_LOCK_BARRIER.set(null);
         FINALIZATION_FAILURE_MERCHANT_UID.set(null);
+        CHECKOUT_RELEASE_BARRIER.set(null);
         paymentRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         checkoutSeatAssignmentRepository.deleteAllInBatch();
@@ -665,6 +669,200 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
                 .singleElement()
                 .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil()).isNull());
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @RepeatedTest(3)
+    void paymentVerificationClaimPreventsConcurrentMultiSeatHoldRelease() throws Exception {
+        CheckoutResponse checkout = prepareCheckout(
+                "checkout-release-race-claim-first",
+                "A1",
+                "A2"
+        );
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-release-race-claim-first",
+                "A2",
+                "A1"
+        );
+        CountDownLatch providerEntered = new CountDownLatch(1);
+        CountDownLatch releaseProvider = new CountDownLatch(1);
+        when(paymentVerificationPort.verify("payment-release-race-claim-first"))
+                .thenAnswer(invocation -> {
+                    providerEntered.countDown();
+                    if (!releaseProvider.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("payment provider release timeout");
+                    }
+                    return approved(
+                            "payment-release-race-claim-first",
+                            checkout.getMerchantUid(),
+                            60_000
+                    );
+                });
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<AttemptResult> reservation = executor.submit(() -> attempt(
+                    request,
+                    "reservation-release-race-claim-first",
+                    start
+            ));
+            start.countDown();
+            assertThat(providerEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> seatHoldService.release(
+                    USERNAME,
+                    CONCERT_ID,
+                    holdRequest("A2", "A1")
+            )).isExactlyInstanceOf(SeatHoldConflictException.class)
+                    .hasMessageContaining("결제 준비 중");
+
+            entityManager.clear();
+            Checkout verifying = checkoutRepository.findByMerchantUid(
+                    checkout.getMerchantUid()
+            ).orElseThrow();
+            assertThat(verifying.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFYING);
+            assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(verifying.getId()))
+                    .hasSize(2)
+                    .allSatisfy(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                            .isEqualTo(verifying.getVerificationDeadline()));
+            assertThat(List.of(
+                    seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
+                    seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
+            )).allSatisfy(seat -> {
+                assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+                assertThat(seat.getHeldUntil()).isEqualTo(verifying.getVerificationDeadline());
+            });
+
+            releaseProvider.countDown();
+            assertThat(reservation.get(5, TimeUnit.SECONDS).success()).isTrue();
+        } finally {
+            releaseProvider.countDown();
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-release-race-claim-first");
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 0, 2);
+    }
+
+    @RepeatedTest(3)
+    void multiSeatHoldReleaseLockFirstRollsBackBeforePaymentVerificationContinues() throws Exception {
+        CheckoutResponse checkout = prepareCheckout(
+                "checkout-release-race-release-first",
+                "A1",
+                "A2"
+        );
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-release-race-release-first",
+                "A2",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-release-race-release-first"))
+                .thenReturn(approved(
+                        "payment-release-race-release-first",
+                        checkout.getMerchantUid(),
+                        60_000
+                ));
+        CheckoutReleaseBarrier barrier = new CheckoutReleaseBarrier(checkout.getMerchantUid());
+        CHECKOUT_RELEASE_BARRIER.set(barrier);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AttemptResult> release = executor.submit(() -> releaseAttempt("A2", "A1"));
+            assertThat(barrier.awaitReleaseAssignmentsLocked()).isTrue();
+            Future<AttemptResult> reservation = executor.submit(() -> attempt(
+                    request,
+                    "reservation-release-race-release-first",
+                    new CountDownLatch(0)
+            ));
+            assertThat(barrier.awaitCheckoutLocked()).isTrue();
+
+            barrier.allowReleaseToFinish();
+            AttemptResult releaseResult = release.get(5, TimeUnit.SECONDS);
+            assertThat(releaseResult.success()).isFalse();
+            assertThat(releaseResult.exceptionType())
+                    .isEqualTo(SeatHoldConflictException.class.getSimpleName());
+            entityManager.clear();
+            assertThat(List.of(
+                    seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
+                    seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
+            )).allSatisfy(seat -> {
+                assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+                assertThat(seat.getHeldUntil()).isEqualTo(checkout.getExpiresAt());
+            });
+            CHECKOUT_RELEASE_BARRIER.set(null);
+            barrier.allowVerificationToContinue();
+            assertThat(reservation.get(5, TimeUnit.SECONDS).success()).isTrue();
+        } finally {
+            CHECKOUT_RELEASE_BARRIER.set(null);
+            barrier.allowReleaseToFinish();
+            barrier.allowVerificationToContinue();
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-release-race-release-first");
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 0, 2);
+    }
+
+    @Test
+    void holdReleaseAtVerificationDeadlineDoesNotAllowLateApprovalToReserve() throws Exception {
+        CheckoutResponse checkout = prepareCheckout(
+                "checkout-release-race-deadline",
+                "A1"
+        );
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-release-race-deadline",
+                "A1"
+        );
+        CountDownLatch providerEntered = new CountDownLatch(1);
+        CountDownLatch releaseProvider = new CountDownLatch(1);
+        when(paymentVerificationPort.verify("payment-release-race-deadline"))
+                .thenAnswer(invocation -> {
+                    providerEntered.countDown();
+                    if (!releaseProvider.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("payment provider release timeout");
+                    }
+                    return approved(
+                            "payment-release-race-deadline",
+                            checkout.getMerchantUid(),
+                            30_000
+                    );
+                });
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<AttemptResult> reservation = executor.submit(() -> attempt(
+                    request,
+                    "reservation-release-race-deadline",
+                    start
+            ));
+            start.countDown();
+            assertThat(providerEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            LocalDateTime deadline = checkout.getExpiresAt().plusSeconds(30);
+            clock.set(deadline);
+            seatHoldService.release(USERNAME, CONCERT_ID, holdRequest("A1"));
+            releaseProvider.countDown();
+
+            AttemptResult result = reservation.get(5, TimeUnit.SECONDS);
+            assertThat(result.success()).isFalse();
+            assertThat(result.exceptionType())
+                    .isEqualTo(PaymentVerificationUnknownException.class.getSimpleName());
+        } finally {
+            releaseProvider.countDown();
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-release-race-deadline");
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationPaymentId()).isEqualTo("payment-release-race-deadline");
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getVerificationLeaseUntil())
+                        .isEqualTo(stored.getVerificationDeadline()));
+        assertThat(seat.getHeldBy()).isNull();
+        assertThat(seat.getHeldUntil()).isNull();
         assertEmptyReservationSnapshot(2);
     }
 
@@ -1273,6 +1471,15 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    private AttemptResult releaseAttempt(String... seatNumbers) {
+        try {
+            seatHoldService.release(USERNAME, CONCERT_ID, holdRequest(seatNumbers));
+            return AttemptResult.succeeded();
+        } catch (Exception exception) {
+            return AttemptResult.failure(exception.getClass().getSimpleName(), exception.getMessage());
+        }
+    }
+
     private boolean awaitAnyCompleted(
             Future<AttemptResult> first,
             Future<AttemptResult> second
@@ -1506,6 +1713,61 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    private static final class CheckoutReleaseBarrier {
+
+        private final String merchantUid;
+        private final AtomicBoolean checkoutIntercepted = new AtomicBoolean();
+        private final AtomicBoolean releaseAssignmentsIntercepted = new AtomicBoolean();
+        private final CountDownLatch releaseAssignmentsLocked = new CountDownLatch(1);
+        private final CountDownLatch allowReleaseFinish = new CountDownLatch(1);
+        private final CountDownLatch checkoutLocked = new CountDownLatch(1);
+        private final CountDownLatch allowVerificationContinue = new CountDownLatch(1);
+
+        private CheckoutReleaseBarrier(String merchantUid) {
+            this.merchantUid = merchantUid;
+        }
+
+        boolean targets(Checkout checkout) {
+            return merchantUid.equals(checkout.getMerchantUid());
+        }
+
+        void releaseAssignmentsLocked() throws InterruptedException {
+            if (!releaseAssignmentsIntercepted.compareAndSet(false, true)) {
+                return;
+            }
+            releaseAssignmentsLocked.countDown();
+            if (!allowReleaseFinish.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("점유 해제 transaction 진행 허용을 기다리지 못했습니다.");
+            }
+        }
+
+        boolean awaitReleaseAssignmentsLocked() throws InterruptedException {
+            return releaseAssignmentsLocked.await(5, TimeUnit.SECONDS);
+        }
+
+        void checkoutLocked() throws InterruptedException {
+            if (!checkoutIntercepted.compareAndSet(false, true)) {
+                return;
+            }
+            checkoutLocked.countDown();
+            if (!allowVerificationContinue.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("결제 검증 transaction 진행 허용을 기다리지 못했습니다.");
+            }
+        }
+
+        boolean awaitCheckoutLocked() throws InterruptedException {
+            return checkoutLocked.await(5, TimeUnit.SECONDS);
+        }
+
+        void allowReleaseToFinish() {
+            allowReleaseFinish.countDown();
+        }
+
+        void allowVerificationToContinue() {
+            allowVerificationContinue.countDown();
+        }
+    }
+
     @TestConfiguration
     static class ClockConfiguration {
 
@@ -1530,6 +1792,14 @@ class CheckoutVerifiedReservationIntegrationTest {
                                 new Class<?>[]{CheckoutRepository.class},
                                 (proxy, method, args) -> {
                                     Object result = invoke(checkoutRepository, method, args);
+                                    CheckoutReleaseBarrier releaseBarrier = CHECKOUT_RELEASE_BARRIER.get();
+                                    if (releaseBarrier != null
+                                            && method.getName().equals("findByMerchantUidWithLock")
+                                            && result instanceof java.util.Optional<?> releaseOptional
+                                            && releaseOptional.orElse(null) instanceof Checkout releaseCheckout
+                                            && releaseBarrier.targets(releaseCheckout)) {
+                                        releaseBarrier.checkoutLocked();
+                                    }
                                     CheckoutAliasLockBarrier barrier = CHECKOUT_ALIAS_LOCK_BARRIER.get();
                                     if (barrier != null
                                             && method.getName().equals("findByMerchantUidWithLock")
@@ -1566,6 +1836,11 @@ class CheckoutVerifiedReservationIntegrationTest {
                                 new Class<?>[]{CheckoutSeatAssignmentRepository.class},
                                 (proxy, method, args) -> {
                                     Object result = invoke(assignmentRepository, method, args);
+                                    CheckoutReleaseBarrier releaseBarrier = CHECKOUT_RELEASE_BARRIER.get();
+                                    if (releaseBarrier != null
+                                            && method.getName().equals("findActiveBySeatIdsWithLock")) {
+                                        releaseBarrier.releaseAssignmentsLocked();
+                                    }
                                     String targetMerchantUid = FINALIZATION_FAILURE_MERCHANT_UID.get();
                                     if (targetMerchantUid != null
                                             && method.getName().equals("findByCheckoutIdWithLock")
