@@ -13,15 +13,17 @@
 
 ## 진행 중
 
-### Backend Issue #100 — Checkout 점유 해제와 결제 검증 진입 경합 기준선
-
-- Branch: `test/100-checkout-release-verification-race`
-- 상태: 구현·로컬 검증 완료, PR 준비
-- 범위: release·verification 선행 순서, 복수 좌석 역순, 정확한 deadline과 전체 DB snapshot
-- 검증: Checkout 통합 41 invocations·전체 Backend 212 tests, 실패·오류·skip 0
-- 제외: Checkout 취소 구현, 실제 PG·환불, Frontend, scheduler·webhook·메시지 인프라
+- 없음
 
 ## 완료
+
+### Backend Issue #100 — Checkout 점유 해제와 결제 검증 진입 경합 기준선
+
+- PR: [#101](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/101) / squash `710113b`
+- 결과: claim·release 잠금 선행 순서와 정확한 deadline을 고정해 활성 Checkout의 부분 해제 방지·rollback·늦은 mock 승인 UNKNOWN 수렴을 확인
+- 검증: Checkout 통합 41 invocations·전체 Backend 212 tests·CI·diff check 통과, Reviewer `MERGE_READY: YES`
+- 근거: [Checkout 점유 해제와 결제 검증 진입 경합 기준선](docs/project-improvement/checkout-release-payment-verification-race-baseline.md)
+- 제외: Checkout 취소 구현, 실제 PG·환불, Frontend, scheduler·webhook·메시지 인프라
 
 ### Backend Issue #97 — 결제 UNKNOWN 수동 단건 reconciliation 경계
 
