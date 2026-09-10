@@ -13,7 +13,13 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #97 — 결제 UNKNOWN 수동 단건 reconciliation 경계
+
+- Branch: `refactor/97-payment-unknown-reconciliation`
+- 상태: 구현·로컬 검증 완료, PR 준비
+- 검증: 대상 41 tests·전체 Backend 205 tests·diff check 통과
+- 범위: provider 중립 단건 조회, UNKNOWN claim, 승인·거절·미확정·보상 필요 전이와 동시성 검증
+- 제외: 실제 PG·환불, 공개 운영자 API, scheduler·webhook·PaymentAttempt·outbox·브로커
 
 ## 완료
 

@@ -215,6 +215,20 @@ public class Checkout {
         status = CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN;
     }
 
+    public void resumeUnknownPaymentVerification() {
+        if (status != CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN) {
+            throw new IllegalStateException("결과가 불명인 결제 검증만 재개할 수 있습니다.");
+        }
+        if (verificationPaymentId == null
+                || verificationIdempotencyKey == null
+                || verificationRequestFingerprint == null
+                || verificationStartedAt == null
+                || verificationDeadline == null) {
+            throw new IllegalStateException("재개할 결제 검증 식별 정보가 없습니다.");
+        }
+        status = CheckoutStatus.PAYMENT_VERIFYING;
+    }
+
     public void confirmReservation(Booking confirmedBooking) {
         if (status != CheckoutStatus.PAYMENT_VERIFYING) {
             throw new IllegalStateException("결제 검증 중인 Checkout만 예약을 확정할 수 있습니다.");

@@ -128,6 +128,68 @@ public class CheckoutPaymentVerificationTransactionService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public PaymentUnknownReconciliationPreparation claimUnknownForReconciliation(
+            String merchantUid
+    ) {
+        if (merchantUid == null || merchantUid.isBlank()) {
+            throw new InvalidCheckoutRequestException("고객사 주문 식별자가 필요합니다.");
+        }
+
+        Checkout checkout = checkoutRepository.findByMerchantUidWithLock(merchantUid)
+                .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
+        if (checkout.getStatus() == CheckoutStatus.RESERVATION_CONFIRMED) {
+            Booking booking = checkout.getBooking();
+            if (booking == null) {
+                throw new IllegalStateException("확정된 Checkout의 예약 정보가 없습니다.");
+            }
+            return PaymentUnknownReconciliationPreparation.completed(
+                    PaymentReconciliationResult.reservationConfirmed(booking.getCreatedAt())
+            );
+        }
+        if (checkout.getStatus() == CheckoutStatus.READY
+                || checkout.getStatus() == CheckoutStatus.EXPIRED) {
+            return PaymentUnknownReconciliationPreparation.completed(
+                    PaymentReconciliationResult.noActionRequired()
+            );
+        }
+        if (checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFYING) {
+            LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+            if (!checkout.isPaymentVerificationTimedOut(now)) {
+                throw new CheckoutConflictException("결제 검증 또는 대조가 진행 중인 Checkout입니다.");
+            }
+            checkout.markPaymentVerificationUnknown();
+        }
+        if (checkout.getStatus() != CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN) {
+            throw new CheckoutConflictException("결제 결과를 대조할 수 없는 Checkout 상태입니다.");
+        }
+
+        List<CheckoutSeatAssignment> assignments = assignmentRepository
+                .findByCheckoutIdOrderBySeatId(checkout.getId());
+        validateUnknownReconciliationAssignments(checkout, assignments);
+        List<String> seatNumbers = assignments.stream()
+                .map(assignment -> assignment.getSeat().getSeatNumber())
+                .sorted()
+                .toList();
+
+        checkout.resumeUnknownPaymentVerification();
+        return PaymentUnknownReconciliationPreparation.claimed(
+                new PaymentUnknownReconciliationClaim(
+                        checkout.getMerchantUid(),
+                        checkout.getUsername(),
+                        checkout.getConcertId(),
+                        checkout.getConcertTimeId(),
+                        checkout.getRequestFingerprint(),
+                        checkout.getExpectedAmount(),
+                        checkout.getVerificationPaymentId(),
+                        checkout.getVerificationIdempotencyKey(),
+                        checkout.getVerificationRequestFingerprint(),
+                        checkout.getVerificationDeadline(),
+                        seatNumbers
+                )
+        );
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public void releaseKnownFailure(
             String merchantUid,
             String username,
@@ -214,6 +276,22 @@ public class CheckoutPaymentVerificationTransactionService {
                         || !Objects.equals(assignment.getActiveUntil(), checkout.getExpiresAt())
                         || assignment.getVerificationLeaseUntil() != null)) {
             throw new CheckoutConflictException("Checkout 좌석 귀속 정보가 결제 요청과 일치하지 않습니다.");
+        }
+    }
+
+    private void validateUnknownReconciliationAssignments(
+            Checkout checkout,
+            List<CheckoutSeatAssignment> assignments
+    ) {
+        if (assignments.isEmpty()
+                || assignments.stream().anyMatch(assignment ->
+                !Objects.equals(assignment.getRequestFingerprint(), checkout.getRequestFingerprint())
+                        || !Objects.equals(assignment.getActiveUntil(), checkout.getExpiresAt())
+                        || !Objects.equals(
+                        assignment.getVerificationLeaseUntil(),
+                        checkout.getVerificationDeadline()
+                ))) {
+            throw new CheckoutConflictException("UNKNOWN Checkout 좌석 귀속 정보가 일치하지 않습니다.");
         }
     }
 

@@ -80,6 +80,34 @@ class CheckoutTest {
     }
 
     @Test
+    void unknownVerificationCanResumeWithoutLosingClaimMetadata() {
+        Checkout checkout = checkout();
+        LocalDateTime deadline = CREATED_AT.plusMinutes(5).plusSeconds(30);
+        checkout.beginPaymentVerification(
+                "payment-1",
+                "reservation-key-1",
+                "booking-fingerprint",
+                CREATED_AT.plusMinutes(4),
+                deadline
+        );
+        checkout.markPaymentVerificationUnknown();
+
+        checkout.resumeUnknownPaymentVerification();
+
+        assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFYING);
+        assertThat(checkout.getVerificationPaymentId()).isEqualTo("payment-1");
+        assertThat(checkout.getVerificationIdempotencyKey()).isEqualTo("reservation-key-1");
+        assertThat(checkout.getVerificationRequestFingerprint()).isEqualTo("booking-fingerprint");
+        assertThat(checkout.getVerificationDeadline()).isEqualTo(deadline);
+    }
+
+    @Test
+    void nonUnknownVerificationCannotResume() {
+        assertThatThrownBy(() -> checkout().resumeUnknownPaymentVerification())
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void expiryMustBeAfterCreation() {
         assertThatThrownBy(() -> Checkout.ready(
                 "ticket-1",
