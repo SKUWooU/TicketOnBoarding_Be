@@ -59,6 +59,9 @@ public class CheckoutSeatAssignment {
     @Column(name = "verification_lease_until")
     private LocalDateTime verificationLeaseUntil;
 
+    @Column(name = "released_at")
+    private LocalDateTime releasedAt;
+
     public static CheckoutSeatAssignment assign(
             Checkout checkout,
             Seat seat,
@@ -92,6 +95,9 @@ public class CheckoutSeatAssignment {
             LocalDateTime expectedCurrentUntil,
             LocalDateTime verificationDeadline
     ) {
+        if (releasedAt != null) {
+            throw new IllegalStateException("해제된 Checkout 좌석에는 결제 검증 lease를 설정할 수 없습니다.");
+        }
         if (!Objects.equals(activeUntil, expectedCurrentUntil)) {
             throw new IllegalStateException("Checkout 좌석 귀속의 현재 활성 기한이 일치하지 않습니다.");
         }
@@ -114,5 +120,16 @@ public class CheckoutSeatAssignment {
 
     public LocalDateTime effectiveActiveUntil() {
         return verificationLeaseUntil == null ? activeUntil : verificationLeaseUntil;
+    }
+
+    public void release(LocalDateTime now) {
+        Objects.requireNonNull(now, "Checkout 좌석 귀속 해제 시각이 필요합니다.");
+        if (releasedAt != null) {
+            return;
+        }
+        if (verificationLeaseUntil != null) {
+            throw new IllegalStateException("결제 검증 중인 Checkout 좌석 귀속은 해제할 수 없습니다.");
+        }
+        releasedAt = now;
     }
 }

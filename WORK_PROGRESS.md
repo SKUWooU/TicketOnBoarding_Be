@@ -13,7 +13,13 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #103 — READY Checkout 취소와 좌석 점유 해제 멱등 경계
+
+- Branch: `feat/103-ready-checkout-cancel`
+- 상태: 구현·로컬 검증 완료, PR 준비
+- 범위: READY 취소·멱등 응답, Checkout→Seat→assignment 잠금, hold 원자 해제, 검증 진입 경합
+- 검증: Checkout 취소 통합 29·결제 검증 통합 49·전체 Backend 235 tests, 실패·오류·skip 0
+- 제외: 검증 중·UNKNOWN·확정 Checkout 취소, 실제 PG·환불, Frontend, 운영 migration·메시지 인프라
 
 ## 완료
 

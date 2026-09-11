@@ -108,6 +108,38 @@ class CheckoutTest {
     }
 
     @Test
+    void readyCheckoutCanBeCanceledIdempotentlyBeforeExpiry() {
+        Checkout checkout = checkout();
+        LocalDateTime canceledAt = CREATED_AT.plusMinutes(1);
+
+        checkout.cancel(canceledAt);
+        checkout.cancel(canceledAt.plusSeconds(1));
+
+        assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.CANCELED);
+        assertThat(checkout.getCanceledAt()).isEqualTo(canceledAt);
+        assertThat(checkout.expireIfNeeded(CREATED_AT.plusHours(1))).isFalse();
+    }
+
+    @Test
+    void nonReadyAndExpiredCheckoutCannotBeCanceled() {
+        Checkout verifying = checkout();
+        verifying.beginPaymentVerification(
+                "payment-1",
+                "reservation-key-1",
+                "booking-fingerprint",
+                CREATED_AT.plusMinutes(4),
+                CREATED_AT.plusMinutes(5).plusSeconds(30)
+        );
+        Checkout expired = checkout();
+        expired.expireIfNeeded(CREATED_AT.plusMinutes(5));
+
+        assertThatThrownBy(() -> verifying.cancel(CREATED_AT.plusMinutes(4)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> expired.cancel(CREATED_AT.plusMinutes(5)))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void expiryMustBeAfterCreation() {
         assertThatThrownBy(() -> Checkout.ready(
                 "ticket-1",

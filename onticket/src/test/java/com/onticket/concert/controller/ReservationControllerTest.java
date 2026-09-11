@@ -8,6 +8,7 @@ import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.service.IdempotencyKeyConflictException;
 import com.onticket.concert.service.CheckoutService;
+import com.onticket.concert.service.CheckoutCancellationService;
 import com.onticket.concert.service.CheckoutVerifiedReservationService;
 import com.onticket.concert.service.CheckoutConflictException;
 import com.onticket.concert.service.CheckoutExpiredException;
@@ -85,6 +86,9 @@ class ReservationControllerTest {
     private CheckoutService checkoutService;
 
     @Mock
+    private CheckoutCancellationService checkoutCancellationService;
+
+    @Mock
     private CheckoutVerifiedReservationService checkoutVerifiedReservationService;
 
     @Mock
@@ -100,6 +104,7 @@ class ReservationControllerTest {
                         verifiedReservationService,
                         seatHoldService,
                         checkoutService,
+                        checkoutCancellationService,
                         checkoutVerifiedReservationService,
                         jwtUtil
                 )
@@ -334,6 +339,77 @@ class ReservationControllerTest {
     }
 
     @Test
+    void authenticatedUserCanCancelReadyCheckoutAndReceiveIdempotentState() throws Exception {
+        when(checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                "ticket-checkout-1"
+        )).thenReturn(new CheckoutResponse(
+                "ticket-checkout-1",
+                30_000,
+                LocalDateTime.of(2030, 1, 1, 12, 5),
+                CheckoutStatus.CANCELED
+        ));
+
+        mockMvc.perform(delete(
+                        "/main/detail/{concertId}/checkouts/{merchantUid}",
+                        CONCERT_ID,
+                        "ticket-checkout-1"
+                ).cookie(new Cookie("accessToken", TOKEN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.merchantUid").value("ticket-checkout-1"))
+                .andExpect(jsonPath("$.status").value("CANCELED"));
+
+        verify(checkoutCancellationService).cancel(
+                USERNAME,
+                CONCERT_ID,
+                "ticket-checkout-1"
+        );
+    }
+
+    @Test
+    void unauthenticatedCheckoutCancellationReturnsHttp401() throws Exception {
+        mockMvc.perform(delete(
+                        "/main/detail/{concertId}/checkouts/{merchantUid}",
+                        CONCERT_ID,
+                        "ticket-checkout-1"
+                ))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void checkoutCancellationConflictReturnsHttp409() throws Exception {
+        when(checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                "ticket-checkout-1"
+        )).thenThrow(new CheckoutConflictException("현재 Checkout 상태에서는 취소할 수 없습니다."));
+
+        mockMvc.perform(delete(
+                        "/main/detail/{concertId}/checkouts/{merchantUid}",
+                        CONCERT_ID,
+                        "ticket-checkout-1"
+                ).cookie(new Cookie("accessToken", TOKEN)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void expiredCheckoutCancellationReturnsHttp410() throws Exception {
+        when(checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                "ticket-checkout-1"
+        )).thenThrow(new CheckoutExpiredException());
+
+        mockMvc.perform(delete(
+                        "/main/detail/{concertId}/checkouts/{merchantUid}",
+                        CONCERT_ID,
+                        "ticket-checkout-1"
+                ).cookie(new Cookie("accessToken", TOKEN)))
+                .andExpect(status().isGone());
+    }
+
+    @Test
     void checkoutVerifiedReservationUsesPathMerchantUid() throws Exception {
         when(checkoutVerifiedReservationService.reserve(
                 eq(USERNAME),
@@ -469,6 +545,7 @@ class ReservationControllerTest {
                         verifiedReservationService,
                         seatHoldService,
                         checkoutService,
+                        checkoutCancellationService,
                         realValidationService,
                         jwtUtil
                 )

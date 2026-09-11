@@ -18,6 +18,7 @@ public interface CheckoutSeatAssignmentRepository
             SELECT assignment
             FROM CheckoutSeatAssignment assignment
             WHERE assignment.seat.id IN :seatIds
+              AND assignment.releasedAt IS NULL
               AND COALESCE(assignment.verificationLeaseUntil, assignment.activeUntil) > :now
             ORDER BY assignment.seat.id
             """)
@@ -30,6 +31,7 @@ public interface CheckoutSeatAssignmentRepository
             SELECT CASE WHEN COUNT(assignment) > 0 THEN true ELSE false END
             FROM CheckoutSeatAssignment assignment
             WHERE assignment.seat.id IN :seatIds
+              AND assignment.releasedAt IS NULL
               AND COALESCE(assignment.verificationLeaseUntil, assignment.activeUntil) > :now
             """)
     boolean existsActiveBySeatIds(
