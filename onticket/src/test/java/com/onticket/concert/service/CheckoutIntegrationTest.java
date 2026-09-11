@@ -62,6 +62,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({
         CheckoutService.class,
+        CheckoutCancellationService.class,
         CheckoutPreparationTransactionService.class,
         CheckoutExpirationService.class,
         VirtualTicketPricePolicy.class,
@@ -92,6 +93,9 @@ class CheckoutIntegrationTest {
 
     @Autowired
     private CheckoutService checkoutService;
+
+    @Autowired
+    private CheckoutCancellationService checkoutCancellationService;
 
     @Autowired
     private SeatHoldService seatHoldService;
@@ -154,6 +158,244 @@ class CheckoutIntegrationTest {
         assertThat(response.getStatus()).isEqualTo(CheckoutStatus.READY);
         assertThat(checkoutRepository.count()).isEqualTo(1);
         assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void readyCheckoutCancellationReleasesEverySeatAndKeepsAssignmentHistory() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2", "A1"),
+                "checkout-cancel-ready"
+        );
+
+        CheckoutResponse canceled = checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                prepared.getMerchantUid()
+        );
+
+        assertThat(canceled.getStatus()).isEqualTo(CheckoutStatus.CANCELED);
+        Checkout stored = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        assertThat(stored.getCanceledAt()).isEqualTo(BASE_TIME);
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .hasSize(2)
+                .allSatisfy(assignment -> assertThat(assignment.getReleasedAt()).isEqualTo(BASE_TIME));
+        assertThat(checkoutSeatAssignmentRepository.existsActiveBySeatIds(
+                List.of(
+                        seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1").getId(),
+                        seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2").getId()
+                ),
+                BASE_TIME
+        )).isFalse();
+        assertThat(List.of(
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
+        )).allSatisfy(seat -> {
+            assertThat(seat.getHeldBy()).isNull();
+            assertThat(seat.getHeldUntil()).isNull();
+            assertThat(seat.isReserved()).isFalse();
+        });
+    }
+
+    @Test
+    void repeatedCancellationReturnsTheSameCanceledCheckoutWithoutFurtherChanges() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-cancel-retry"
+        );
+        CheckoutResponse first = checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                prepared.getMerchantUid()
+        );
+        clock.advanceSeconds(10);
+
+        CheckoutResponse retry = checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                prepared.getMerchantUid()
+        );
+
+        assertThat(retry.getMerchantUid()).isEqualTo(first.getMerchantUid());
+        assertThat(retry.getStatus()).isEqualTo(CheckoutStatus.CANCELED);
+        Checkout stored = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        assertThat(stored.getCanceledAt()).isEqualTo(BASE_TIME);
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getReleasedAt()).isEqualTo(BASE_TIME));
+    }
+
+    @RepeatedTest(3)
+    void concurrentCancellationRetriesConvergeOnOneCanceledResult() throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A2", "A1"),
+                "checkout-cancel-concurrent"
+        );
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CheckoutResponse> first = executor.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return checkoutCancellationService.cancel(USERNAME, CONCERT_ID, prepared.getMerchantUid());
+            });
+            Future<CheckoutResponse> second = executor.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return checkoutCancellationService.cancel(USERNAME, CONCERT_ID, prepared.getMerchantUid());
+            });
+            start.countDown();
+
+            assertThat(List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            )).allSatisfy(result -> {
+                assertThat(result.getMerchantUid()).isEqualTo(prepared.getMerchantUid());
+                assertThat(result.getStatus()).isEqualTo(CheckoutStatus.CANCELED);
+            });
+        }
+
+        Checkout stored = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        assertThat(stored.getCanceledAt()).isEqualTo(BASE_TIME);
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .hasSize(2)
+                .allSatisfy(assignment -> assertThat(assignment.getReleasedAt()).isEqualTo(BASE_TIME));
+        assertThat(seatRepository.countActiveHolds(concertTimeId, BASE_TIME)).isZero();
+    }
+
+    @Test
+    void releasedAssignmentDoesNotBlockANewHoldAndCheckout() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse canceledCheckout = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-cancel-reuse-first"
+        );
+        checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                canceledCheckout.getMerchantUid()
+        );
+
+        clock.advanceSeconds(1);
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse replacement = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-cancel-reuse-second"
+        );
+
+        assertThat(replacement.getMerchantUid()).isNotEqualTo(canceledCheckout.getMerchantUid());
+        assertThat(replacement.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
+        assertThat(checkoutRepository.findByMerchantUid(canceledCheckout.getMerchantUid()).orElseThrow()
+                .getStatus()).isEqualTo(CheckoutStatus.CANCELED);
+    }
+
+    @Test
+    void cancellationRejectsAnotherUserAndConcertWithoutChangingState() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-cancel-owner"
+        );
+
+        assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                "another-user",
+                CONCERT_ID,
+                prepared.getMerchantUid()
+        )).isExactlyInstanceOf(CheckoutConflictException.class);
+        assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                USERNAME,
+                "ANOTHER-CONCERT",
+                prepared.getMerchantUid()
+        )).isExactlyInstanceOf(CheckoutConflictException.class);
+
+        Checkout stored = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(stored.getCanceledAt()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getReleasedAt()).isNull());
+        assertThat(seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1").getHeldBy())
+                .isEqualTo(USERNAME);
+    }
+
+    @Test
+    void cancellationAtTheExactExpiryPersistsExpiredWithoutReleasingHistory() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1"),
+                "checkout-cancel-expired"
+        );
+        clock.set(prepared.getExpiresAt());
+
+        assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                prepared.getMerchantUid()
+        )).isExactlyInstanceOf(CheckoutExpiredException.class);
+
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(stored.getCanceledAt()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getReleasedAt()).isNull());
+        Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        assertThat(seat.availabilityAt(BASE_TIME.plusMinutes(5)))
+                .isEqualTo(com.onticket.concert.domain.SeatAvailability.AVAILABLE);
+    }
+
+    @Test
+    void cancellationFailureRollsBackCheckoutAndEarlierAssignmentRelease() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME,
+                CONCERT_ID,
+                checkoutRequest("A1", "A2"),
+                "checkout-cancel-rollback"
+        );
+        Checkout checkout = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        List<CheckoutSeatAssignment> assignments = checkoutSeatAssignmentRepository
+                .findByCheckoutIdOrderBySeatId(checkout.getId());
+        assignments.get(1).beginVerificationLease(
+                prepared.getExpiresAt(),
+                prepared.getExpiresAt().plusSeconds(30)
+        );
+        checkoutSeatAssignmentRepository.saveAndFlush(assignments.get(1));
+
+        assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                prepared.getMerchantUid()
+        )).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("결제 검증 중");
+
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(prepared.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.READY);
+        assertThat(stored.getCanceledAt()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutIdOrderBySeatId(stored.getId()))
+                .allSatisfy(assignment -> assertThat(assignment.getReleasedAt()).isNull());
+        assertThat(List.of(
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
+        )).allSatisfy(seat -> assertThat(seat.getHeldBy()).isEqualTo(USERNAME));
     }
 
     @Test

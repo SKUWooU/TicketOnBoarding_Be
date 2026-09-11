@@ -60,6 +60,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,6 +84,7 @@ import static org.mockito.Mockito.when;
         CheckoutService.class,
         CheckoutPreparationTransactionService.class,
         CheckoutExpirationService.class,
+        CheckoutCancellationService.class,
         CheckoutPaymentVerificationTransactionService.class,
         CheckoutVerifiedReservationService.class,
         PaymentUnknownReconciliationService.class,
@@ -103,6 +105,8 @@ class CheckoutVerifiedReservationIntegrationTest {
     private static final AtomicReference<String> FINALIZATION_FAILURE_MERCHANT_UID =
             new AtomicReference<>();
     private static final AtomicReference<CheckoutReleaseBarrier> CHECKOUT_RELEASE_BARRIER =
+            new AtomicReference<>();
+    private static final AtomicReference<CheckoutCancellationRaceBarrier> CHECKOUT_CANCELLATION_BARRIER =
             new AtomicReference<>();
 
     @Container
@@ -133,6 +137,9 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @Autowired
     private SeatHoldService seatHoldService;
+
+    @Autowired
+    private CheckoutCancellationService checkoutCancellationService;
 
     @Autowired
     private CheckoutRepository checkoutRepository;
@@ -183,6 +190,7 @@ class CheckoutVerifiedReservationIntegrationTest {
         CHECKOUT_ALIAS_LOCK_BARRIER.set(null);
         FINALIZATION_FAILURE_MERCHANT_UID.set(null);
         CHECKOUT_RELEASE_BARRIER.set(null);
+        CHECKOUT_CANCELLATION_BARRIER.set(null);
         paymentRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         checkoutSeatAssignmentRepository.deleteAllInBatch();
@@ -864,6 +872,203 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertThat(seat.getHeldBy()).isNull();
         assertThat(seat.getHeldUntil()).isNull();
         assertEmptyReservationSnapshot(2);
+    }
+
+    @RepeatedTest(3)
+    void checkoutCancellationLockFirstPreventsPaymentVerificationBeforeProviderCall() throws Exception {
+        CheckoutResponse checkout = prepareCheckout(
+                "checkout-cancel-race-cancel-first",
+                "A1",
+                "A2"
+        );
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-cancel-race-cancel-first",
+                "A2",
+                "A1"
+        );
+        CheckoutCancellationRaceBarrier barrier = new CheckoutCancellationRaceBarrier(
+                checkout.getMerchantUid()
+        );
+        CHECKOUT_CANCELLATION_BARRIER.set(barrier);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<CheckoutResponse> cancellation = executor.submit(() ->
+                    checkoutCancellationService.cancel(
+                            USERNAME,
+                            CONCERT_ID,
+                            checkout.getMerchantUid()
+                    ));
+            assertThat(barrier.awaitFirstCheckoutLocked()).isTrue();
+
+            Future<AttemptResult> reservation = executor.submit(() -> attempt(
+                    request,
+                    "reservation-cancel-race-cancel-first",
+                    new CountDownLatch(0)
+            ));
+            assertThat(barrier.awaitSecondCheckoutAttempt()).isTrue();
+            barrier.allowFirstTransactionToContinue();
+
+            assertThat(cancellation.get(5, TimeUnit.SECONDS).getStatus())
+                    .isEqualTo(CheckoutStatus.CANCELED);
+            AttemptResult reservationResult = reservation.get(5, TimeUnit.SECONDS);
+            assertThat(reservationResult.success()).isFalse();
+            assertThat(reservationResult.exceptionType())
+                    .isEqualTo(CheckoutConflictException.class.getSimpleName());
+        } finally {
+            barrier.allowFirstTransactionToContinue();
+            CHECKOUT_CANCELLATION_BARRIER.set(null);
+        }
+
+        verifyNoInteractions(paymentVerificationPort);
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.CANCELED);
+        assertThat(stored.getCanceledAt()).isEqualTo(BASE_TIME);
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .hasSize(2)
+                .allSatisfy(assignment -> {
+                    assertThat(assignment.getReleasedAt()).isEqualTo(BASE_TIME);
+                    assertThat(assignment.getVerificationLeaseUntil()).isNull();
+                });
+        assertThat(List.of(
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
+        )).allSatisfy(seat -> {
+            assertThat(seat.getHeldBy()).isNull();
+            assertThat(seat.getHeldUntil()).isNull();
+        });
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @RepeatedTest(3)
+    void paymentVerificationClaimFirstRejectsCheckoutCancellationAndConfirmsReservation() throws Exception {
+        CheckoutResponse checkout = prepareCheckout(
+                "checkout-cancel-race-verification-first",
+                "A1",
+                "A2"
+        );
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-cancel-race-verification-first",
+                "A2",
+                "A1"
+        );
+        CountDownLatch providerEntered = new CountDownLatch(1);
+        CountDownLatch releaseProvider = new CountDownLatch(1);
+        when(paymentVerificationPort.verify("payment-cancel-race-verification-first"))
+                .thenAnswer(invocation -> {
+                    providerEntered.countDown();
+                    if (!releaseProvider.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("payment provider release timeout");
+                    }
+                    return approved(
+                            "payment-cancel-race-verification-first",
+                            checkout.getMerchantUid(),
+                            60_000
+                    );
+                });
+
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<AttemptResult> reservation = executor.submit(() -> attempt(
+                    request,
+                    "reservation-cancel-race-verification-first",
+                    new CountDownLatch(0)
+            ));
+            assertThat(providerEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                    USERNAME,
+                    CONCERT_ID,
+                    checkout.getMerchantUid()
+            )).isExactlyInstanceOf(CheckoutConflictException.class);
+
+            entityManager.clear();
+            Checkout verifying = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+            assertThat(verifying.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFYING);
+            assertThat(verifying.getCanceledAt()).isNull();
+            assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(verifying.getId()))
+                    .hasSize(2)
+                    .allSatisfy(assignment -> {
+                        assertThat(assignment.getReleasedAt()).isNull();
+                        assertThat(assignment.getVerificationLeaseUntil())
+                                .isEqualTo(verifying.getVerificationDeadline());
+                    });
+
+            releaseProvider.countDown();
+            assertThat(reservation.get(5, TimeUnit.SECONDS).success()).isTrue();
+        } finally {
+            releaseProvider.countDown();
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-cancel-race-verification-first");
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 0, 2);
+    }
+
+    @Test
+    void unknownCheckoutCannotBeCanceledOrReleaseItsVerificationHistory() {
+        UnknownCheckoutFixture fixture = createUnknownCheckout(
+                "checkout-cancel-unknown",
+                "payment-cancel-unknown",
+                "reservation-cancel-unknown"
+        );
+
+        assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                fixture.checkout().getMerchantUid()
+        )).isExactlyInstanceOf(CheckoutConflictException.class);
+
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(
+                fixture.checkout().getMerchantUid()
+        ).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getCanceledAt()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> {
+                    assertThat(assignment.getReleasedAt()).isNull();
+                    assertThat(assignment.getVerificationLeaseUntil())
+                            .isEqualTo(fixture.deadline());
+                });
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void confirmedCheckoutCannotBeCanceledOrReleaseReservedSeats() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("checkout-cancel-confirmed", "A1");
+        VerifiedReservRequest request = verifiedRequest(
+                checkout.getMerchantUid(),
+                "payment-cancel-confirmed",
+                "A1"
+        );
+        when(paymentVerificationPort.verify("payment-cancel-confirmed"))
+                .thenReturn(approved(
+                        "payment-cancel-confirmed",
+                        checkout.getMerchantUid(),
+                        30_000
+                ));
+        reservationService.reserve(
+                USERNAME,
+                CONCERT_ID,
+                request,
+                "reservation-cancel-confirmed"
+        );
+
+        assertThatThrownBy(() -> checkoutCancellationService.cancel(
+                USERNAME,
+                CONCERT_ID,
+                checkout.getMerchantUid()
+        )).isExactlyInstanceOf(CheckoutConflictException.class);
+
+        verify(paymentVerificationPort, times(1)).verify("payment-cancel-confirmed");
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        assertThat(stored.getCanceledAt()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId()))
+                .singleElement()
+                .satisfies(assignment -> assertThat(assignment.getReleasedAt()).isNull());
     }
 
     @Test
@@ -1768,6 +1973,55 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    private static final class CheckoutCancellationRaceBarrier {
+
+        private final String merchantUid;
+        private final AtomicInteger checkoutAttempts = new AtomicInteger();
+        private final AtomicReference<Thread> firstThread = new AtomicReference<>();
+        private final CountDownLatch firstCheckoutLocked = new CountDownLatch(1);
+        private final CountDownLatch secondCheckoutAttempted = new CountDownLatch(1);
+        private final CountDownLatch allowFirstTransaction = new CountDownLatch(1);
+
+        private CheckoutCancellationRaceBarrier(String merchantUid) {
+            this.merchantUid = merchantUid;
+        }
+
+        void beforeCheckoutLock(String requestedMerchantUid) {
+            if (!merchantUid.equals(requestedMerchantUid)) {
+                return;
+            }
+            int attempt = checkoutAttempts.incrementAndGet();
+            if (attempt == 1) {
+                firstThread.set(Thread.currentThread());
+            } else if (attempt == 2) {
+                secondCheckoutAttempted.countDown();
+            }
+        }
+
+        void afterCheckoutLock(Checkout checkout) throws InterruptedException {
+            if (!merchantUid.equals(checkout.getMerchantUid())
+                    || Thread.currentThread() != firstThread.get()) {
+                return;
+            }
+            firstCheckoutLocked.countDown();
+            if (!allowFirstTransaction.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("첫 Checkout transaction 진행 허용을 기다리지 못했습니다.");
+            }
+        }
+
+        boolean awaitFirstCheckoutLocked() throws InterruptedException {
+            return firstCheckoutLocked.await(5, TimeUnit.SECONDS);
+        }
+
+        boolean awaitSecondCheckoutAttempt() throws InterruptedException {
+            return secondCheckoutAttempted.await(5, TimeUnit.SECONDS);
+        }
+
+        void allowFirstTransactionToContinue() {
+            allowFirstTransaction.countDown();
+        }
+    }
+
     @TestConfiguration
     static class ClockConfiguration {
 
@@ -1791,7 +2045,22 @@ class CheckoutVerifiedReservationIntegrationTest {
                                 CheckoutRepository.class.getClassLoader(),
                                 new Class<?>[]{CheckoutRepository.class},
                                 (proxy, method, args) -> {
+                                    CheckoutCancellationRaceBarrier cancellationBarrier =
+                                            CHECKOUT_CANCELLATION_BARRIER.get();
+                                    if (cancellationBarrier != null
+                                            && method.getName().equals("findByMerchantUidWithLock")
+                                            && args != null
+                                            && args.length == 1
+                                            && args[0] instanceof String merchantUid) {
+                                        cancellationBarrier.beforeCheckoutLock(merchantUid);
+                                    }
                                     Object result = invoke(checkoutRepository, method, args);
+                                    if (cancellationBarrier != null
+                                            && method.getName().equals("findByMerchantUidWithLock")
+                                            && result instanceof java.util.Optional<?> cancellationOptional
+                                            && cancellationOptional.orElse(null) instanceof Checkout cancellationCheckout) {
+                                        cancellationBarrier.afterCheckoutLock(cancellationCheckout);
+                                    }
                                     CheckoutReleaseBarrier releaseBarrier = CHECKOUT_RELEASE_BARRIER.get();
                                     if (releaseBarrier != null
                                             && method.getName().equals("findByMerchantUidWithLock")

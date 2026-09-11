@@ -91,6 +91,9 @@ public class Checkout {
     @Column(name = "verification_deadline")
     private LocalDateTime verificationDeadline;
 
+    @Column(name = "canceled_at")
+    private LocalDateTime canceledAt;
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", unique = true)
     private Booking booking;
@@ -236,6 +239,21 @@ public class Checkout {
         booking = Objects.requireNonNull(confirmedBooking, "확정된 예약 요청이 필요합니다.");
         status = CheckoutStatus.RESERVATION_CONFIRMED;
         clearPaymentVerification();
+    }
+
+    public void cancel(LocalDateTime now) {
+        Objects.requireNonNull(now, "Checkout 취소 시각이 필요합니다.");
+        if (status == CheckoutStatus.CANCELED) {
+            return;
+        }
+        if (status != CheckoutStatus.READY) {
+            throw new IllegalStateException("준비된 Checkout만 취소할 수 있습니다.");
+        }
+        if (!now.isBefore(expiresAt)) {
+            throw new IllegalStateException("만료된 Checkout은 취소할 수 없습니다.");
+        }
+        status = CheckoutStatus.CANCELED;
+        canceledAt = now;
     }
 
     private void clearPaymentVerification() {

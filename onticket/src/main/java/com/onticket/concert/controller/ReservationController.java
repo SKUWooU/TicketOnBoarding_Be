@@ -8,6 +8,7 @@ import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.service.ReservationIdempotencyService;
 import com.onticket.concert.service.CheckoutService;
+import com.onticket.concert.service.CheckoutCancellationService;
 import com.onticket.concert.service.CheckoutVerifiedReservationService;
 import com.onticket.concert.service.SeatHoldService;
 import com.onticket.concert.service.VerifiedReservationService;
@@ -30,6 +31,8 @@ public class ReservationController {
     private final SeatHoldService seatHoldService;
 
     private final CheckoutService checkoutService;
+
+    private final CheckoutCancellationService checkoutCancellationService;
 
     private final CheckoutVerifiedReservationService checkoutVerifiedReservationService;
 
@@ -97,6 +100,26 @@ public class ReservationController {
                     idempotencyKey
             );
             return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
+    }
+
+    @DeleteMapping(
+            value = "/main/detail/{concertId}/checkouts/{merchantUid}",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<?> cancelCheckout(
+            @CookieValue(value = "accessToken", required = false) String token,
+            @PathVariable("concertId") String concertId,
+            @PathVariable("merchantUid") String merchantUid
+    ) {
+        if (token != null && jwtUtil.validateToken(token)) {
+            String username = jwtUtil.getUsernameFromToken(token);
+            return ResponseEntity.ok(checkoutCancellationService.cancel(
+                    username,
+                    concertId,
+                    merchantUid
+            ));
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
     }
