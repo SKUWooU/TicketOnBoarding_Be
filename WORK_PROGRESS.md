@@ -17,6 +17,14 @@
 
 ## 완료
 
+### Backend Issue #114 — 좌석 hold Hikari pool 반복 matrix 기준선
+
+- PR: [#115](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/115) / squash: 병합 대기
+- 결과: pool 10/16/24의 warm-up 분리 본 측정 3회 matrix를 구성하고, 완료율·cycle p95·pending·CPU·heap 중앙값/범위를 근거로 local Hikari 기본값을 24로 조정
+- 검증: matrix 계획·aggregate 8 assertions, 관측 parser 48·seat-hold 56 assertions, local 2,000석 본 측정 9회 snapshot/domain gate, Backend 235 tests 통과. 10→24: 완료율 89.71→99.15%, hold/cycle p95 1,109.21/2,048.2→431.60/886ms, pending 188→114, deadlock 0
+- 근거: [좌석 hold Hikari pool 반복 matrix](docs/project-improvement/archive/load-testing/seat-hold-hikari-pool-repeat-matrix.md)
+- 제외: 운영 pool 변경·SLA 주장·다중 인스턴스 일반화·Redis·대기열·Kafka·Frontend·외부 API 호출
+
 ### Backend Issue #112 — 좌석 hold churn Hikari pool matrix 검증
 
 - PR: [#113](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/113) / squash: 병합 대기
