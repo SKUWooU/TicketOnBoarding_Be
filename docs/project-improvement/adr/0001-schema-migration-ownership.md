@@ -60,4 +60,4 @@ Issue #57의 고경합 A/B로 복합 unique index의 효과가 확인된 뒤, Is
 - [Issue #17](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/17)
 - [PR #18](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/18)
 - [Issue #59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
-- [좌석 복합 unique index migration 안전성 기준선](../seat-unique-index-migration-baseline.md)
+- [좌석 복합 unique index migration 안전성 기준선](../archive/foundations/seat-unique-index-migration-baseline.md)

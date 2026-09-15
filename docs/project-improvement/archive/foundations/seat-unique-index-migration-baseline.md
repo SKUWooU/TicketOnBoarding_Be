@@ -74,7 +74,7 @@ index 생성 후 같은 회차에 `A1`을 다시 insert하면 SQL state `23000`,
 - `baseline-on-migrate`는 기존 DB의 시작 version을 표시할 뿐 신규 DB의 전체 schema를 만들지 않는다.
 - Entity 10개의 schema 소유권을 Hibernate에서 Flyway로 넘기는 변경이 좌석 index보다 큰 범위가 된다.
 
-따라서 이번 Issue에서는 Flyway를 활성화하지 않는다. 결정과 재검토 조건은 [ADR-0001](adr/0001-schema-migration-ownership.md)에 기록한다.
+따라서 이번 Issue에서는 Flyway를 활성화하지 않는다. 결정과 재검토 조건은 [ADR-0001](../../adr/0001-schema-migration-ownership.md)에 기록한다.
 
 ## 다음 구현 조건
 
@@ -102,4 +102,4 @@ Issue #57의 2,000석 고경합 A/B 근거 이후 Issue #59는 위 조건 중 �
 - [Issue #59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)
 - [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)
 - [복수 좌석 canonical 잠금 순서와 요청 검증](canonical-seat-lock-order.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)

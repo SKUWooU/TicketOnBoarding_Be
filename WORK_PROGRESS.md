@@ -13,20 +13,31 @@
 
 ## 진행 중
 
-### Backend Issue #106 — 좌석 hold 도메인 메트릭 시나리오 검증 gate
-
-- Branch: `test/#106-seat-domain-metric-scenarios`
-- 범위: distributed·hot-section·hot-seat 부하와 만료·재점유 fixture에서 k6 결과, DB snapshot, commit 이후 hold metric delta의 시나리오별 계약을 검증
-- 제외: Prometheus/Grafana 서버·대시보드, Checkout 전용 계측, MCP, Frontend, migration, Kafka/outbox/SSE, 실제 외부 호출
+- 없음
 
 ## 완료
+
+### Backend Issue #108 — 개선 근거 문서 아카이브 구조 정리
+
+- PR: [#109](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/109) / squash: 병합 대기
+- 결과: 상세 근거 33개를 `foundations`·`load-testing`·`seat-hold`·`checkout`으로 재배치하고, 문서 인덱스와 전체 상대 링크를 정리
+- 검증: Markdown 상대 링크 전수 검사·`git diff --check` 통과. 애플리케이션·Frontend·CI와 외부 API 호출은 변경하지 않음
+- 제외: 문서 내용 축약 또는 삭제, 애플리케이션·Frontend·CI 변경, 외부 API 호출
+
+### Backend Issue #106 — 좌석 hold 도메인 메트릭 시나리오 검증 gate
+
+- PR: [#107](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/107) / squash `eb241b9`
+- 결과: distributed·hot-section·hot-seat와 만료·재점유 fixture마다 k6 결과·DB snapshot·commit 이후 hold metric delta를 함께 확인하는 scenario gate를 구성
+- 검증: PowerShell 49 assertions·SeatHold MariaDB Testcontainers·전체 Backend tests·CI·diff check 통과. 2,000석 local fixture 100 RPS/10초에서 k6와 도메인 상태를 교차 확인했으며 운영 성능 주장에는 사용하지 않음
+- 근거: [좌석 hold 도메인 메트릭 시나리오 gate](docs/project-improvement/archive/seat-hold/seat-hold-domain-metric-scenario-gate.md)
+- 제외: Prometheus/Grafana 서버·대시보드, Checkout 전용 계측, MCP, Frontend, migration, Kafka/outbox/SSE, 실제 외부 호출
 
 ### Backend Issue #103 — READY Checkout 취소와 좌석 점유 해제 멱등 경계
 
 - PR: [#104](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/104) / squash `0543f72`
 - 결과: `READY → CANCELED`과 배정 해제 이력을 추가하고, merchantUid 멱등 DELETE와 Checkout→canonical Seat→assignment 원자 해제를 구성
 - 검증: Checkout 취소 통합 29·결제 검증 통합 49·전체 Backend 235 tests·CI·diff check 통과, Reviewer `MERGE_READY: YES`
-- 근거: [READY Checkout 취소와 좌석 점유 해제 멱등 경계](docs/project-improvement/ready-checkout-cancellation.md)
+- 근거: [READY Checkout 취소와 좌석 점유 해제 멱등 경계](docs/project-improvement/archive/checkout/ready-checkout-cancellation.md)
 - 제외: 검증 중·UNKNOWN·확정 Checkout 취소, 실제 PG·환불, Frontend, 운영 migration·메시지 인프라
 
 ### Backend Issue #100 — Checkout 점유 해제와 결제 검증 진입 경합 기준선
@@ -34,7 +45,7 @@
 - PR: [#101](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/101) / squash `710113b`
 - 결과: claim·release 잠금 선행 순서와 정확한 deadline을 고정해 활성 Checkout의 부분 해제 방지·rollback·늦은 mock 승인 UNKNOWN 수렴을 확인
 - 검증: Checkout 통합 41 invocations·전체 Backend 212 tests·CI·diff check 통과, Reviewer `MERGE_READY: YES`
-- 근거: [Checkout 점유 해제와 결제 검증 진입 경합 기준선](docs/project-improvement/checkout-release-payment-verification-race-baseline.md)
+- 근거: [Checkout 점유 해제와 결제 검증 진입 경합 기준선](docs/project-improvement/archive/checkout/checkout-release-payment-verification-race-baseline.md)
 - 제외: Checkout 취소 구현, 실제 PG·환불, Frontend, scheduler·webhook·메시지 인프라
 
 ### Backend Issue #97 — 결제 UNKNOWN 수동 단건 reconciliation 경계
@@ -42,7 +53,7 @@
 - PR: [#98](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/98) / squash `8a7819b`
 - 결과: provider 중립 단건 조회와 bounded exclusive claim으로 UNKNOWN의 승인·거절·미확정·보상 필요 상태 수렴 경계를 구성
 - 검증: 대상 41 tests·전체 Backend 205 tests·CI·diff check 통과, stale claim Blocking 수정 후 Reviewer `MERGE_READY: YES`
-- 근거: [결제 UNKNOWN 수동 단건 reconciliation](docs/project-improvement/payment-unknown-manual-reconciliation.md)
+- 근거: [결제 UNKNOWN 수동 단건 reconciliation](docs/project-improvement/archive/checkout/payment-unknown-manual-reconciliation.md)
 - 제외: 실제 PG·환불, 공개 운영자 API, scheduler·webhook·PaymentAttempt·outbox·브로커
 
 ### Backend Issue #94 — 결제 검증 UNKNOWN 복구 부재 기준선
@@ -50,7 +61,7 @@
 - PR: [#95](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/95) / squash `8d0768f`
 - 결과: mock provider의 첫 불명 결과 뒤 후속 승인·거절 가능 상태를 재조회하지 않아 Checkout이 `UNKNOWN`에 머무는 현행 경계를 고정
 - 검증: 대상 23 tests·전체 Backend 192 tests·CI·diff check 통과, Reviewer `MERGE_READY: YES`
-- 근거: [결제 검증 UNKNOWN 복구 부재 기준선](docs/project-improvement/payment-verification-unknown-recovery-baseline.md)
+- 근거: [결제 검증 UNKNOWN 복구 부재 기준선](docs/project-improvement/archive/checkout/payment-verification-unknown-recovery-baseline.md)
 - 제외: 실제 PG 호출, reconciliation 구현, PaymentAttempt·scheduler·outbox·브로커
 
 ### Backend Issue #91 — 좌석 점유 도메인 메트릭
@@ -58,7 +69,7 @@
 - PR: [#92](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/92) / squash `f157e6f`
 - 결과: transaction 완료 기준 요청 Timer와 commit된 좌석 transition Counter를 추가하고 k6-Prometheus 결과 교차 gate 구성
 - 검증: Backend 190 tests·PowerShell 44 assertions·CI, hot-seat 100 RPS 10초의 k6/server success 2·conflict 998 일치, `MERGE_READY: YES`
-- 근거: [좌석 점유 도메인 메트릭](docs/project-improvement/seat-hold-domain-metrics.md)
+- 근거: [좌석 점유 도메인 메트릭](docs/project-improvement/archive/seat-hold/seat-hold-domain-metrics.md)
 - 제외: 식별자 태그, Grafana·Redis·대기열·브로커, 실제 외부 호출, 운영 성능 주장
 
 ### Backend Issue #88 — loadtest fixture 공연 상세 조회 계약 복구
@@ -66,7 +77,7 @@
 - PR: [#89](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/89) / squash `afa3840`
 - 결과: 가상 장소가 누락된 기존·신규 2,000석 fixture를 보정하고, 상세 DTO의 lazy review 직렬화 500을 방지
 - 검증: Backend 188 tests·CI·MariaDB Testcontainers·로컬 HTTP 200·diff check 통과, `MERGE_READY: YES`
-- 근거: [loadtest fixture 공연 상세 계약](docs/project-improvement/loadtest-fixture-detail-contract.md)
+- 근거: [loadtest fixture 공연 상세 계약](docs/project-improvement/archive/load-testing/loadtest-fixture-detail-contract.md)
 - 제외: 실제 KOPIS 장소·PG·SMS, 운영 성능 주장, Frontend browser E2E
 
 ### Backend Issue #85 — 가상 공연장 layout·구역별 좌석 API 계약
@@ -74,7 +85,7 @@
 - PR: [#86](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/86) / squash `669f248`
 - 결과: 서버 소유 versioned layout과 구역 요약·상세 API를 구성하고 24석·2,000석 fixture를 동일 계약으로 연결
 - 검증: Backend 186 tests·CI·MariaDB Testcontainers·HTTP 404/409·diff check 통과, `MERGE_READY: YES`
-- 근거: [가상 좌석 레이아웃 API](docs/project-improvement/virtual-seat-layout-api.md), [ADR-0003](docs/project-improvement/adr/0003-server-owned-virtual-seat-layout.md)
+- 근거: [가상 좌석 레이아웃 API](docs/project-improvement/archive/seat-hold/virtual-seat-layout-api.md), [ADR-0003](docs/project-improvement/adr/0003-server-owned-virtual-seat-layout.md)
 - 제외: 실제 좌석도·운영 migration·Frontend·WebSocket·대기열·브로커
 
 ### Backend Issue #82 — Checkout 결제 검증 claim과 만료 경합 해소
@@ -82,7 +93,7 @@
 - PR: [#83](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/83) / squash `d45fede`
 - 결과: 짧은 `PAYMENT_VERIFYING` claim과 30초 bounded 좌석 lease로 동일 Checkout의 외부 검증 진입을 1회로 제한하고, 승인·명확한 실패·결과 불명의 상태 경계를 분리
 - 검증: Backend 177 tests·CI·Compose·diff check 통과; deadline 후 재선택 정책과 최종 transaction rollback Blocking 수정 후 `MERGE_READY: YES`
-- 근거: [Checkout 결제 검증 claim과 bounded 좌석 lease](docs/project-improvement/checkout-payment-verification-claim.md), [ADR-0002](docs/project-improvement/adr/0002-bounded-checkout-payment-verification-claim.md)
+- 근거: [Checkout 결제 검증 claim과 bounded 좌석 lease](docs/project-improvement/archive/checkout/checkout-payment-verification-claim.md), [ADR-0002](docs/project-improvement/adr/0002-bounded-checkout-payment-verification-claim.md)
 - 제외: 실제 PG·자동 환불·UNKNOWN reconciliation·Checkout 취소·Frontend·운영 migration·분산 기술
 
 ### Backend Issue #79 — 결제 검증 중 Checkout 만료 경합 기준선
@@ -90,7 +101,7 @@
 - PR: [#80](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/80) / squash `d5dcc3e`
 - 결과: 결제 검증 대기 중 정확한 만료를 persisted한 뒤 mock 승인 응답이 반환돼도 최종 transaction은 만료로 거부되고 서버 Payment 증빙이 남지 않는 공백 재현
 - 검증: 결정적 경합 3회, Backend 165 tests·CI 통과; 매회 Checkout `EXPIRED`, Payment·Booking·Reservation 0, 최종 `MERGE_READY: YES`
-- 근거: [결제 검증 중 Checkout 만료 경합 기준선](docs/project-improvement/checkout-verification-expiry-race-baseline.md)
+- 근거: [결제 검증 중 Checkout 만료 경합 기준선](docs/project-improvement/archive/checkout/checkout-verification-expiry-race-baseline.md)
 - 제외: 운영 코드 변경, Checkout 취소 API, 실제 PG·KOPIS·SMS, Frontend, 성능 수치·분산 기술
 
 ### Backend Issue #76 — 활성 Checkout 좌석 귀속과 부분 중첩 차단
@@ -98,7 +109,7 @@
 - PR: [#77](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/77) / squash `4c36de3`
 - 결과: Checkout-Seat 귀속과 canonical 잠금·DB unique로 `A1`↔`A1+A2` 부분 중첩을 결제 검증 전 409 차단하고, 동일 payload 재사용·활성 release 차단·최단 만료 후 재사용을 보존
 - 검증: 시차 hold Blocking 수정 후 Backend CI 162 tests 통과, 동시 3회 성공 1·409 1·관찰 deadlock 0, 최종 `MERGE_READY: YES`
-- 근거: [활성 Checkout의 좌석 귀속과 부분 중첩 차단](docs/project-improvement/active-checkout-seat-assignment.md)
+- 근거: [활성 Checkout의 좌석 귀속과 부분 중첩 차단](docs/project-improvement/archive/checkout/active-checkout-seat-assignment.md)
 - 제외: 실제 PG·KOPIS·운영 DB migration, Frontend, Redis·분산 lock·대기열·브로커
 
 ### Backend Issue #73 — 부분 중첩 좌석 Checkout 승인 충돌 기준선
@@ -106,7 +117,7 @@
 - PR: [#74](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/74) / squash `cd16d44`
 - 결과: `A1`과 `A1+A2`의 Checkout 2개·mock 승인 2회 이후 확정 1·좌석 충돌 1, 패자 Payment rollback·Checkout `READY` 공백 재현
 - 검증: 순차 2개·동시 3회 좌석별 hold·예약·Booking 연결, Backend 157 tests·CI 통과, Blocking 수정 후 `MERGE_READY: YES`
-- 근거: [부분 중첩 좌석 Checkout 승인 충돌 기준선](docs/project-improvement/partial-overlap-checkout-baseline.md)
+- 근거: [부분 중첩 좌석 Checkout 승인 충돌 기준선](docs/project-improvement/archive/checkout/partial-overlap-checkout-baseline.md)
 - 제외: 차단 구현, 실제 PG·취소·환불, Frontend, 신규 schema·분산 기술
 
 ### Backend Issue #70 — 동일 활성 hold의 Checkout 단일화
@@ -114,7 +125,7 @@
 - PR: [#71](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/71) / squash `6ee2b67`
 - 결과: 같은 hold의 Checkout·merchantUid를 하나로 수렴시키고 모든 수락 키를 귀속했으며, 후속 키 저장을 좌석 transaction 밖으로 분리해 FK lock 역순을 제거
 - 검증: Backend 152 tests·CI 통과, lock 교차 3회 deadlock 0, 두 차례 Blocking 수정 후 `MERGE_READY: YES`
-- 근거: [동일 활성 hold의 Checkout 단일화](docs/project-improvement/single-checkout-per-active-hold.md)
+- 근거: [동일 활성 hold의 Checkout 단일화](docs/project-improvement/archive/checkout/single-checkout-per-active-hold.md)
 - 제외: Frontend, 부분 중첩 payload, 실제 PG·환불, 운영 migration, 분산 기술
 
 ### Backend Issue #67 — 서버 소유 결제 요청과 예약 검증 경계
@@ -122,14 +133,14 @@
 - PR: [#68](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/68) / squash `3fb9ff3`
 - 결과: 본인 HELD 좌석의 서버 Checkout, 서버 금액·merchantUid·만료, 결제 검증 후 잠금 기반 1회 예약 확정 경계를 구성
 - 검증: Backend 142 tests·CI 통과, Reviewer Blocking 수정 후 `MERGE_READY: YES`
-- 근거: [서버 소유 Checkout과 예약 검증 경계](docs/project-improvement/server-owned-checkout-boundary.md)
+- 근거: [서버 소유 Checkout과 예약 검증 경계](docs/project-improvement/archive/checkout/server-owned-checkout-boundary.md)
 - 후속: 실제 PG adapter 전 동일 hold의 복수 `READY` Checkout과 결제 보상 정책 결정
 
 ### Backend Issue #65 — 좌석 임시 점유 API의 고경합 부하 기준선
 
 - PR: [#66](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/66) / squash `5e09a83`
 - 결과: 가상 2,000석·mock 인증의 27회 유효 측정에서 최대 200 RPS, 예상 밖 실패·deadlock·Hikari pending 0
-- 근거: [좌석 임시 점유 API의 고경합 부하 기준선](docs/project-improvement/seat-hold-contention-performance-baseline.md)
+- 근거: [좌석 임시 점유 API의 고경합 부하 기준선](docs/project-improvement/archive/seat-hold/seat-hold-contention-performance-baseline.md)
 
 ### Backend Issue #63 — DB 기반 좌석 임시 점유·만료 상태 전이
 
@@ -142,7 +153,7 @@
 - 구현: `Seat` row에 nullable 점유자·만료 시각을 추가하고 `AVAILABLE/HELD/RESERVED` 파생 상태, 기본 5분 TTL과 `Clock`, 점유·해제 API, 좌석 조회 호환 필드, 자기 점유 예약·타인 점유 409를 연결했다. 동일 사용자 재요청은 TTL을 연장하지 않고 만료는 쓰기 시점에 lazy 회수한다.
 - Reviewer: 최종 HEAD `57c60a42ee2ab75672f249cd3fafe755a1dd9130`, Blocking 없음, `MERGE_READY: YES`
 - 검증: MariaDB Testcontainers에서 동일 좌석 2사용자 동시 점유 성공 1·conflict 1, 만료 직전/정확한 만료 경계, 다좌석 취득·해제 rollback, 자기/타인 점유 예약과 Payment·Booking rollback, 조회·HTTP 400/401/409 계약을 확인했다. Backend 전체 119 tests(실패·오류·skip 0), Backend CI, `git diff --check`, Compose config 통과.
-- 근거: [DB 기반 좌석 임시 점유·만료 상태 전이](docs/project-improvement/seat-hold-expiration-state-transition.md)
+- 근거: [DB 기반 좌석 임시 점유·만료 상태 전이](docs/project-improvement/archive/seat-hold/seat-hold-expiration-state-transition.md)
 - 범위: Backend `Seat`·점유 service/API·좌석 응답·예약 transaction, `Clock`·TTL, MariaDB 동시성·시간 경계·rollback fixture와 근거 문서
 - 제외: 실제 KOPIS·PG·SMS, Frontend·README, Redis·분산 lock·scheduler·대기열·브로커, 운영 DB 자동 migration, 성능 수치 측정
 
