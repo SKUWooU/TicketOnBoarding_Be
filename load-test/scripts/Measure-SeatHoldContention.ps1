@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('distributed', 'hot-section', 'hot-seat')]
+    [ValidateSet('distributed', 'hot-section', 'hot-seat', 'distributed-churn', 'hot-seat-churn')]
     [string]$Scenario = 'distributed',
     [ValidateRange(1, 10000)][int]$Rate = 5,
     [ValidateRange(1, 3600)][int]$DurationSeconds = 10,

@@ -30,8 +30,10 @@ function New-Issue65ResultText {
         [long]$Iterations = 100,
         [long]$Dropped = 0,
         [long]$Success = 100,
+        [long]$ReleaseSuccess = 0,
         [long]$Contention = 0,
         [long]$Unexpected = 0,
+        [long]$UnexpectedRelease = 0,
         [double]$UnexpectedRate = 0,
         [double]$P95 = 20,
         [int]$Rate = 10,
@@ -47,10 +49,13 @@ function New-Issue65ResultText {
         iterations = $Iterations
         droppedIterations = $Dropped
         holdSuccess = $Success
+        releaseSuccess = $ReleaseSuccess
         expectedContention = $Contention
         unexpectedNonSuccessful = $Unexpected
+        unexpectedRelease = $UnexpectedRelease
         unexpectedFailureRate = $UnexpectedRate
         holdDurationMs = [ordered]@{ average = 10; median = 9; p95 = $P95; maximum = 30 }
+        cycleDurationMs = [ordered]@{ average = 20; median = 19; p95 = ($P95 * 2); maximum = 60 }
         maxObservedVus = 4
         maxAllocatedVus = 250
         preAllocatedVus = 250
@@ -89,9 +94,11 @@ function New-Issue65MetricSummary {
                 CompletedIterationsPerScheduledSecond = 10
                 ScheduledIterationAttainmentRate = $Attainment
                 HoldSuccess = 100
+                ReleaseSuccess = 0
                 ExpectedContention = 0
                 UnexpectedFailureRate = $Unexpected
                 HoldDurationMs = [pscustomobject]@{ P95 = $P95 }
+                CycleDurationMs = [pscustomobject]@{ P95 = ($P95 * 2) }
             }
             FinalSnapshot = [pscustomobject]@{ activeHeldSeats = 100 }
         }
@@ -105,6 +112,7 @@ function New-Issue65MetricSummary {
 $issue65Raw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText)
 Assert-Issue65Equal $issue65Raw.scenario 'distributed' 'scenario parser'
 Assert-Issue65Equal $issue65Raw.holdSuccess 100 'success parser'
+Assert-Issue65Equal $issue65Raw.releaseSuccess 0 'release parser'
 Assert-Issue65Equal $issue65Raw.holdDurationMs.p95 20 'duration parser'
 Assert-Issue65Throws { ConvertFrom-SeatHoldK6Result -Text 'missing' } 'missing result must fail'
 Assert-Issue65Throws { ConvertFrom-SeatHoldK6Result -Text ((New-Issue65ResultText) + "`n" + (New-Issue65ResultText)) } 'duplicate result must fail'
@@ -140,6 +148,7 @@ Assert-Issue65Equal $issue65Summary.Iterations 100 'summary iterations'
 Assert-Issue65Equal $issue65Summary.CompletedIterationsPerScheduledSecond 10 'summary throughput'
 Assert-Issue65Equal $issue65Summary.ScheduledIterationAttainmentRate 1 'summary attainment'
 Assert-Issue65Equal $issue65Summary.HoldDurationMs.P95 20 'summary p95'
+Assert-Issue65Equal $issue65Summary.CycleDurationMs.P95 40 'summary cycle p95'
 Assert-Issue65Throws {
     New-SeatHoldRunSummary -Result (ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Iterations 100 -Success 99)) -DurationSeconds 10
 } 'counter mismatch'
@@ -159,6 +168,18 @@ $issue65HotSeatSummary = New-SeatHoldRunSummary -Result $issue65HotSeatRaw -Dura
 $issue65HotSeatSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 1)
 Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue65HotSeatSummary -Snapshot $issue65HotSeatSnapshot) 'hot-seat final state allows owner retry'
 
+$issue110ChurnRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario distributed-churn -Success 100 -ReleaseSuccess 100)
+$issue110ChurnSummary = New-SeatHoldRunSummary -Result $issue110ChurnRaw -DurationSeconds 10
+$issue110ChurnSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 0)
+Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue110ChurnSummary -Snapshot $issue110ChurnSnapshot) 'distributed churn leaves no holds'
+Assert-Issue65Throws {
+    New-SeatHoldRunSummary -Result (ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario distributed-churn -Success 100 -ReleaseSuccess 99)) -DurationSeconds 10
+} 'churn release count mismatch'
+$issue110HotChurnRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario hot-seat-churn -Success 40 -ReleaseSuccess 40 -Contention 60)
+$issue110HotChurnSummary = New-SeatHoldRunSummary -Result $issue110HotChurnRaw -DurationSeconds 10
+$issue110HotChurnSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 0)
+Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue110HotChurnSummary -Snapshot $issue110HotChurnSnapshot) 'hot-seat churn accepts expected conflicts and leaves no holds'
+
 $issue106DistributedDomain = [pscustomobject]@{ HoldSuccess = 100; HoldConflict = 0; HoldInvalid = 0; HoldError = 0; HoldAcquired = 100; HoldReused = 0; HoldReclaimed = 0 }
 Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue65Summary -Snapshot $issue65Snapshot -DomainMetricDelta $issue106DistributedDomain) 'distributed domain scenario gate'
 $issue106HotSectionDomain = [pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 0; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0 }
@@ -171,6 +192,10 @@ Assert-Issue65Throws {
 Assert-Issue65Throws {
     Assert-SeatHoldDomainScenarioGate -K6Summary $issue65HotSectionSummary -Snapshot $issue65HotSectionSnapshot -DomainMetricDelta ([pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 1; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0 })
 } 'domain error outcome must fail'
+$issue110ChurnDomain = [pscustomobject]@{ HoldSuccess = 100; HoldConflict = 0; HoldInvalid = 0; HoldError = 0; HoldAcquired = 100; HoldReused = 0; HoldReclaimed = 0; ReleaseSuccess = 100; ReleaseConflict = 0; ReleaseInvalid = 0; ReleaseError = 0; Released = 100; ExpiredCleared = 0 }
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue110ChurnSummary -Snapshot $issue110ChurnSnapshot -DomainMetricDelta $issue110ChurnDomain) 'distributed churn domain scenario gate'
+$issue110HotChurnDomain = [pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 0; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0; ReleaseSuccess = 40; ReleaseConflict = 0; ReleaseInvalid = 0; ReleaseError = 0; Released = 40; ExpiredCleared = 0 }
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue110HotChurnSummary -Snapshot $issue110HotChurnSnapshot -DomainMetricDelta $issue110HotChurnDomain) 'hot-seat churn domain scenario gate'
 Assert-Issue65Throws { Assert-SeatHoldFinalState -Summary $issue65Summary -Snapshot (ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 99)) } 'distributed persistence mismatch'
 Assert-Issue65Throws { Assert-SeatHoldFinalState -Summary $issue65Summary -Snapshot (ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 100 -Invariant $false)) } 'false invariant'
 

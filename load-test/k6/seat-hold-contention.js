@@ -19,14 +19,24 @@ const expectedContention = new Counter('seat_hold_expected_contention');
 const unexpectedNonSuccessfulHold = new Counter('seat_hold_unexpected_non_2xx');
 const unexpectedFailure = new Rate('seat_hold_unexpected_failure');
 const holdDuration = new Trend('seat_hold_duration', true);
+const releaseSuccess = new Counter('seat_hold_release_success');
+const unexpectedNonSuccessfulRelease = new Counter('seat_hold_release_unexpected_non_2xx');
+const cycleDuration = new Trend('seat_hold_cycle_duration', true);
 
+const churnScenario = TEST_SCENARIO === 'distributed-churn'
+  || TEST_SCENARIO === 'hot-seat-churn';
 const expectedContentionScenario = TEST_SCENARIO === 'hot-seat'
-  || TEST_SCENARIO === 'hot-section';
+  || TEST_SCENARIO === 'hot-section'
+  || TEST_SCENARIO === 'hot-seat-churn';
 
 http.setResponseCallback(
-  expectedContentionScenario
-    ? http.expectedStatuses(200, 409)
-    : http.expectedStatuses(200),
+  churnScenario
+    ? expectedContentionScenario
+      ? http.expectedStatuses(200, 204, 409)
+      : http.expectedStatuses(200, 204)
+    : expectedContentionScenario
+      ? http.expectedStatuses(200, 409)
+      : http.expectedStatuses(200),
 );
 
 export const options = {
@@ -43,6 +53,7 @@ export const options = {
   thresholds: ENFORCE_THRESHOLDS
     ? {
       seat_hold_duration: ['p(95)<2000'],
+      seat_hold_cycle_duration: ['p(95)<2000'],
       seat_hold_unexpected_failure: ['rate<0.05'],
     }
     : {},
@@ -80,12 +91,13 @@ export function setup() {
 }
 
 export default function (data) {
+  const startedAt = Date.now();
   const iteration = exec.scenario.iterationInTest;
   const tokenIndex = expectedContentionScenario
     ? iteration % data.tokens.length
     : (__VU - 1) % data.tokens.length;
   const token = data.tokens[tokenIndex];
-  const seatNumber = selectSeat(data.fixture, iteration);
+  const seatNumber = selectSeat(data.fixture, iteration, tokenIndex);
   const response = http.post(
     `${BASE_URL}/main/detail/${data.fixture.concertId}/seat-holds`,
     JSON.stringify({
@@ -105,6 +117,33 @@ export default function (data) {
 
   if (response.status === 200) {
     holdSuccess.add(1);
+    if (churnScenario) {
+      const releaseResponse = http.del(
+        `${BASE_URL}/main/detail/${data.fixture.concertId}/seat-holds`,
+        JSON.stringify({
+          concertTimeId: data.fixture.concertTimeId,
+          seatNumberList: [seatNumber],
+        }),
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Cookie: `accessToken=${token.accessToken}`,
+          },
+          tags: { test_scenario: TEST_SCENARIO },
+        },
+      );
+      cycleDuration.add(Date.now() - startedAt);
+      if (releaseResponse.status === 204) {
+        releaseSuccess.add(1);
+        unexpectedFailure.add(false);
+        return;
+      }
+      unexpectedNonSuccessfulRelease.add(1);
+      unexpectedFailure.add(true);
+      return;
+    }
+    cycleDuration.add(Date.now() - startedAt);
     unexpectedFailure.add(false);
     return;
   }
@@ -112,11 +151,13 @@ export default function (data) {
   nonSuccessfulHold.add(1);
   if (response.status === 409 && expectedContentionScenario) {
     expectedContention.add(1);
+    cycleDuration.add(Date.now() - startedAt);
     unexpectedFailure.add(false);
     return;
   }
 
   unexpectedNonSuccessfulHold.add(1);
+  cycleDuration.add(Date.now() - startedAt);
   unexpectedFailure.add(true);
 }
 
@@ -140,10 +181,13 @@ export function handleSummary(data) {
     iterations: counterValue(data, 'iterations'),
     droppedIterations: counterValue(data, 'dropped_iterations'),
     holdSuccess: counterValue(data, 'seat_hold_success'),
+    releaseSuccess: counterValue(data, 'seat_hold_release_success'),
     expectedContention: counterValue(data, 'seat_hold_expected_contention'),
     unexpectedNonSuccessful: counterValue(data, 'seat_hold_unexpected_non_2xx'),
+    unexpectedRelease: counterValue(data, 'seat_hold_release_unexpected_non_2xx'),
     unexpectedFailureRate: rateValue(data, 'seat_hold_unexpected_failure'),
     holdDurationMs: trendValues(data, 'seat_hold_duration'),
+    cycleDurationMs: trendValues(data, 'seat_hold_cycle_duration'),
     maxObservedVus: gaugeMaximum(data, 'vus'),
     maxAllocatedVus: gaugeMaximum(data, 'vus_max'),
     preAllocatedVus: PRE_ALLOCATED_VUS,
@@ -155,15 +199,17 @@ export function handleSummary(data) {
   };
 }
 
-function selectSeat(fixture, iteration) {
-  if (TEST_SCENARIO === 'hot-seat') {
+function selectSeat(fixture, iteration, tokenIndex) {
+  if (TEST_SCENARIO === 'hot-seat' || TEST_SCENARIO === 'hot-seat-churn') {
     return 'R001-S001';
   }
   if (TEST_SCENARIO === 'hot-section') {
     return seatNumber(1, (iteration % fixture.seatsPerRow) + 1);
   }
 
-  const seatIndex = iteration % fixture.totalSeats;
+  const seatIndex = TEST_SCENARIO === 'distributed-churn'
+    ? tokenIndex % fixture.totalSeats
+    : iteration % fixture.totalSeats;
   const row = Math.floor(seatIndex / fixture.seatsPerRow) + 1;
   const number = (seatIndex % fixture.seatsPerRow) + 1;
   return seatNumber(row, number);
