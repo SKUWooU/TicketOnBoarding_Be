@@ -55,7 +55,7 @@ MariaDB 10.11.8 Testcontainers에 공연 1개, 회차 1개와 가상 좌석 24�
 
 이번 Issue는 현재 결함을 재현하는 characterization test와 근거 문서만 추가하고 운영 로직은 바꾸지 않습니다. 다음 Issue에서 rollback 원자성과 회차 집계 갱신을 먼저 바로잡고, 복수 좌석 lock ordering·deadlock은 별도 시나리오로 분리합니다. 분산 락이나 대기열은 이 결과만으로 도입하지 않습니다.
 
-상세 조건과 결과는 [예매 트랜잭션·경합 기준선](reservation-transaction-concurrency-baseline.md)에서 확인합니다.
+상세 조건과 결과는 [예매 트랜잭션·경합 기준선](archive/foundations/reservation-transaction-concurrency-baseline.md)에서 확인합니다.
 
 ### 링크
 
@@ -79,7 +79,7 @@ Issue #3에서 같은 예약 transaction 안의 두 결함을 분리해 확인�
 
 이번 변경은 처리량 최적화가 아니며 lock wait를 측정하지 않았습니다. 복수 좌석 lock ordering, 좌석 복합·유일 인덱스, 취소·결제·멱등성과 API 예외 모델은 후속 Issue로 남겼습니다.
 
-상세 조건과 결과는 [예약 원자성·잔여 좌석 갱신 정합성 개선](reservation-atomicity-inventory-consistency.md)에서 확인합니다.
+상세 조건과 결과는 [예약 원자성·잔여 좌석 갱신 정합성 개선](archive/foundations/reservation-atomicity-inventory-consistency.md)에서 확인합니다.
 
 ### 링크
 
@@ -99,7 +99,7 @@ Issue #3에서 같은 예약 transaction 안의 두 결함을 분리해 확인�
 
 매회 성공 1·business 실패 1, 예약 좌석 2, 예약 row 2, 잔여 22로 `24 = reserved + remaining`을 충족했습니다. 실패 transaction의 부분 commit과 SQL deadlock error는 없었습니다. 결과는 MariaDB 10.11.8 단일 컨테이너와 가상 좌석 24개 조건이며 운영 deadlock 발생률이나 처리량을 의미하지 않습니다.
 
-상세 동기화 방식과 다음 검증 조건은 [복수 좌석 잠금 순서와 deadlock 기준선](multi-seat-lock-order-deadlock-baseline.md)에 기록합니다.
+상세 동기화 방식과 다음 검증 조건은 [복수 좌석 잠금 순서와 deadlock 기준선](archive/foundations/multi-seat-lock-order-deadlock-baseline.md)에 기록합니다.
 
 ### 링크
 
@@ -120,7 +120,7 @@ Issue #9와 같은 fixture에 test용 `(concert_time_id, seat_number)` 복합 un
 
 복합 index는 좌석 식별과 잠금 query plan을 개선하지만 입력 순서 잠금의 cycle을 실제로 드러냈습니다. 따라서 운영 변경에서는 index migration과 canonical lock ordering을 함께 검증해야 합니다. retry·분산 lock·대기열은 도입하지 않습니다.
 
-상세 조건은 [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)에 기록합니다.
+상세 조건은 [좌석 복합 인덱스와 deadlock 비교 기준선](archive/foundations/seat-composite-index-deadlock-comparison.md)에 기록합니다.
 
 ### 링크
 
@@ -143,7 +143,7 @@ Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3�
 
 운영 복합 unique index는 기존 schema migration 기준과 중복 데이터 검사 없이 추가하지 않는다. 후속 schema Issue에서 migration과 query plan을 검증한 뒤 Phase 5의 예약·결제 상태 전이로 이동한다.
 
-상세 내용은 [복수 좌석 canonical 잠금 순서와 요청 검증](canonical-seat-lock-order.md)에 기록한다.
+상세 내용은 [복수 좌석 canonical 잠금 순서와 요청 검증](archive/foundations/canonical-seat-lock-order.md)에 기록한다.
 
 ### 링크
 
@@ -164,7 +164,7 @@ Issue #11과 같은 test 복합 index 조건에서 `[A1,A2]`와 `[A2,A1]`을 3�
 
 좌석 ALTER migration만 추가하면 신규 DB에 전체 schema가 없어 실패한다. 10개 Entity의 baseline DDL과 기존 DB version을 확인하기 전까지 Flyway 운영 활성화를 보류한다. 실제 조건과 대안은 [ADR-0001](adr/0001-schema-migration-ownership.md)에 기록한다.
 
-상세 내용은 [좌석 복합 unique index migration 안전성 기준선](seat-unique-index-migration-baseline.md)에서 확인한다.
+상세 내용은 [좌석 복합 unique index migration 안전성 기준선](archive/foundations/seat-unique-index-migration-baseline.md)에서 확인한다.
 
 ### 링크
 
@@ -187,7 +187,7 @@ Compose MariaDB가 healthy인 상태에서 `bootRun`이 18080 port로 시작했�
 
 서버와 container는 검증 후 종료했고 named volume은 삭제하지 않았다. KOPIS·CoolSMS·OAuth·결제·운영 DB 호출은 없었다.
 
-상세 명령과 환경변수는 [Docker Compose 기반 로컬 Backend 실행 기준선](local-backend-runtime.md)에 기록한다.
+상세 명령과 환경변수는 [Docker Compose 기반 로컬 Backend 실행 기준선](archive/foundations/local-backend-runtime.md)에 기록한다.
 
 ### 링크
 
@@ -328,7 +328,7 @@ fingerprint에는 현재 Service가 실제 사용하는 공연 ID·회차 ID·�
 
 MariaDB 10.11.8·가상 좌석 24개 fixture에서 순차 재시도, 두 요청이 모두 기존 키 없음 결과를 얻은 뒤의 동시 경쟁을 3회, 다른 payload 충돌과 실패 후 키 재사용을 검증했다. 동시 경쟁은 매회 같은 생성 시각을 반환하고 Booking 1·Reservation 1·점유 1·잔여 23으로 수렴했다. Service 29개·Controller 3개와 전체 Backend 59개 test invocation이 통과했다.
 
-이는 실제 PG 결제 멱등성이나 운영 처리량 결과가 아니다. Frontend 키 전달과 운영 schema migration이 완료되기 전에는 실제 화면 경로와 배포 DB에 적용됐다고 주장할 수 없다. 상세 계약과 fixture는 [예약 요청 멱등성과 최초 결과 재사용](reservation-idempotency.md)에 기록한다.
+이는 실제 PG 결제 멱등성이나 운영 처리량 결과가 아니다. Frontend 키 전달과 운영 schema migration이 완료되기 전에는 실제 화면 경로와 배포 DB에 적용됐다고 주장할 수 없다. 상세 계약과 fixture는 [예약 요청 멱등성과 최초 결과 재사용](archive/foundations/reservation-idempotency.md)에 기록한다.
 
 ### 링크
 
@@ -350,7 +350,7 @@ DB와 Frontend는 기존 한글 값에 결합되어 있으므로 converter와 JS
 
 상태 단위 6개, 예약·멱등성·좌석 경합 29개, 취소 경합·rollback 23개를 포함한 전체 Backend 65개 invocation이 통과했다. 상태가 먼저 `취소완료`로 바뀐 뒤 재고 복구 query가 실패하는 fixture도 transaction rollback 후 `취소신청`·점유·잔여 수량을 유지했다.
 
-이번 변경은 서버 미검증 `결제완료` 생성을 해결하지 않는다. 다음에는 Frontend 고정 가격이 아니라 서버가 소유하는 가상 가격 기준과 별도 Payment 상태·mock 검증 경계를 설계한다. 그 상태 불변식이 안정된 후에야 k6의 성공·충돌·실패 응답을 도메인 결과로 해석할 수 있다. 상세 내용은 [예약 상태의 타입 안전 전이 정책](reservation-status-transition.md)에 기록한다.
+이번 변경은 서버 미검증 `결제완료` 생성을 해결하지 않는다. 다음에는 Frontend 고정 가격이 아니라 서버가 소유하는 가상 가격 기준과 별도 Payment 상태·mock 검증 경계를 설계한다. 그 상태 불변식이 안정된 후에야 k6의 성공·충돌·실패 응답을 도메인 결과로 해석할 수 있다. 상세 내용은 [예약 상태의 타입 안전 전이 정책](archive/foundations/reservation-status-transition.md)에 기록한다.
 
 ### 링크
 
@@ -370,7 +370,7 @@ KOPIS의 가격은 자유 문자열이고 Frontend 금액도 서로 다른 고�
 
 MariaDB 10.11.8·가상 좌석 24개에서 2석 60,000원 정상 확정, 미승인·식별자·금액/사용자 불일치 무변경 거부, 성공 응답 재사용, 예약 실패 rollback을 확인했다. 동일 결제 ID를 다른 멱등 키로 동시 소비하는 시나리오는 3회 모두 1건만 확정됐다. Reviewer Blocking 후에는 실제 좌석·예약 변경 뒤 재고 감소가 실패하는 late-failure와, 동일 멱등 키의 동시 동일 payload 재사용·다른 payload 충돌을 각 3회 결정적 barrier로 추가했다. Issue 대상 30개와 기존 회귀를 포함한 전체 Backend 92개 invocation이 통과했다.
 
-실제 PG, 운영 schema, Frontend 전환, 좌석 hold·만료·환불은 검증하지 않았다. 기존 `/reservation`은 호환을 위한 미검증 legacy 경로로 남아 있다. Backend 우선 작업 후 Frontend 계약을 전환하고 legacy를 제거해야 한다. 상세 근거는 [서버 가상 가격과 mock 결제 검증 경계](verified-payment-reservation-boundary.md)에 기록한다.
+실제 PG, 운영 schema, Frontend 전환, 좌석 hold·만료·환불은 검증하지 않았다. 기존 `/reservation`은 호환을 위한 미검증 legacy 경로로 남아 있다. Backend 우선 작업 후 Frontend 계약을 전환하고 legacy를 제거해야 한다. 상세 근거는 [서버 가상 가격과 mock 결제 검증 경계](archive/checkout/verified-payment-reservation-boundary.md)에 기록한다.
 
 ### 링크
 
@@ -396,7 +396,7 @@ k6는 동일 한 좌석, 40석 구간, 2,000석 분산, 동일 멱등 요청의 
 
 run 격리 보완 후 distributed 5 RPS·10초를 연속 실행했을 때 각 run은 예약 50건과 51건을 별도 재고에 저장하고 모두 불변식을 충족했다. run 경계·로그 조건까지 최종 보완한 실행은 예약 API 전용 p95 68.21ms·비-2xx 0건·예약 51건으로 종료됐다. 이는 스크립트·fixture·관측 경로와 재실행 격리가 함께 동작한다는 증거이지 안정 처리량이나 개선 전후 수치가 아니다. 로그 조건이 다른 앞선 실행과 직접 비교하지 않으며, 종료 뒤 Hikari와 MariaDB 상태도 peak가 아니므로 시계열 관측 없이는 병목 위치를 단정할 수 없다.
 
-다음 학습 순서는 경합 실패를 409와 5xx로 구분하는 HTTP 계약, 부하 중 시계열 수집, 단계별 도착률 측정이다. 대기열·분산 lock·outbox·브로커는 이 측정에서 필요 조건이 확인된 뒤 선택한다. 상세 조건과 명령은 [가상 좌석 2,000석 고경합 부하 측정 기반](high-contention-load-test-harness.md)에 기록했다.
+다음 학습 순서는 경합 실패를 409와 5xx로 구분하는 HTTP 계약, 부하 중 시계열 수집, 단계별 도착률 측정이다. 대기열·분산 lock·outbox·브로커는 이 측정에서 필요 조건이 확인된 뒤 선택한다. 상세 조건과 명령은 [가상 좌석 2,000석 고경합 부하 측정 기반](archive/load-testing/high-contention-load-test-harness.md)에 기록했다.
 
 ### 링크
 
@@ -416,7 +416,7 @@ run 격리 보완 후 distributed 5 RPS·10초를 연속 실행했을 때 각 ru
 
 첫 hot-seat smoke는 성공 1·409 경합 200·예상 밖 오류 0이었지만 k6 기본 `http_req_failed`는 409를 모두 실패로 세어 98.03%를 표시했다. hot 시나리오에서만 409를 expected status로 등록한 뒤 독립 run을 다시 실행해 기본 실패율과 커스텀 실패율을 모두 0%로 맞췄다. 지표 이름만 추가하는 것으로는 충분하지 않고 도구의 기본 성공 판정도 도메인 계약과 일치해야 한다.
 
-최종 로컬 smoke는 20 RPS·10초의 201회 요청에서 성공 1·예상 409 경합 200·예상 밖 비-2xx/5xx 0, 예약 p95 36.69ms, 종료 불변식 충족으로 끝났다. 이는 오류 분류 계약 확인값이며 안정 처리량이나 성능 개선 수치가 아니다. 전체 Backend 102개 test도 실패·오류·skip 없이 통과했다. 상세 내용은 [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)에 기록한다.
+최종 로컬 smoke는 20 RPS·10초의 201회 요청에서 성공 1·예상 409 경합 200·예상 밖 비-2xx/5xx 0, 예약 p95 36.69ms, 종료 불변식 충족으로 끝났다. 이는 오류 분류 계약 확인값이며 안정 처리량이나 성능 개선 수치가 아니다. 전체 Backend 102개 test도 실패·오류·skip 없이 통과했다. 상세 내용은 [좌석 경합 실패의 HTTP 409 계약](archive/load-testing/seat-contention-http-contract.md)에 기록한다.
 
 ### 링크
 
@@ -436,7 +436,7 @@ Issue #47 smoke가 끝난 뒤 Hikari active 0과 MariaDB row lock wait 누적값
 
 DB CLI 표본 시간이 추가되므로 단순히 매 조회 후 1초를 기다리면 실제 간격이 1.5~2초로 늘어났다. 고정 cadence로 바꾸고 summary에 실제 min·avg·max를 추가했다. 최종 hot-seat smoke의 목표는 1,000ms였고 실제 평균은 1,009.36ms, 최대는 1,692ms였다. polling이 놓칠 수 있는 짧은 spike를 숨기지 않고 수치 해석의 한계로 남긴다.
 
-최종 로컬 smoke에서 distributed 5 RPS·5초는 Hikari active peak 1·pending 0·lock wait delta 0이었다. hot-seat 100 RPS·10초는 1,001회 중 성공 1·예상 409 1,000·예상 밖 오류 0, p95 39.68ms, Hikari active peak 2·pending 0, row lock wait +77회·+142ms, deadlock 0과 종료 불변식을 기록했다. 이는 서로 다른 조건의 collector 기능 확인값이며 성능 전후 비교가 아니다. 상세 내용은 [고경합 부하의 경량 Hikari·MariaDB 관측 경계](lightweight-contention-observability.md)에 기록한다.
+최종 로컬 smoke에서 distributed 5 RPS·5초는 Hikari active peak 1·pending 0·lock wait delta 0이었다. hot-seat 100 RPS·10초는 1,001회 중 성공 1·예상 409 1,000·예상 밖 오류 0, p95 39.68ms, Hikari active peak 2·pending 0, row lock wait +77회·+142ms, deadlock 0과 종료 불변식을 기록했다. 이는 서로 다른 조건의 collector 기능 확인값이며 성능 전후 비교가 아니다. 상세 내용은 [고경합 부하의 경량 Hikari·MariaDB 관측 경계](archive/load-testing/lightweight-contention-observability.md)에 기록한다.
 
 ### 링크
 
@@ -460,7 +460,7 @@ distributed는 서로 다른 좌석을 선택하지만 모든 예약 transaction
 
 hot-section·hot-seat은 100 RPS에서 dropped 없이 예상 409를 처리했지만 150 RPS에서는 Hikari active 10·pending 최대 189와 row lock wait 중앙값 1,400회 이상이 반복됐다. 이 완료율은 성공 예약 TPS가 아니라 충돌 판정과 409 거부 처리율이므로 distributed와 분리해 해석한다.
 
-상세 조건과 전체 중앙값·범위는 [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)에 기록한다.
+상세 조건과 전체 중앙값·범위는 [가상 좌석 고경합의 단계별 성능 기준선](archive/load-testing/staged-contention-performance-baseline.md)에 기록한다.
 
 ### 링크
 
@@ -482,7 +482,7 @@ Issue #53에서 서로 다른 좌석 예약도 100 RPS부터 Hikari pending과 D
 
 실제 `seat` schema에는 `concert_time_id` 단일 FK index만 있고 `seat_number`를 포함한 복합 index가 없다. 실행계획은 한 좌석을 찾을 때 같은 회차 약 2,000행을 검사했다. 대기시간이 좌석 잠금 SELECT에 집중된 사실은 확인했지만 복합 index 적용 후 고경합 개선은 아직 측정하지 않았다. 다음 Issue에서 동일 진단 조건의 index 전후 A/B로 검증한다.
 
-상세한 판단 과정과 전체 범위는 [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)에 기록한다.
+상세한 판단 과정과 전체 범위는 [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](archive/load-testing/concert-time-row-bottleneck-diagnosis.md)에 기록한다.
 
 ### 링크
 
@@ -506,7 +506,7 @@ Issue #55에서 좌석 잠금 SELECT의 대기와 약 2,000행 탐색을 확인�
 
 좌석 조회가 빨라지자 100 RPS 회차 감소 UPDATE 평균은 0.381→5.287ms로 늘었고 composite에서도 row lock wait 중앙값 412회가 남았다. 더 많은 transaction이 같은 회차 counter에 빨리 도달한 결과로 해석할 수 있지만 composite 조건은 여전히 목표 100 RPS·pending 0을 유지했다. 따라서 지금 counter 분리·대기열·Redis lock을 도입하지 않고, 복합 unique index를 Entity·기존 DB migration 경계에 영구 반영한 뒤 더 높은 부하나 burst에서 다음 변곡을 다시 측정한다.
 
-상세 설계·전체 범위·폐기 batch와 한계는 [좌석 잠금 복합 unique index의 고경합 A/B 검증](seat-composite-index-high-contention-ab.md)에 기록한다.
+상세 설계·전체 범위·폐기 batch와 한계는 [좌석 잠금 복합 unique index의 고경합 A/B 검증](archive/load-testing/seat-composite-index-high-contention-ab.md)에 기록한다.
 
 ### 링크
 
@@ -544,7 +544,7 @@ Entity annotation은 Hibernate가 새로 만드는 local·test schema에는 제�
 
 다음 구현은 좌석 상태 `AVAILABLE → HELD → RESERVED`, 점유 소유자, `expiresAt`, 주입 가능한 `Clock`, 조건부 DB 갱신과 만료 점유 회수, 동일 요청 멱등성, 결제 성공·실패 시 상태 전이를 함께 정의해야 한다. 먼저 DB 기반 lazy expiration/reclaim으로 단일 인스턴스 정합성을 검증하고, 실제 병목이나 다중 인스턴스 요구가 생기기 전에는 Redis·분산 lock·대기열을 도입하지 않는다.
 
-상세 fixture와 한계는 [결제 전 좌석 임시 점유·만료 부재 기준선](seat-hold-expiration-baseline.md)에 기록한다.
+상세 fixture와 한계는 [결제 전 좌석 임시 점유·만료 부재 기준선](archive/seat-hold/seat-hold-expiration-baseline.md)에 기록한다.
 
 ### 링크
 
@@ -564,7 +564,7 @@ TTL은 기본 5분이며 `Clock`을 주입한다. 같은 사용자의 재요청�
 
 점유와 해제도 예약과 같은 canonical 좌석 번호 순서로 row를 잠근다. 앞 좌석을 변경한 뒤 뒤 좌석에서 타인 점유를 발견해도 transaction 전체가 rollback된다. 활성 점유는 소유자만 예약할 수 있고 예약 성공 시 `RESERVED`로 바뀌면서 점유 정보가 제거된다. Frontend 전환 전 호환을 위해 점유가 없는 기존 예약 경로는 아직 허용하지만, 타인의 활성 점유는 409로 거부한다.
 
-좌석 조회는 기존 Frontend가 점유 좌석을 선택하지 않도록 `reserved=true`를 유지하면서 새 필드 `availability=HELD`, `holdExpiresAt`을 함께 제공한다. 소유자 식별자는 응답에 노출하지 않는다. 상세 상태 표와 fixture 한계는 [DB 기반 좌석 임시 점유·만료 상태 전이](seat-hold-expiration-state-transition.md)에 기록한다.
+좌석 조회는 기존 Frontend가 점유 좌석을 선택하지 않도록 `reserved=true`를 유지하면서 새 필드 `availability=HELD`, `holdExpiresAt`을 함께 제공한다. 소유자 식별자는 응답에 노출하지 않는다. 상세 상태 표와 fixture 한계는 [DB 기반 좌석 임시 점유·만료 상태 전이](archive/seat-hold/seat-hold-expiration-state-transition.md)에 기록한다.
 
 ### 링크
 
@@ -584,7 +584,7 @@ TTL은 기본 5분이며 `Clock`을 주입한다. 같은 사용자의 재요청�
 
 distributed는 150 RPS까지, hot 경합은 200 RPS까지 목표 도달률 100%와 Hikari pending 0을 유지했다. 단일 좌석 lock wait는 200 RPS에서 중앙값 142회·722ms까지 증가했지만 p95 29.37ms, dropped·deadlock 0이었다. 검증 범위 안에서 Redis lock이나 대기열을 추가할 근거가 없으므로 다음 단계는 Frontend 점유 연동과 legacy 경로 축소다.
 
-상세 조건·수치·한계는 [좌석 임시 점유 API의 고경합 부하 기준선](seat-hold-contention-performance-baseline.md)에 기록한다.
+상세 조건·수치·한계는 [좌석 임시 점유 API의 고경합 부하 기준선](archive/seat-hold/seat-hold-contention-performance-baseline.md)에 기록한다.
 
 ### 링크
 
@@ -604,7 +604,7 @@ distributed는 150 RPS까지, hot 경합은 200 RPS까지 목표 도달률 100%�
 
 Checkout은 선택 좌석 중 가장 이른 hold 만료를 사용하지만 다른 좌석은 더 늦게 만료될 수 있다. 하나의 Checkout 만료로 모든 Seat를 복구하면 원래 상태를 훼손한다. 귀속 row에 좌석별 `originalHoldExpiresAt`과 별도 `verificationLeaseUntil`을 두고, 알려진 실패 때 검증 기한과 정확히 일치하는 Seat만 조건부 복구했다.
 
-상세 상태표·잠금 순서·fixture와 한계는 [Checkout 결제 검증 claim과 bounded 좌석 lease](checkout-payment-verification-claim.md), 도입·보류 판단은 [ADR-0002](adr/0002-bounded-checkout-payment-verification-claim.md)에 기록한다.
+상세 상태표·잠금 순서·fixture와 한계는 [Checkout 결제 검증 claim과 bounded 좌석 lease](archive/checkout/checkout-payment-verification-claim.md), 도입·보류 판단은 [ADR-0002](adr/0002-bounded-checkout-payment-verification-claim.md)에 기록한다.
 
 ### 링크
 
@@ -617,7 +617,7 @@ Checkout은 선택 좌석 중 가장 이른 hold 만료를 사용하지만 다�
 소유하고 구역 요약과 선택 구역 상세를 분리했다. 2,000석은 전체 응답하지 않고 10개 구역의
 집계 후 구역당 200석만 탐색한다. 이는 실제 공연장 모델이 아니라 가상 fixture 계약이다.
 
-상세 개념·코드 경로·검증·한계는 [가상 공연장 layout·구역별 좌석 API 계약](virtual-seat-layout-api.md)과
+상세 개념·코드 경로·검증·한계는 [가상 공연장 layout·구역별 좌석 API 계약](archive/seat-hold/virtual-seat-layout-api.md)과
 [ADR-0003](adr/0003-server-owned-virtual-seat-layout.md)에 기록했다.
 
 ### 링크

@@ -70,4 +70,4 @@ deadlock 무제한 retry, Redis 분산 lock과 대기열은 도입하지 않는�
 - [PR #16](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/16)
 - [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)
 - [복수 좌석 잠금 순서와 deadlock 기준선](multi-seat-lock-order-deadlock-baseline.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)

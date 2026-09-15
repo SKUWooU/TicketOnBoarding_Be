@@ -180,5 +180,5 @@ Issue #53에서 동일 조건 warmup·반복과 시나리오별 단계 측정을
 - [Backend Issue #53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
 - [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)
 - [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
-- [학습·개선 여정](LEARNING_JOURNEY.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)
+- [학습·개선 여정](../../LEARNING_JOURNEY.md)

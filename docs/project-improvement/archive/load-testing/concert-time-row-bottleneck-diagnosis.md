@@ -156,7 +156,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 
 - [Backend Issue #55](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/55)
 - [가상 좌석 고경합의 단계별 성능 기준선](staged-contention-performance-baseline.md)
-- [좌석 복합 인덱스와 deadlock 비교 기준선](seat-composite-index-deadlock-comparison.md)
-- [좌석 복합 unique index migration 안전성 기준선](seat-unique-index-migration-baseline.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
-- [학습·개선 여정](LEARNING_JOURNEY.md)
+- [좌석 복합 인덱스와 deadlock 비교 기준선](../foundations/seat-composite-index-deadlock-comparison.md)
+- [좌석 복합 unique index migration 안전성 기준선](../foundations/seat-unique-index-migration-baseline.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)
+- [학습·개선 여정](../../LEARNING_JOURNEY.md)

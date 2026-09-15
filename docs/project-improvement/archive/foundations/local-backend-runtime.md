@@ -48,7 +48,7 @@ named volume `ticketonboarding_be_onticket-mariadb-data`를 사용한다. `docke
 - Spring Batch job 자동 실행 비활성화
 - JWT issuer와 외부 연동 placeholder의 local 기본값
 
-`ddl-auto=create`는 Backend를 시작할 때 application table을 다시 만든다. named volume이 남아 있어도 application data가 보존되는 환경이 아니며 운영 schema 정책으로 사용하지 않는다. Flyway 전환 조건은 [ADR-0001](adr/0001-schema-migration-ownership.md)을 따른다.
+`ddl-auto=create`는 Backend를 시작할 때 application table을 다시 만든다. named volume이 남아 있어도 application data가 보존되는 환경이 아니며 운영 schema 정책으로 사용하지 않는다. Flyway 전환 조건은 [ADR-0001](../../adr/0001-schema-migration-ownership.md)을 따른다.
 
 ## 실행
 
@@ -160,5 +160,5 @@ docker compose -f compose.yml down -v
 
 - [Issue #19](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/19)
 - [PR #20](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/20)
-- [Backend 아키텍처 학습 기준선](backend-architecture-learning-baseline.md)
-- [ADR-0001](adr/0001-schema-migration-ownership.md)
+- [Backend 아키텍처 학습 기준선](../../backend-architecture-learning-baseline.md)
+- [ADR-0001](../../adr/0001-schema-migration-ownership.md)

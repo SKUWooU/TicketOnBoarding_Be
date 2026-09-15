@@ -165,5 +165,5 @@ Backend CI는 Ubuntu `pwsh`에서 이 fixture 검사와 Issue #53의 baseline ru
 - [가상 좌석 2,000석 고경합 부하 측정 기반](high-contention-load-test-harness.md)
 - [회차 잔여 좌석 단일 행 병목 가설의 SQL별 진단](concert-time-row-bottleneck-diagnosis.md)
 - [좌석 경합 실패의 HTTP 409 계약](seat-contention-http-contract.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
-- [학습·개선 여정](LEARNING_JOURNEY.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)
+- [학습·개선 여정](../../LEARNING_JOURNEY.md)

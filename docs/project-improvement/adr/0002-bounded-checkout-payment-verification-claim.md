@@ -55,6 +55,6 @@ Issue #79에서 transaction 밖의 mock 결제 검증 중 Checkout이 만료되�
 
 ## 관련 근거
 
-- [Issue #79 기준선](../checkout-verification-expiry-race-baseline.md)
-- [Issue #82 개선 근거](../checkout-payment-verification-claim.md)
+- [Issue #79 기준선](../archive/checkout/checkout-verification-expiry-race-baseline.md)
+- [Issue #82 개선 근거](../archive/checkout/checkout-payment-verification-claim.md)
 - [ADR-0001 schema migration 소유권](0001-schema-migration-ownership.md)

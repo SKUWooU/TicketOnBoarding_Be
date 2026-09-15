@@ -147,5 +147,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 - [Backend Issue #63](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/63)
 - [Backend Issue #65](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/65)
 - [DB 기반 좌석 임시 점유·만료 상태 전이](seat-hold-expiration-state-transition.md)
-- [좌석 잠금 복합 unique index의 고경합 A/B](seat-composite-index-high-contention-ab.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
+- [좌석 잠금 복합 unique index의 고경합 A/B](../load-testing/seat-composite-index-high-contention-ab.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)

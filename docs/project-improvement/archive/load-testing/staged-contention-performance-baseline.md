@@ -165,5 +165,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 - [Backend Issue #53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53)
 - [가상 좌석 2,000석 고경합 부하 측정 기반](high-contention-load-test-harness.md)
 - [고경합 부하의 경량 Hikari·MariaDB 관측 경계](lightweight-contention-observability.md)
-- [개선 근거 연결표](EVIDENCE_MAP.md)
-- [학습·개선 여정](LEARNING_JOURNEY.md)
+- [개선 근거 연결표](../../EVIDENCE_MAP.md)
+- [학습·개선 여정](../../LEARNING_JOURNEY.md)

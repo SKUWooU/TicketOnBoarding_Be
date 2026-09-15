@@ -100,5 +100,5 @@ remaining seats = 22
 - [PR #10](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/10)
 - [예매 transaction·경합 기준선](reservation-transaction-concurrency-baseline.md)
 - [예약 원자성·잔여 좌석 정합성 개선](reservation-atomicity-inventory-consistency.md)
-- [Backend 아키텍처 학습 기준선](backend-architecture-learning-baseline.md)
+- [Backend 아키텍처 학습 기준선](../../backend-architecture-learning-baseline.md)
 - [Jakarta Persistence lock mode](https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1#locking-and-concurrency)
