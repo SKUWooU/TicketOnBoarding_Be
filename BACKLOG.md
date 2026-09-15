@@ -18,6 +18,8 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 | 7 | BE | 고경합 병목 위치가 측정되지 않았다 | 2,000석 fixture·k6·Actuator 실행 기반 구성 후 단계별 TPS·p95·오류율, lock wait, Hikari 시계열 측정 | 운영 SLA 주장 | 측정·경합 HTTP 계약·관측 경계 완료 ([#47](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/47), [#49](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/49), [#51](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/51)); 50→100 RPS 변곡·SQL 병목 격리·복합 unique index A/B에서 p95 3,064.39→143.41ms·pending 189→0 확인 ([#53](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/53), [#55](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/55), [#57](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/57)); Entity 신규 schema 구현·로컬 검증 완료 ([#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)); 서버 hold 판정·commit transition과 k6 결과 교차 계측 완료 ([#91](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/91)); hold/release churn으로 정상 409와 Hikari pending 포화 신호 분리 ([#110](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/110)); pool 10/16/24 단일 matrix에서 24의 방향성은 확인했으나 반복 전 local 기본 10 유지 ([#112](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/112)) |
 | 8 | BE | 비동기·분산 구조의 필요성이 확인되지 않았다 | burst 수용 한계, 이벤트 유실, 독립 재시도 요구 | 기술 시연 목적의 도입 | 보류 |
 
+Phase 7의 Hikari pool은 local 2,000석 distributed churn 200 RPS 반복 matrix에서 10·16·24를 warm-up 분리 후 각 3회 비교했다. 24는 10 대비 완료율 중앙값 89.71%→99.15%, hold/cycle p95 1,109.21/2,048.2ms→431.60/886ms, pending 188→114를 보였다. 이 근거로 local profile 기본값만 24로 조정했으며, 운영 pool·SLA·다중 인스턴스 최적화는 별도 재현 전 보류한다 ([#114](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/114)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`
