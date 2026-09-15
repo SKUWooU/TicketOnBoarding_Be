@@ -17,9 +17,17 @@
 
 ## 완료
 
+### Backend Issue #112 — 좌석 hold churn Hikari pool matrix 검증
+
+- PR: [#113](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/113) / squash: 병합 대기
+- 결과: local Hikari max를 환경 변수로 명시하고 실제 Prometheus max 계약, process·system CPU·JVM heap 보조 지표를 추가해 pool 10/16/24의 동일 churn 조건을 비교
+- 검증: PowerShell 48·56 assertions·k6 3회·각 실행 final snapshot/domain metric gate 통과. 완료율 86.21/84.81/93.46%, cycle p95 2,451/2,223/1,640.5ms, pending 188/183/176, DB lock wait·deadlock 0. 단일 local 진단이므로 기본값 10 유지
+- 근거: [좌석 hold churn Hikari pool matrix](docs/project-improvement/archive/load-testing/seat-hold-hikari-pool-matrix.md)
+- 제외: 운영 pool 변경·SLA 주장·반복 matrix 확정·Redis·대기열·Kafka·Frontend·외부 API 호출
+
 ### Backend Issue #110 — 좌석 hold 고경합 포화 구간과 자원 병목 기준선
 
-- PR: [#111](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/111) / squash: 병합 대기
+- PR: [#111](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/111) / squash `843737b`
 - 결과: 가상 2,000석의 hold→release churn과 commit 기준 hold/release metric·Hikari·MariaDB·snapshot 교차 gate를 구성
 - 검증: PowerShell 56 assertions·Backend 전체 235 tests·k6 syntax·local fixture smoke 통과. distributed 200 RPS에서 정상 409·DB lock wait 없이 pending 188·완료율 96.55%·cycle p95 1,333ms 관찰, hot-seat 100 RPS는 409 508·dropped 0·pending 0·cycle p95 37ms
 - 근거: [좌석 hold churn 고경합 포화 기준선](docs/project-improvement/archive/load-testing/seat-hold-churn-saturation-baseline.md)

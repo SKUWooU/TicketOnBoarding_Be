@@ -47,6 +47,10 @@ hikaricp_connections_idle{application="onticket-loadtest",pool="HikariPool-1",} 
 hikaricp_connections_idle{application="onticket-loadtest",pool="HikariPool-2",} 4.0
 hikaricp_connections_max{application="onticket-loadtest",pool="HikariPool-1",} 10.0
 hikaricp_connections_max{application="onticket-loadtest",pool="HikariPool-2",} 5.0
+process_cpu_usage 0.25
+system_cpu_usage 0.50
+jvm_memory_used_bytes{area="heap",id="G1 Eden Space",} 100.0
+jvm_memory_used_bytes{area="heap",id="G1 Old Gen",} 200.0
 '@
 $issue51Hikari = ConvertFrom-PrometheusHikari -Text $issue51PrometheusFixture
 Assert-Issue51Equal $issue51Hikari.Active 3.0 'Hikari active values must be summed across pools.'
@@ -54,6 +58,11 @@ Assert-Issue51Equal $issue51Hikari.Pending 1.0 'Hikari pending values must be su
 Assert-Issue51Equal $issue51Hikari.Idle 11.0 'Hikari idle values must be summed across pools.'
 Assert-Issue51Equal $issue51Hikari.Max 15.0 'Hikari max values must be summed across pools.'
 Assert-Issue51Throws { ConvertFrom-PrometheusHikari -Text 'hikaricp_connections_active 1.0' } 'Missing Hikari metrics must fail parsing.'
+$issue112Runtime = ConvertFrom-PrometheusRuntimeMetrics -Text $issue51PrometheusFixture
+Assert-Issue51Equal $issue112Runtime.ProcessCpuUsage 0.25 'Process CPU must be parsed.'
+Assert-Issue51Equal $issue112Runtime.SystemCpuUsage 0.50 'System CPU must be parsed.'
+Assert-Issue51Equal $issue112Runtime.HeapUsedBytes 300.0 'Heap usage must sum heap pools.'
+Assert-Issue51Throws { ConvertFrom-PrometheusRuntimeMetrics -Text 'process_cpu_usage 0.1' } 'Missing runtime metrics must fail parsing.'
 
 $issue51BeforeDb = ConvertFrom-MariaDbStatus -Lines @'
 Innodb_deadlocks	2
@@ -79,18 +88,21 @@ $issue51Samples = @(
     [pscustomobject]@{
         ElapsedMilliseconds = 0
         HikariActive = 0; HikariPending = 0; HikariIdle = 10; HikariMax = 10
+        ProcessCpuUsage = 0.1; SystemCpuUsage = 0.2; HeapUsedBytes = 100
         DbRowLockCurrentWaits = 0; DbRowLockWaits = 4; DbRowLockTimeMs = 100
         DbDeadlocks = 2; DbThreadsConnected = 11; DbThreadsRunning = 1
     },
     [pscustomobject]@{
         ElapsedMilliseconds = 1000
         HikariActive = 8; HikariPending = 3; HikariIdle = 2; HikariMax = 10
+        ProcessCpuUsage = 0.5; SystemCpuUsage = 0.6; HeapUsedBytes = 300
         DbRowLockCurrentWaits = 2; DbRowLockWaits = 7; DbRowLockTimeMs = 220
         DbDeadlocks = 2; DbThreadsConnected = 12; DbThreadsRunning = 5
     },
     [pscustomobject]@{
         ElapsedMilliseconds = 2200
         HikariActive = 1; HikariPending = 0; HikariIdle = 9; HikariMax = 10
+        ProcessCpuUsage = 0.2; SystemCpuUsage = 0.4; HeapUsedBytes = 200
         DbRowLockCurrentWaits = 0; DbRowLockWaits = 9; DbRowLockTimeMs = 370
         DbDeadlocks = 3; DbThreadsConnected = 11; DbThreadsRunning = 1
     }
@@ -102,6 +114,8 @@ Assert-Issue51Equal $issue51Summary.Sampling.AverageIntervalMs 1100 'Average sam
 Assert-Issue51Equal $issue51Summary.Sampling.MaximumIntervalMs 1200 'Maximum sample interval must be calculated.'
 Assert-Issue51Equal $issue51Summary.Peaks.HikariActive 8.0 'Hikari active peak must be calculated.'
 Assert-Issue51Equal $issue51Summary.Peaks.HikariPending 3.0 'Hikari pending peak must be calculated.'
+Assert-Issue51Equal $issue51Summary.Peaks.ProcessCpuUsage 0.5 'Process CPU peak must be calculated.'
+Assert-Issue51Equal $issue51Summary.Peaks.HeapUsedBytes 300.0 'Heap peak must be calculated.'
 Assert-Issue51Equal $issue51Summary.Peaks.DbRowLockCurrentWaits 2 'DB current wait peak must be calculated.'
 Assert-Issue51Equal $issue51Summary.Deltas.DbRowLockWaits 5 'DB row lock wait delta must be calculated.'
 Assert-Issue51Equal $issue51Summary.Deltas.DbRowLockTimeMs 270 'DB row lock time delta must be calculated.'
@@ -119,12 +133,14 @@ $issue51MiddleResetSamples = @(
     [pscustomobject]@{
         ElapsedMilliseconds = 1000
         HikariActive = 1; HikariPending = 0; HikariIdle = 9; HikariMax = 10
+        ProcessCpuUsage = 0.1; SystemCpuUsage = 0.2; HeapUsedBytes = 100
         DbRowLockCurrentWaits = 0; DbRowLockWaits = 0; DbRowLockTimeMs = 0
         DbDeadlocks = 0; DbThreadsConnected = 11; DbThreadsRunning = 1
     },
     [pscustomobject]@{
         ElapsedMilliseconds = 2000
         HikariActive = 1; HikariPending = 0; HikariIdle = 9; HikariMax = 10
+        ProcessCpuUsage = 0.1; SystemCpuUsage = 0.2; HeapUsedBytes = 100
         DbRowLockCurrentWaits = 0; DbRowLockWaits = 10; DbRowLockTimeMs = 400
         DbDeadlocks = 3; DbThreadsConnected = 11; DbThreadsRunning = 1
     }
