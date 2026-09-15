@@ -17,9 +17,17 @@
 
 ## 완료
 
+### Backend Issue #110 — 좌석 hold 고경합 포화 구간과 자원 병목 기준선
+
+- PR: [#111](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/111) / squash: 병합 대기
+- 결과: 가상 2,000석의 hold→release churn과 commit 기준 hold/release metric·Hikari·MariaDB·snapshot 교차 gate를 구성
+- 검증: PowerShell 56 assertions·Backend 전체 235 tests·k6 syntax·local fixture smoke 통과. distributed 200 RPS에서 정상 409·DB lock wait 없이 pending 188·완료율 96.55%·cycle p95 1,333ms 관찰, hot-seat 100 RPS는 409 508·dropped 0·pending 0·cycle p95 37ms
+- 근거: [좌석 hold churn 고경합 포화 기준선](docs/project-improvement/archive/load-testing/seat-hold-churn-saturation-baseline.md)
+- 제외: 실제 외부 호출, 운영 SLA, Hikari 설정 선제 조정, Redis·대기열·Kafka·Frontend 변경
+
 ### Backend Issue #108 — 개선 근거 문서 아카이브 구조 정리
 
-- PR: [#109](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/109) / squash: 병합 대기
+- PR: [#109](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/109) / squash `1d32227`
 - 결과: 상세 근거 33개를 `foundations`·`load-testing`·`seat-hold`·`checkout`으로 재배치하고, 문서 인덱스와 전체 상대 링크를 정리
 - 검증: Markdown 상대 링크 전수 검사·`git diff --check` 통과. 애플리케이션·Frontend·CI와 외부 API 호출은 변경하지 않음
 - 제외: 문서 내용 축약 또는 삭제, 애플리케이션·Frontend·CI 변경, 외부 API 호출
