@@ -176,6 +176,7 @@ try {
     $issue91AfterPrometheus = Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get
     $issue91DomainAfter = ConvertFrom-PrometheusSeatHoldDomainMetrics -Text $issue91AfterPrometheus.Content
     $issue91DomainDelta = Assert-SeatHoldDomainMetricDelta -Before $issue91DomainBefore -After $issue91DomainAfter -K6Summary $issue65K6Summary
+    Assert-SeatHoldDomainScenarioGate -K6Summary $issue65K6Summary -Snapshot $issue65Snapshot -DomainMetricDelta $issue91DomainDelta | Out-Null
     $issue65MetricSummary = New-ContentionMetricsSummary -Samples $issue65Samples.ToArray()
     $issue65Samples | Export-Csv -LiteralPath $issue65SamplesPath -NoTypeInformation -Encoding UTF8
 

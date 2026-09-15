@@ -343,6 +343,57 @@ function Assert-SeatHoldDomainMetricDelta {
     [pscustomobject]$issue91Delta
 }
 
+function Assert-SeatHoldDomainScenarioGate {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object]$K6Summary,
+        [Parameter(Mandatory = $true)][object]$Snapshot,
+        [Parameter(Mandatory = $true)][object]$DomainMetricDelta
+    )
+
+    $issue106Success = [long]$K6Summary.HoldSuccess
+    $issue106Transitions = [long]$DomainMetricDelta.HoldAcquired +
+        [long]$DomainMetricDelta.HoldReused +
+        [long]$DomainMetricDelta.HoldReclaimed
+
+    if ($issue106Transitions -ne $issue106Success) {
+        throw "Committed hold transitions do not match successful requests: transitions=$issue106Transitions success=$issue106Success"
+    }
+    if ([long]$DomainMetricDelta.HoldInvalid -ne 0 -or [long]$DomainMetricDelta.HoldError -ne 0) {
+        throw "Seat-hold scenario contains invalid or error outcomes: invalid=$($DomainMetricDelta.HoldInvalid) error=$($DomainMetricDelta.HoldError)"
+    }
+
+    switch ([string]$K6Summary.Scenario) {
+        'distributed' {
+            if ([long]$Snapshot.activeHeldSeats -ne $issue106Success -or
+                [long]$DomainMetricDelta.HoldAcquired -ne $issue106Success -or
+                [long]$DomainMetricDelta.HoldReused -ne 0 -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0) {
+                throw 'Distributed scenario must persist one newly acquired hold for every successful request.'
+            }
+        }
+        'hot-section' {
+            $issue106ExpectedDistinctSeats = [math]::Min(40, [long]$K6Summary.Iterations)
+            if ([long]$Snapshot.activeHeldSeats -ne $issue106ExpectedDistinctSeats -or
+                [long]$DomainMetricDelta.HoldAcquired -ne $issue106ExpectedDistinctSeats -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0) {
+                throw 'Hot-section scenario must acquire each of the 40 fixture seats once without reclaiming an active hold.'
+            }
+        }
+        'hot-seat' {
+            $issue106ExpectedDistinctSeats = [math]::Min(1, [long]$K6Summary.Iterations)
+            if ([long]$Snapshot.activeHeldSeats -ne $issue106ExpectedDistinctSeats -or
+                [long]$DomainMetricDelta.HoldAcquired -ne $issue106ExpectedDistinctSeats -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0) {
+                throw 'Hot-seat scenario must retain exactly one initially acquired hold without reclaiming it.'
+            }
+        }
+        default { throw "Unsupported seat-hold scenario: $($K6Summary.Scenario)" }
+    }
+
+    $true
+}
+
 function New-Issue65Range {
     param([double[]]$Values)
     [pscustomobject]@{
@@ -392,6 +443,7 @@ Export-ModuleMember -Function @(
     'Assert-SeatHoldFinalState',
     'ConvertFrom-PrometheusSeatHoldDomainMetrics',
     'Assert-SeatHoldDomainMetricDelta',
+    'Assert-SeatHoldDomainScenarioGate',
     'New-SeatHoldBaselinePlan',
     'Get-SeatHoldBaselineStopReasons',
     'New-SeatHoldBaselineAggregate'

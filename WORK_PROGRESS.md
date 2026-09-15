@@ -13,7 +13,11 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #106 — 좌석 hold 도메인 메트릭 시나리오 검증 gate
+
+- Branch: `test/#106-seat-domain-metric-scenarios`
+- 범위: distributed·hot-section·hot-seat 부하와 만료·재점유 fixture에서 k6 결과, DB snapshot, commit 이후 hold metric delta의 시나리오별 계약을 검증
+- 제외: Prometheus/Grafana 서버·대시보드, Checkout 전용 계측, MCP, Frontend, migration, Kafka/outbox/SSE, 실제 외부 호출
 
 ## 완료
 

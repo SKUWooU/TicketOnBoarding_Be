@@ -158,6 +158,19 @@ $issue65HotSeatRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -
 $issue65HotSeatSummary = New-SeatHoldRunSummary -Result $issue65HotSeatRaw -DurationSeconds 10
 $issue65HotSeatSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 1)
 Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue65HotSeatSummary -Snapshot $issue65HotSeatSnapshot) 'hot-seat final state allows owner retry'
+
+$issue106DistributedDomain = [pscustomobject]@{ HoldSuccess = 100; HoldConflict = 0; HoldInvalid = 0; HoldError = 0; HoldAcquired = 100; HoldReused = 0; HoldReclaimed = 0 }
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue65Summary -Snapshot $issue65Snapshot -DomainMetricDelta $issue106DistributedDomain) 'distributed domain scenario gate'
+$issue106HotSectionDomain = [pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 0; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0 }
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue65HotSectionSummary -Snapshot $issue65HotSectionSnapshot -DomainMetricDelta $issue106HotSectionDomain) 'hot-section domain scenario gate'
+$issue106HotSeatDomain = [pscustomobject]@{ HoldSuccess = 2; HoldConflict = 98; HoldInvalid = 0; HoldError = 0; HoldAcquired = 1; HoldReused = 1; HoldReclaimed = 0 }
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue65HotSeatSummary -Snapshot $issue65HotSeatSnapshot -DomainMetricDelta $issue106HotSeatDomain) 'hot-seat domain scenario gate'
+Assert-Issue65Throws {
+    Assert-SeatHoldDomainScenarioGate -K6Summary $issue65HotSeatSummary -Snapshot $issue65HotSeatSnapshot -DomainMetricDelta ([pscustomobject]@{ HoldSuccess = 2; HoldConflict = 98; HoldInvalid = 0; HoldError = 0; HoldAcquired = 2; HoldReused = 0; HoldReclaimed = 0 })
+} 'hot-seat multiple acquisition must fail'
+Assert-Issue65Throws {
+    Assert-SeatHoldDomainScenarioGate -K6Summary $issue65HotSectionSummary -Snapshot $issue65HotSectionSnapshot -DomainMetricDelta ([pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 1; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0 })
+} 'domain error outcome must fail'
 Assert-Issue65Throws { Assert-SeatHoldFinalState -Summary $issue65Summary -Snapshot (ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 99)) } 'distributed persistence mismatch'
 Assert-Issue65Throws { Assert-SeatHoldFinalState -Summary $issue65Summary -Snapshot (ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 100 -Invariant $false)) } 'false invariant'
 
