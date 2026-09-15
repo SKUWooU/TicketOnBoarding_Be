@@ -14,6 +14,7 @@ param(
     [string]$OutputDirectory = '',
     [string]$DatabaseUser = 'onticket',
     [string]$DatabasePassword = 'onticket',
+    [ValidateRange(0, 100)][int]$ExpectedHikariMax = 0,
     [switch]$DisablePerformanceThresholds
 )
 
@@ -90,6 +91,7 @@ function Get-Issue65MetricSample {
     param([Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch)
     $issue65Prometheus = Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get
     $issue65Hikari = ConvertFrom-PrometheusHikari -Text $issue65Prometheus.Content
+    $issue112Runtime = ConvertFrom-PrometheusRuntimeMetrics -Text $issue65Prometheus.Content
     $issue65Db = Get-Issue65MariaDbStatus
     [pscustomobject]@{
         TimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
@@ -98,6 +100,9 @@ function Get-Issue65MetricSample {
         HikariPending = $issue65Hikari.Pending
         HikariIdle = $issue65Hikari.Idle
         HikariMax = $issue65Hikari.Max
+        ProcessCpuUsage = $issue112Runtime.ProcessCpuUsage
+        SystemCpuUsage = $issue112Runtime.SystemCpuUsage
+        HeapUsedBytes = $issue112Runtime.HeapUsedBytes
         DbRowLockCurrentWaits = $issue65Db.RowLockCurrentWaits
         DbRowLockWaits = $issue65Db.RowLockWaits
         DbRowLockTimeMs = $issue65Db.RowLockTimeMs
@@ -116,6 +121,9 @@ $issue65StderrTask = $null
 
 try {
     $issue65Samples.Add((Get-Issue65MetricSample -Stopwatch $issue65Stopwatch))
+    if ($ExpectedHikariMax -gt 0 -and [int]$issue65Samples[0].HikariMax -ne $ExpectedHikariMax) {
+        throw "Hikari maximum does not match the requested matrix variant: expected=$ExpectedHikariMax actual=$($issue65Samples[0].HikariMax)"
+    }
     $issue65K6Executable = $issue65K6Command.Source
     if ([string]::IsNullOrWhiteSpace($issue65K6Executable)) {
         $issue65K6Executable = $issue65K6Command.Path
@@ -178,6 +186,9 @@ try {
     $issue91DomainDelta = Assert-SeatHoldDomainMetricDelta -Before $issue91DomainBefore -After $issue91DomainAfter -K6Summary $issue65K6Summary
     Assert-SeatHoldDomainScenarioGate -K6Summary $issue65K6Summary -Snapshot $issue65Snapshot -DomainMetricDelta $issue91DomainDelta | Out-Null
     $issue65MetricSummary = New-ContentionMetricsSummary -Samples $issue65Samples.ToArray()
+    if ($ExpectedHikariMax -gt 0 -and [int]$issue65MetricSummary.Peaks.HikariMax -ne $ExpectedHikariMax) {
+        throw "Hikari maximum changed during the matrix run: expected=$ExpectedHikariMax actual=$($issue65MetricSummary.Peaks.HikariMax)"
+    }
     $issue65Samples | Export-Csv -LiteralPath $issue65SamplesPath -NoTypeInformation -Encoding UTF8
 
     $issue65Summary = [ordered]@{

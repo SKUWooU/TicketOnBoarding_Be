@@ -48,6 +48,34 @@ function ConvertFrom-PrometheusHikari {
     }
 }
 
+function ConvertFrom-PrometheusRuntimeMetrics {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $issue112ProcessCpu = $null
+    $issue112SystemCpu = $null
+    $issue112HeapUsed = 0.0
+    $issue112HeapSamples = 0
+    foreach ($issue112Line in ($Text -split "`r?`n")) {
+        if ($issue112Line -match '^process_cpu_usage(?:\{[^}]*\})?\s+([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*$') {
+            $issue112ProcessCpu = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
+        } elseif ($issue112Line -match '^system_cpu_usage(?:\{[^}]*\})?\s+([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*$') {
+            $issue112SystemCpu = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
+        } elseif ($issue112Line -match '^jvm_memory_used_bytes\{[^}]*area="heap"[^}]*\}\s+([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*$') {
+            $issue112HeapUsed += [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture)
+            $issue112HeapSamples += 1
+        }
+    }
+    if ($null -eq $issue112ProcessCpu -or $null -eq $issue112SystemCpu -or $issue112HeapSamples -eq 0) {
+        throw 'Required JVM/process Prometheus metrics are missing.'
+    }
+    [pscustomobject]@{
+        ProcessCpuUsage = $issue112ProcessCpu
+        SystemCpuUsage = $issue112SystemCpu
+        HeapUsedBytes = $issue112HeapUsed
+    }
+}
+
 function ConvertFrom-MariaDbStatus {
     [CmdletBinding()]
     param(
@@ -142,6 +170,9 @@ function New-ContentionMetricsSummary {
             HikariPending        = [double](($Samples | Measure-Object -Property HikariPending -Maximum).Maximum)
             HikariIdle           = [double](($Samples | Measure-Object -Property HikariIdle -Maximum).Maximum)
             HikariMax            = [double](($Samples | Measure-Object -Property HikariMax -Maximum).Maximum)
+            ProcessCpuUsage       = [double](($Samples | Measure-Object -Property ProcessCpuUsage -Maximum).Maximum)
+            SystemCpuUsage        = [double](($Samples | Measure-Object -Property SystemCpuUsage -Maximum).Maximum)
+            HeapUsedBytes         = [double](($Samples | Measure-Object -Property HeapUsedBytes -Maximum).Maximum)
             DbRowLockCurrentWaits = [long](($Samples | Measure-Object -Property DbRowLockCurrentWaits -Maximum).Maximum)
             DbThreadsConnected   = [long](($Samples | Measure-Object -Property DbThreadsConnected -Maximum).Maximum)
             DbThreadsRunning     = [long](($Samples | Measure-Object -Property DbThreadsRunning -Maximum).Maximum)
@@ -352,6 +383,7 @@ function Assert-K6ContentionRunIdentity {
 
 Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusHikari',
+    'ConvertFrom-PrometheusRuntimeMetrics',
     'ConvertFrom-MariaDbStatus',
     'Assert-ContentionRunId',
     'New-ContentionMetricsSummary',
