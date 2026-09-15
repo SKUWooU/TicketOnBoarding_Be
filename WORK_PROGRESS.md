@@ -17,6 +17,14 @@
 
 ## 완료
 
+### Backend Issue #116 — 좌석 hold JVM·MariaDB 자원 병목 분리 관측
+
+- PR: [#117](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/117) / squash: 병합 대기
+- 결과: JVM GC·live thread와 opt-in MariaDB container CPU·memory를 Hikari churn summary에 연결하고 누락 fail gate 구성
+- 검증: parser 59·seat-hold 56 assertions, local 2,000석 diagnostic의 snapshot/domain gate 통과. process/system CPU 49.27/99.76%, MariaDB CPU 77.27%, GC 0.084초/16회이나 Docker stats 표본 평균 5,083ms로 보조 진단 한정
+- 근거: [좌석 hold JVM·MariaDB 자원 관측](docs/project-improvement/archive/load-testing/seat-hold-jvm-mariadb-observability.md)
+- 제외: 운영 CPU·SLA 주장·GC tuning·Grafana·Redis·대기열·Kafka·Frontend·외부 API 호출
+
 ### Backend Issue #114 — 좌석 hold Hikari pool 반복 matrix 기준선
 
 - PR: [#115](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/115) / squash: 병합 대기

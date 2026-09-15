@@ -15,6 +15,7 @@ param(
     [string]$DatabaseUser = 'onticket',
     [string]$DatabasePassword = 'onticket',
     [ValidateRange(0, 100)][int]$ExpectedHikariMax = 0,
+    [switch]$CollectMariaDbContainerStats,
     [switch]$DisablePerformanceThresholds
 )
 
@@ -87,12 +88,22 @@ function Get-Issue65MariaDbStatus {
     ConvertFrom-MariaDbStatus -Lines $issue65DbOutput
 }
 
+function Get-Issue116MariaDbContainerStats {
+    $issue116Output = & docker compose -f $issue65ComposeFile stats --no-stream --format json mariadb 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "MariaDB container stats failed with exit code $LASTEXITCODE." }
+    $issue116Json = @($issue116Output | Where-Object { $_.Trim().StartsWith('{') })
+    if ($issue116Json.Count -ne 1) { throw 'Expected exactly one MariaDB container stats JSON record.' }
+    ConvertFrom-DockerContainerStats -Json $issue116Json[0]
+}
+
 function Get-Issue65MetricSample {
     param([Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch)
     $issue65Prometheus = Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get
     $issue65Hikari = ConvertFrom-PrometheusHikari -Text $issue65Prometheus.Content
     $issue112Runtime = ConvertFrom-PrometheusRuntimeMetrics -Text $issue65Prometheus.Content
+    $issue116Jvm = ConvertFrom-PrometheusJvmContentionMetrics -Text $issue65Prometheus.Content
     $issue65Db = Get-Issue65MariaDbStatus
+    $issue116Container = if ($CollectMariaDbContainerStats.IsPresent) { Get-Issue116MariaDbContainerStats } else { $null }
     [pscustomobject]@{
         TimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
         ElapsedMilliseconds = $Stopwatch.ElapsedMilliseconds
@@ -103,6 +114,11 @@ function Get-Issue65MetricSample {
         ProcessCpuUsage = $issue112Runtime.ProcessCpuUsage
         SystemCpuUsage = $issue112Runtime.SystemCpuUsage
         HeapUsedBytes = $issue112Runtime.HeapUsedBytes
+        JvmThreadsLive = $issue116Jvm.JvmThreadsLive
+        JvmGcPauseSeconds = $issue116Jvm.JvmGcPauseSeconds
+        JvmGcPauseCount = $issue116Jvm.JvmGcPauseCount
+        MariaDbContainerCpuPercent = if ($null -eq $issue116Container) { $null } else { $issue116Container.ContainerCpuPercent }
+        MariaDbContainerMemoryBytes = if ($null -eq $issue116Container) { $null } else { $issue116Container.ContainerMemoryBytes }
         DbRowLockCurrentWaits = $issue65Db.RowLockCurrentWaits
         DbRowLockWaits = $issue65Db.RowLockWaits
         DbRowLockTimeMs = $issue65Db.RowLockTimeMs

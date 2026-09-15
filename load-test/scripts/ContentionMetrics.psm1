@@ -76,6 +76,33 @@ function ConvertFrom-PrometheusRuntimeMetrics {
     }
 }
 
+function ConvertFrom-PrometheusJvmContentionMetrics {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $threads = $null; $gcSeconds = 0.0; $gcCount = 0.0; $gcSecondsFound = $false; $gcCountFound = $false
+    foreach ($line in ($Text -split "`r?`n")) {
+        if ($line -match '^jvm_threads_live_threads(?:\{[^}]*\})?\s+([0-9.eE+-]+)\s*$') { $threads = [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture) }
+        elseif ($line -match '^jvm_gc_pause_seconds_sum\{[^}]*\}\s+([0-9.eE+-]+)\s*$') { $gcSeconds += [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture); $gcSecondsFound = $true }
+        elseif ($line -match '^jvm_gc_pause_seconds_count\{[^}]*\}\s+([0-9.eE+-]+)\s*$') { $gcCount += [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture); $gcCountFound = $true }
+    }
+    if ($null -eq $threads -or -not $gcSecondsFound -or -not $gcCountFound) { throw 'Required JVM contention metrics are missing.' }
+    [pscustomobject]@{ JvmThreadsLive = $threads; JvmGcPauseSeconds = $gcSeconds; JvmGcPauseCount = $gcCount }
+}
+
+function ConvertFrom-DockerContainerStats {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Json)
+    try { $stats = $Json | ConvertFrom-Json } catch { throw 'Docker container stats are not valid JSON.' }
+    if ([string]::IsNullOrWhiteSpace([string]$stats.CPUPerc) -or [string]::IsNullOrWhiteSpace([string]$stats.MemUsage)) { throw 'Docker container stats are missing CPU or memory.' }
+    if ([string]$stats.CPUPerc -notmatch '^\s*([0-9]+(?:[.,][0-9]+)?)%\s*$') { throw 'Docker container CPU percentage is invalid.' }
+    $cpu = [double]::Parse($Matches[1].Replace(',', '.'), [Globalization.CultureInfo]::InvariantCulture)
+    if ([string]$stats.MemUsage -notmatch '^\s*([0-9]+(?:[.,][0-9]+)?)\s*(B|KiB|MiB|GiB)\s*/') { throw 'Docker container memory usage is invalid.' }
+    $memory = [double]::Parse($Matches[1].Replace(',', '.'), [Globalization.CultureInfo]::InvariantCulture)
+    $multipliers = @{ B = 1; KiB = 1KB; MiB = 1MB; GiB = 1GB }
+    [pscustomobject]@{ ContainerCpuPercent = $cpu; ContainerMemoryBytes = [double]($memory * $multipliers[$Matches[2]]); ContainerName = [string]$stats.Name }
+}
+
 function ConvertFrom-MariaDbStatus {
     [CmdletBinding()]
     param(
@@ -140,6 +167,12 @@ function New-ContentionMetricsSummary {
 
     $issue51First = $Samples[0]
     $issue51Last = $Samples[$Samples.Count - 1]
+    $issue116ContainerSamples = @($Samples | Where-Object {
+            $null -ne $_.MariaDbContainerCpuPercent -and $null -ne $_.MariaDbContainerMemoryBytes
+        })
+    if ($issue116ContainerSamples.Count -ne 0 -and $issue116ContainerSamples.Count -ne $Samples.Count) {
+        throw 'MariaDB container stats must be present for every sample or omitted for every sample.'
+    }
 
     $issue51Intervals = New-Object 'Collections.Generic.List[long]'
     for ($issue51Index = 1; $issue51Index -lt $Samples.Count; $issue51Index += 1) {
@@ -173,6 +206,7 @@ function New-ContentionMetricsSummary {
             ProcessCpuUsage       = [double](($Samples | Measure-Object -Property ProcessCpuUsage -Maximum).Maximum)
             SystemCpuUsage        = [double](($Samples | Measure-Object -Property SystemCpuUsage -Maximum).Maximum)
             HeapUsedBytes         = [double](($Samples | Measure-Object -Property HeapUsedBytes -Maximum).Maximum)
+            JvmThreadsLive        = [double](($Samples | Measure-Object -Property JvmThreadsLive -Maximum).Maximum)
             DbRowLockCurrentWaits = [long](($Samples | Measure-Object -Property DbRowLockCurrentWaits -Maximum).Maximum)
             DbThreadsConnected   = [long](($Samples | Measure-Object -Property DbThreadsConnected -Maximum).Maximum)
             DbThreadsRunning     = [long](($Samples | Measure-Object -Property DbThreadsRunning -Maximum).Maximum)
@@ -181,11 +215,18 @@ function New-ContentionMetricsSummary {
             DbRowLockWaits  = [long]$issue51Last.DbRowLockWaits - [long]$issue51First.DbRowLockWaits
             DbRowLockTimeMs = [long]$issue51Last.DbRowLockTimeMs - [long]$issue51First.DbRowLockTimeMs
             DbDeadlocks     = [long]$issue51Last.DbDeadlocks - [long]$issue51First.DbDeadlocks
+            JvmGcPauseSeconds = [double]$issue51Last.JvmGcPauseSeconds - [double]$issue51First.JvmGcPauseSeconds
+            JvmGcPauseCount = [long]$issue51Last.JvmGcPauseCount - [long]$issue51First.JvmGcPauseCount
         }
+        MariaDbContainer = if ($issue116ContainerSamples.Count -eq 0) { $null } else { [pscustomobject]@{
+                CpuPercentPeak = [double](($issue116ContainerSamples | Measure-Object -Property MariaDbContainerCpuPercent -Maximum).Maximum)
+                MemoryBytesPeak = [double](($issue116ContainerSamples | Measure-Object -Property MariaDbContainerMemoryBytes -Maximum).Maximum)
+            } }
         ObserverEffects = [pscustomobject]@{
             DbCliConnectionIncludedInThreadGauges = $true
             ConnectionsCounterExcluded            = $true
             ComposeHealthcheckMayOpenConnections   = $true
+            DockerStatsCollected                    = ($issue116ContainerSamples.Count -gt 0)
         }
     }
 }
@@ -384,6 +425,8 @@ function Assert-K6ContentionRunIdentity {
 Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusHikari',
     'ConvertFrom-PrometheusRuntimeMetrics',
+    'ConvertFrom-PrometheusJvmContentionMetrics',
+    'ConvertFrom-DockerContainerStats',
     'ConvertFrom-MariaDbStatus',
     'Assert-ContentionRunId',
     'New-ContentionMetricsSummary',
