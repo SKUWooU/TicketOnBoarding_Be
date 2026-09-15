@@ -62,7 +62,7 @@ Gradle wrapper 배포 파일과 의존성 다운로드에는 네트워크가 필
 
 Java 21과 Testcontainers MariaDB 10.11.8 환경을 구성해 가상 좌석 24개로 검증했습니다. 동일 좌석 8개 동시 요청은 한 건만 성공했고, 대기 요청은 commit된 예약 상태를 확인했습니다. 반면 서로 다른 8좌석의 예약은 모두 성공했지만 잔여 수량 감소 7회가 유실됐습니다. 복수 좌석 중 checked exception이 발생하면 앞선 좌석과 예약 row가 부분 commit되는 것도 확인했습니다.
 
-상세 fixture, 반복 횟수, 최종 DB 상태와 한계는 [예매 트랜잭션·경합 기준선](reservation-transaction-concurrency-baseline.md)에 기록합니다. 아직 검증하지 않은 항목은 동시성 fixture로 확인하기 전까지 개선 성과나 결함 확정으로 표현하지 않습니다.
+상세 fixture, 반복 횟수, 최종 DB 상태와 한계는 [예매 트랜잭션·경합 기준선](archive/foundations/reservation-transaction-concurrency-baseline.md)에 기록합니다. 아직 검증하지 않은 항목은 동시성 fixture로 확인하기 전까지 개선 성과나 결함 확정으로 표현하지 않습니다.
 
 ## Frontend
 

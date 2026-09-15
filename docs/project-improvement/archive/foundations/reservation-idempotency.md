@@ -46,7 +46,7 @@ Service 통합 테스트는 반복 invocation을 포함해 29개, Controller는 
 ## 적용 한계와 후속 조건
 
 - 현재 Frontend는 `Idempotency-Key`를 보내지 않으므로 실제 화면 호출은 아직 기존 호환 경로를 사용한다. Frontend 연동은 별도 저장소 Issue가 필요하다.
-- `reservation_booking`과 `booking_id`는 local/Testcontainers의 Hibernate `ddl-auto=create` schema에서 검증했다. 운영 schema migration 이력은 [ADR-0001](adr/0001-schema-migration-ownership.md)에 따라 아직 보류 상태이므로 배포 가능한 migration을 완료한 것으로 주장하지 않는다.
+- `reservation_booking`과 `booking_id`는 local/Testcontainers의 Hibernate `ddl-auto=create` schema에서 검증했다. 운영 schema migration 이력은 [ADR-0001](../../adr/0001-schema-migration-ownership.md)에 따라 아직 보류 상태이므로 배포 가능한 migration을 완료한 것으로 주장하지 않는다.
 - Booking은 PG 승인·금액·환불 상태를 저장하지 않는다. 실제 결제 검증과 Payment/Order 상태 머신은 mock 경계부터 별도 Issue로 진행한다.
 - Redis, 대기열, outbox와 메시지 브로커는 이번 단일 DB transaction 문제에 필요하지 않아 도입하지 않았다.
 

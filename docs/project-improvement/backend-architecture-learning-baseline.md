@@ -944,8 +944,8 @@ WebSocket이나 SSE는 다른 사용자의 좌석 hold·확정 변화를 빠르�
 - 인증: `onticket/src/main/java/com/onticket/user`
 - 예약 통합 테스트: `onticket/src/test/java/com/onticket/concert/service/SeatReservationConcurrencyIntegrationTest.java`
 - [프로젝트 개선 기준선](PROJECT_BASELINE.md)
-- [예매 transaction·경합 기준선](reservation-transaction-concurrency-baseline.md)
-- [예약 원자성·잔여 좌석 정합성 개선](reservation-atomicity-inventory-consistency.md)
+- [예매 transaction·경합 기준선](archive/foundations/reservation-transaction-concurrency-baseline.md)
+- [예약 원자성·잔여 좌석 정합성 개선](archive/foundations/reservation-atomicity-inventory-consistency.md)
 - [개선 근거 연결표](EVIDENCE_MAP.md)
 - [GlobalTimes Backend](https://github.com/SKU-GlobalTimes/GlobalTimes_BeSide/tree/develop)
 - [Spring transaction rollback 규칙](https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/rolling-back.html)
