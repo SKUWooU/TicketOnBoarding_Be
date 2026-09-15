@@ -20,6 +20,8 @@ BACKLOG는 확정 구현 목록이 아니라 조사와 재현이 필요한 후�
 
 Phase 7의 Hikari pool은 local 2,000석 distributed churn 200 RPS 반복 matrix에서 10·16·24를 warm-up 분리 후 각 3회 비교했다. 24는 10 대비 완료율 중앙값 89.71%→99.15%, hold/cycle p95 1,109.21/2,048.2ms→431.60/886ms, pending 188→114를 보였다. 이 근거로 local profile 기본값만 24로 조정했으며, 운영 pool·SLA·다중 인스턴스 최적화는 별도 재현 전 보류한다 ([#114](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/114)).
 
+pool 24의 system CPU 포화는 JVM·MariaDB 어느 한쪽으로 단정하지 않는다. opt-in Docker stats 진단에서 process/system CPU 49.27/99.76%, MariaDB CPU 77.27%, GC 0.084초/16회를 확인했지만, collector의 평균 표본 간격이 5,083ms로 늘어났다. 따라서 container CPU는 보조 진단값으로만 유지하고, 독립 host telemetry 또는 반복 관측 전 Grafana·GC tuning·분산 인프라는 보류한다 ([#116](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/116)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`
