@@ -21,8 +21,9 @@ function ConvertFrom-SeatHoldK6Result {
     foreach ($issue65Property in @(
         'schemaVersion', 'scenario', 'targetRatePerSecond', 'duration',
         'thresholdsEnforced', 'iterations', 'droppedIterations', 'holdSuccess',
-        'expectedContention', 'unexpectedNonSuccessful', 'unexpectedFailureRate',
-        'holdDurationMs', 'maxObservedVus', 'maxAllocatedVus',
+        'releaseSuccess', 'expectedContention', 'unexpectedNonSuccessful',
+        'unexpectedRelease', 'unexpectedFailureRate', 'holdDurationMs',
+        'cycleDurationMs', 'maxObservedVus', 'maxAllocatedVus',
         'preAllocatedVus', 'configuredMaxVus'
     )) {
         if ($issue65Property -notin $issue65Result.PSObject.Properties.Name) {
@@ -32,6 +33,9 @@ function ConvertFrom-SeatHoldK6Result {
     foreach ($issue65DurationProperty in @('average', 'median', 'p95', 'maximum')) {
         if ($issue65DurationProperty -notin $issue65Result.holdDurationMs.PSObject.Properties.Name) {
             throw "Structured seat-hold duration is missing: $issue65DurationProperty"
+        }
+        if ($issue65DurationProperty -notin $issue65Result.cycleDurationMs.PSObject.Properties.Name) {
+            throw "Structured seat-hold cycle duration is missing: $issue65DurationProperty"
         }
     }
     if ([int]$issue65Result.schemaVersion -ne 1) {
@@ -100,9 +104,11 @@ function New-SeatHoldRunSummary {
     $issue65Iterations = [long]$Result.iterations
     $issue65Dropped = [long]$Result.droppedIterations
     $issue65Success = [long]$Result.holdSuccess
+    $issue65ReleaseSuccess = [long]$Result.releaseSuccess
     $issue65Contention = [long]$Result.expectedContention
     $issue65Unexpected = [long]$Result.unexpectedNonSuccessful
-    foreach ($issue65Value in @($issue65Iterations, $issue65Dropped, $issue65Success, $issue65Contention, $issue65Unexpected)) {
+    $issue65UnexpectedRelease = [long]$Result.unexpectedRelease
+    foreach ($issue65Value in @($issue65Iterations, $issue65Dropped, $issue65Success, $issue65ReleaseSuccess, $issue65Contention, $issue65Unexpected, $issue65UnexpectedRelease)) {
         if ($issue65Value -lt 0) {
             throw 'Structured seat-hold counters must not be negative.'
         }
@@ -112,6 +118,13 @@ function New-SeatHoldRunSummary {
     }
     if ($issue65Iterations -ne ($issue65Success + $issue65Contention + $issue65Unexpected)) {
         throw 'Structured seat-hold counters do not match completed iterations.'
+    }
+    $issue65ChurnScenario = [string]$Result.scenario -in @('distributed-churn', 'hot-seat-churn')
+    if ($issue65ChurnScenario -and $issue65Success -ne ($issue65ReleaseSuccess + $issue65UnexpectedRelease)) {
+        throw 'Churn seat-hold successes must have exactly one release result.'
+    }
+    if (-not $issue65ChurnScenario -and ($issue65ReleaseSuccess -ne 0 -or $issue65UnexpectedRelease -ne 0)) {
+        throw 'Non-churn seat-hold scenarios must not report release results.'
     }
     $issue65Scheduled = $issue65Iterations + $issue65Dropped
     [pscustomobject]@{
@@ -124,14 +137,22 @@ function New-SeatHoldRunSummary {
         ScheduledIterationAttainmentRate = if ($issue65Scheduled -eq 0) { 0.0 } else { [double]$issue65Iterations / $issue65Scheduled }
         CompletedIterationsPerScheduledSecond = [double]$issue65Iterations / $DurationSeconds
         HoldSuccess = $issue65Success
+        ReleaseSuccess = $issue65ReleaseSuccess
         ExpectedContention = $issue65Contention
         UnexpectedNonSuccessful = $issue65Unexpected
+        UnexpectedRelease = $issue65UnexpectedRelease
         UnexpectedFailureRate = [double]$Result.unexpectedFailureRate
         HoldDurationMs = [pscustomobject]@{
             Average = [double]$Result.holdDurationMs.average
             Median = [double]$Result.holdDurationMs.median
             P95 = [double]$Result.holdDurationMs.p95
             Maximum = [double]$Result.holdDurationMs.maximum
+        }
+        CycleDurationMs = [pscustomobject]@{
+            Average = [double]$Result.cycleDurationMs.average
+            Median = [double]$Result.cycleDurationMs.median
+            P95 = [double]$Result.cycleDurationMs.p95
+            Maximum = [double]$Result.cycleDurationMs.maximum
         }
         MaxObservedVus = [int]$Result.maxObservedVus
         MaxAllocatedVus = [int]$Result.maxAllocatedVus
@@ -167,6 +188,8 @@ function Assert-SeatHoldFinalState {
         'distributed' { [long]$Summary.HoldSuccess }
         'hot-section' { [math]::Min(40, [long]$Summary.Iterations) }
         'hot-seat' { [math]::Min(1, [long]$Summary.Iterations) }
+        'distributed-churn' { 0 }
+        'hot-seat-churn' { 0 }
         default { throw "Unsupported seat-hold scenario: $($Summary.Scenario)" }
     }
     if ([long]$Snapshot.activeHeldSeats -ne $issue65ExpectedHeld) {
@@ -175,10 +198,10 @@ function Assert-SeatHoldFinalState {
     if ([long]$Snapshot.activeHeldSeats -gt [long]$Summary.HoldSuccess) {
         throw 'Persisted active holds cannot exceed successful hold responses.'
     }
-    if ([string]$Summary.Scenario -eq 'distributed' -and [long]$Summary.ExpectedContention -ne 0) {
+    if ([string]$Summary.Scenario -in @('distributed', 'distributed-churn') -and [long]$Summary.ExpectedContention -ne 0) {
         throw 'Distributed seat-hold workload must not report expected contention.'
     }
-    if ([string]$Summary.Scenario -in @('hot-section', 'hot-seat') -and
+    if ([string]$Summary.Scenario -in @('hot-section', 'hot-seat', 'hot-seat-churn') -and
         [long]$Summary.ExpectedContention -le 0) {
         throw 'Hot seat-hold workload must observe at least one expected 409 contention response.'
     }
@@ -339,6 +362,15 @@ function Assert-SeatHoldDomainMetricDelta {
     if ($issue91CommittedTransitions -ne [long]$issue91Delta.HoldSuccess) {
         throw "Committed hold transitions do not match successful one-seat requests: transitions=$issue91CommittedTransitions success=$($issue91Delta.HoldSuccess)"
     }
+    if ([string]$K6Summary.Scenario -in @('distributed-churn', 'hot-seat-churn')) {
+        if ([long]$issue91Delta.ReleaseSuccess -ne [long]$K6Summary.ReleaseSuccess -or
+            [long]$issue91Delta.ReleaseInvalid -ne 0 -or
+            [long]$issue91Delta.ReleaseConflict -ne 0 -or
+            [long]$issue91Delta.ReleaseError -ne 0 -or
+            [long]$issue91Delta.Released -ne [long]$K6Summary.ReleaseSuccess) {
+            throw 'Churn release metrics do not match k6 or contain a non-success outcome.'
+        }
+    }
 
     [pscustomobject]$issue91Delta
 }
@@ -388,6 +420,24 @@ function Assert-SeatHoldDomainScenarioGate {
                 throw 'Hot-seat scenario must retain exactly one initially acquired hold without reclaiming it.'
             }
         }
+        'distributed-churn' {
+            if ([long]$Snapshot.activeHeldSeats -ne 0 -or
+                [long]$DomainMetricDelta.HoldAcquired -ne $issue106Success -or
+                [long]$DomainMetricDelta.HoldReused -ne 0 -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0 -or
+                [long]$DomainMetricDelta.Released -ne $issue106Success) {
+                throw 'Distributed churn must release every newly acquired hold before the final snapshot.'
+            }
+        }
+        'hot-seat-churn' {
+            if ([long]$Snapshot.activeHeldSeats -ne 0 -or
+                [long]$DomainMetricDelta.HoldAcquired -ne $issue106Success -or
+                [long]$DomainMetricDelta.HoldReused -ne 0 -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0 -or
+                [long]$DomainMetricDelta.Released -ne $issue106Success) {
+                throw 'Hot-seat churn must release every acquired hold before the final snapshot.'
+            }
+        }
         default { throw "Unsupported seat-hold scenario: $($K6Summary.Scenario)" }
     }
 
@@ -421,10 +471,12 @@ function New-SeatHoldBaselineAggregate {
             CompletedIterationsPerScheduledSecond = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.CompletedIterationsPerScheduledSecond })
             ScheduledIterationAttainmentRate = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.ScheduledIterationAttainmentRate })
             HoldSuccess = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.HoldSuccess })
+            ReleaseSuccess = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.ReleaseSuccess })
             ExpectedContention = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.ExpectedContention })
             ActiveHeldSeats = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.FinalSnapshot.activeHeldSeats })
             UnexpectedFailureRate = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.UnexpectedFailureRate })
             HoldP95Ms = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.HoldDurationMs.P95 })
+            CycleP95Ms = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.K6.Result.CycleDurationMs.P95 })
             HikariActivePeak = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.Metrics.Peaks.HikariActive })
             HikariPendingPeak = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.Metrics.Peaks.HikariPending })
             DbRowLockWaitsDelta = New-Issue65Range -Values @($issue65Summaries | ForEach-Object { [double]$_.Metrics.Deltas.DbRowLockWaits })
