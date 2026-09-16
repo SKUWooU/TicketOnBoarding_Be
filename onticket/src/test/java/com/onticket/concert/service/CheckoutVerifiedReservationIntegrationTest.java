@@ -24,6 +24,7 @@ import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
 import com.onticket.user.jwt.JwtUtil;
 import jakarta.persistence.EntityManager;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -91,7 +92,8 @@ import static org.mockito.Mockito.when;
         VerifiedReservationTransactionService.class,
         VirtualTicketPricePolicy.class,
         CheckoutVerifiedReservationIntegrationTest.ClockConfiguration.class,
-        CheckoutVerifiedReservationIntegrationTest.CheckoutAliasLockBarrierConfiguration.class
+        CheckoutVerifiedReservationIntegrationTest.CheckoutAliasLockBarrierConfiguration.class,
+        CheckoutVerifiedReservationIntegrationTest.MetricsConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -174,6 +176,9 @@ class CheckoutVerifiedReservationIntegrationTest {
     @Autowired
     private MutableClock clock;
 
+    @Autowired
+    private SimpleMeterRegistry meterRegistry;
+
     @MockBean
     private PaymentVerificationPort paymentVerificationPort;
 
@@ -187,6 +192,7 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry.clear();
         CHECKOUT_ALIAS_LOCK_BARRIER.set(null);
         FINALIZATION_FAILURE_MERCHANT_UID.set(null);
         CHECKOUT_RELEASE_BARRIER.set(null);
@@ -254,6 +260,12 @@ class CheckoutVerifiedReservationIntegrationTest {
         )).isExactlyInstanceOf(IdempotencyKeyConflictException.class);
         verify(paymentVerificationPort, times(1)).verify("payment-success");
         assertConfirmedSnapshot(checkout.getMerchantUid(), 0, 2);
+        assertThat(meterRegistry.get(CheckoutMetrics.TRANSITION_METRIC)
+                .tag("operation", "verify_claim").tag("transition", "verification_claimed")
+                .counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get(CheckoutMetrics.TRANSITION_METRIC)
+                .tag("operation", "verify_finalize").tag("transition", "reservation_confirmed")
+                .counter().count()).isEqualTo(1.0);
     }
 
     @Test
@@ -306,6 +318,9 @@ class CheckoutVerifiedReservationIntegrationTest {
                     assertThat(checkout.getVerificationPaymentId()).isEqualTo("payment-wrong-merchant");
                 });
         assertEmptyReservationSnapshot(2);
+        assertThat(meterRegistry.get(CheckoutMetrics.TRANSITION_METRIC)
+                .tag("operation", "verify_claim").tag("transition", "verification_unknown")
+                .counter().count()).isEqualTo(2.0);
     }
 
     @Test
@@ -2140,6 +2155,15 @@ class CheckoutVerifiedReservationIntegrationTest {
                     }
                 }
             };
+        }
+    }
+
+    @TestConfiguration
+    static class MetricsConfiguration {
+
+        @Bean
+        SimpleMeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 

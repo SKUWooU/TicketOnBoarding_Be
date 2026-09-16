@@ -10,6 +10,8 @@ import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class VerifiedReservationTransactionService {
     private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final SeatReservationService seatReservationService;
     private final Clock clock;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
     @Transactional(rollbackFor = Exception.class)
     public LocalDateTime reserve(
@@ -71,17 +74,23 @@ public class VerifiedReservationTransactionService {
             String bookingFingerprint,
             PaymentApproval approval
     ) throws Exception {
+        CheckoutMetrics.Tracker tracker = new CheckoutMetrics(meterRegistryProvider.getIfAvailable())
+                .start(CheckoutMetrics.Operation.VERIFY_FINALIZE);
+        try {
         Checkout checkout = checkoutRepository.findByMerchantUidWithLock(request.getMerchantUid())
                 .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
         LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
         if (checkout.isPaymentVerificationTimedOut(now)) {
             checkout.markPaymentVerificationUnknown();
+            tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_UNKNOWN);
             throw new PaymentVerificationUnknownException();
         }
         validateCheckout(checkout, username, concertId, request, checkoutFingerprint);
 
         if (checkout.getStatus() == CheckoutStatus.RESERVATION_CONFIRMED) {
-            return existingCheckoutResult(checkout, username, idempotencyKey, bookingFingerprint);
+            LocalDateTime existing = existingCheckoutResult(checkout, username, idempotencyKey, bookingFingerprint);
+            tracker.succeed(CheckoutMetrics.Transition.RESERVATION_CONFIRMED);
+            return existing;
         }
         if (checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN) {
             throw new PaymentVerificationUnknownException();
@@ -117,7 +126,12 @@ public class VerifiedReservationTransactionService {
                 .forEach(assignment ->
                         assignment.clearVerificationLease(checkout.getVerificationDeadline()));
         checkout.confirmReservation(booking);
+        tracker.succeed(CheckoutMetrics.Transition.RESERVATION_CONFIRMED);
         return booking.getCreatedAt();
+        } catch (RuntimeException exception) {
+            tracker.fail(exception);
+            throw exception;
+        }
     }
 
     private void validateCheckout(
