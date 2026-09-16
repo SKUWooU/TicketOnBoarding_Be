@@ -3,6 +3,8 @@ package com.onticket.loadtest;
 import com.onticket.user.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +24,12 @@ public class LoadTestController {
 
     private final LoadTestFixtureService fixtureService;
     private final JwtUtil jwtUtil;
+
+    @ExceptionHandler(InvalidLoadTestRunIdException.class)
+    public ResponseEntity<LoadTestErrorResponse> handleInvalidRunId(InvalidLoadTestRunIdException exception) {
+        return ResponseEntity.badRequest()
+                .body(new LoadTestErrorResponse("INVALID_LOADTEST_RUN_ID", exception.getMessage()));
+    }
 
     @PostMapping("/runs")
     public LoadTestFixtureService.FixtureMetadata initialize(@RequestParam String runId) {
@@ -65,5 +73,8 @@ public class LoadTestController {
     }
 
     public record LoadTestToken(String username, String accessToken) {
+    }
+
+    public record LoadTestErrorResponse(String code, String message) {
     }
 }

@@ -17,9 +17,17 @@
 
 ## 완료
 
+### Backend Issue #118 — loadtest runId 입력 오류 HTTP 계약
+
+- PR: [#119](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/119) / squash: 검토 대기
+- 결과: loadtest fixture API의 잘못된 `runId`를 전용 예외·400 JSON 계약으로 고정
+- 검증: controller 단위 테스트·diff check 통과. fixture row 무변경 MariaDB Testcontainers 회귀는 Docker daemon 미기동으로 local 보류, CI 확인 대기
+- 근거: [loadtest runId 입력 오류 HTTP 계약](docs/project-improvement/archive/load-testing/loadtest-run-id-http-contract.md)
+- 제외: 운영 API 오류 포맷 통일·예약/결제·Frontend·외부 API 호출
+
 ### Backend Issue #116 — 좌석 hold JVM·MariaDB 자원 병목 분리 관측
 
-- PR: [#117](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/117) / squash: 병합 대기
+- PR: [#117](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/117) / squash `211d1b9`
 - 결과: JVM GC·live thread와 opt-in MariaDB container CPU·memory를 Hikari churn summary에 연결하고 누락 fail gate 구성
 - 검증: parser 59·seat-hold 56 assertions, local 2,000석 diagnostic의 snapshot/domain gate 통과. process/system CPU 49.27/99.76%, MariaDB CPU 77.27%, GC 0.084초/16회이나 Docker stats 표본 평균 5,083ms로 보조 진단 한정
 - 근거: [좌석 hold JVM·MariaDB 자원 관측](docs/project-improvement/archive/load-testing/seat-hold-jvm-mariadb-observability.md)
@@ -27,7 +35,7 @@
 
 ### Backend Issue #114 — 좌석 hold Hikari pool 반복 matrix 기준선
 
-- PR: [#115](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/115) / squash: 병합 대기
+- PR: [#115](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/115) / squash `629532a`
 - 결과: pool 10/16/24의 warm-up 분리 본 측정 3회 matrix를 구성하고, 완료율·cycle p95·pending·CPU·heap 중앙값/범위를 근거로 local Hikari 기본값을 24로 조정
 - 검증: matrix 계획·aggregate 8 assertions, 관측 parser 48·seat-hold 56 assertions, local 2,000석 본 측정 9회 snapshot/domain gate, Backend 235 tests 통과. 10→24: 완료율 89.71→99.15%, hold/cycle p95 1,109.21/2,048.2→431.60/886ms, pending 188→114, deadlock 0
 - 근거: [좌석 hold Hikari pool 반복 matrix](docs/project-improvement/archive/load-testing/seat-hold-hikari-pool-repeat-matrix.md)
@@ -35,7 +43,7 @@
 
 ### Backend Issue #112 — 좌석 hold churn Hikari pool matrix 검증
 
-- PR: [#113](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/113) / squash: 병합 대기
+- PR: [#113](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/113) / squash `124cf9c`
 - 결과: local Hikari max를 환경 변수로 명시하고 실제 Prometheus max 계약, process·system CPU·JVM heap 보조 지표를 추가해 pool 10/16/24의 동일 churn 조건을 비교
 - 검증: PowerShell 48·56 assertions·k6 3회·각 실행 final snapshot/domain metric gate 통과. 완료율 86.21/84.81/93.46%, cycle p95 2,451/2,223/1,640.5ms, pending 188/183/176, DB lock wait·deadlock 0. 단일 local 진단이므로 기본값 10 유지
 - 근거: [좌석 hold churn Hikari pool matrix](docs/project-improvement/archive/load-testing/seat-hold-hikari-pool-matrix.md)
