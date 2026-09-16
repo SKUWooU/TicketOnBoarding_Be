@@ -13,7 +13,13 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #122 — Checkout 고경합 결과·도메인 상태 교차 검증
+
+- Branch: `test/#122-checkout-contention-gate`
+- PR: [#123](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/123)
+- 결과: hot-seat 20 RPS·10초 local mock fixture에서 확정 응답·snapshot·commit transition delta 교차 gate 통과
+- 검증: PowerShell parser/gate 6 assertions, k6 inspect·smoke 통과; 전체 Backend test는 CI 확인 대기
+- 제외: 실제 PG·운영 SLA·Grafana·Kafka·대기열·Frontend
 
 ## 완료
 
