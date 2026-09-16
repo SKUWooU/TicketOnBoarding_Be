@@ -30,16 +30,16 @@ Checkout API의 HTTP 200과 k6의 성공 수만으로 transaction commit 이후 
 2026-09-16에 Docker Compose MariaDB, `local,loadtest` Spring profile, mock PG에서 아래 smoke를 실행했다.
 
 ```powershell
-k6 run -e RUN_ID=checkout122d5 -e TEST_SCENARIO=hot-seat -e RATE=20 -e DURATION=10s -e TOKEN_COUNT=100 load-test/k6/checkout-contention.js
+k6 run -e RUN_ID=checkout122d7 -e TEST_SCENARIO=hot-seat -e RATE=20 -e DURATION=10s -e TOKEN_COUNT=100 load-test/k6/checkout-contention.js
 ```
 
 | 항목 | 결과 |
 | --- | ---: |
-| iterations | 200 |
+| iterations | 201 |
 | Checkout 확정 | 1 |
-| 의도된 seat-hold 경합 | 199 |
+| 의도된 seat-hold 경합 | 200 |
 | 예상 밖 비정상 응답 | 0 |
-| Checkout duration p95 | 142 ms |
+| Checkout duration p95 | 140 ms |
 | reserved / reservation / booking / payment | 1 / 1 / 1 / 1 |
 | `verification_claimed` / `reservation_confirmed` delta | 1 / 1 |
 
@@ -50,8 +50,8 @@ k6 run -e RUN_ID=checkout122d5 -e TEST_SCENARIO=hot-seat -e RATE=20 -e DURATION=
 k6 console 로그는 JSON을 escape하여 stderr에 쓰므로, Windows PowerShell의 pipeline formatter를 통과시키지 않고 원문 파일로 저장한 뒤 gate를 실행한다.
 
 ```powershell
-cmd /c "k6 run -e RUN_ID=checkout122d5 -e TEST_SCENARIO=hot-seat -e RATE=20 -e DURATION=10s -e TOKEN_COUNT=100 load-test/k6/checkout-contention.js > build/checkout-k6.log 2>&1"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { Import-Module load-test/scripts/CheckoutContention.psm1; $text = Get-Content build/checkout-k6.log -Raw; Assert-CheckoutContentionGate (ConvertFrom-CheckoutK6Result $text) (ConvertFrom-CheckoutFinalSnapshot $text) (ConvertFrom-CheckoutTransitionDelta $text) }"
+cmd /c "k6 run -e RUN_ID=checkout122d7 -e TEST_SCENARIO=hot-seat -e RATE=20 -e DURATION=10s -e TOKEN_COUNT=100 load-test/k6/checkout-contention.js > onticket/build/checkout122d7-k6.log 2>&1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { Import-Module .\load-test\scripts\CheckoutContention.psm1 -Force; $text = Get-Content .\onticket\build\checkout122d7-k6.log -Raw; Assert-CheckoutContentionGate (ConvertFrom-CheckoutK6Result $text) (ConvertFrom-CheckoutFinalSnapshot $text) (ConvertFrom-CheckoutTransitionDelta $text) }"
 ```
 
 ## 제외와 다음 조건
