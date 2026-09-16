@@ -17,6 +17,14 @@
 
 ## 완료
 
+### Backend Issue #120 — Checkout 취소·결제 검증 경합 도메인 메트릭
+
+- PR: [#121](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/121) / squash: 검토 대기
+- 결과: 취소·검증 claim·예약 확정의 transaction 완료 timer와 commit 상태 전이 counter를 추가
+- 검증: rollback/UNKNOWN 단위 계약·test source compile·diff check 통과. MariaDB Checkout 통합 fixture는 Docker daemon 미기동으로 local 보류, CI 확인 대기
+- 근거: [Checkout transaction 완료 기준 도메인 메트릭](docs/project-improvement/archive/checkout/checkout-transaction-domain-metrics.md)
+- 제외: Grafana·Prometheus server·Kafka·실제 PG·운영 성능 주장·Frontend
+
 ### Backend Issue #118 — loadtest runId 입력 오류 HTTP 계약
 
 - PR: [#119](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/119) / squash: 검토 대기

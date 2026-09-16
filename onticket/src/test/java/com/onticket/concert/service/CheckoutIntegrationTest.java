@@ -16,6 +16,7 @@ import com.onticket.concert.repository.ConcertRepository;
 import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.SeatRepository;
 import jakarta.persistence.EntityManager;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         CheckoutExpirationService.class,
         VirtualTicketPricePolicy.class,
         SeatHoldService.class,
-        CheckoutIntegrationTest.ClockConfiguration.class
+        CheckoutIntegrationTest.ClockConfiguration.class,
+        CheckoutIntegrationTest.MetricsConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -124,10 +126,14 @@ class CheckoutIntegrationTest {
     @Autowired
     private MutableClock clock;
 
+    @Autowired
+    private SimpleMeterRegistry meterRegistry;
+
     private Long concertTimeId;
 
     @BeforeEach
     void setUp() {
+        meterRegistry.clear();
         checkoutSeatAssignmentRepository.deleteAllInBatch();
         checkoutRequestKeyRepository.deleteAllInBatch();
         checkoutRepository.deleteAllInBatch();
@@ -330,6 +336,22 @@ class CheckoutIntegrationTest {
                 .satisfies(assignment -> assertThat(assignment.getReleasedAt()).isNull());
         assertThat(seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1").getHeldBy())
                 .isEqualTo(USERNAME);
+    }
+
+    @Test
+    void recordsOnlyCommittedCancellationTransitions() {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        CheckoutResponse prepared = checkoutService.prepare(
+                USERNAME, CONCERT_ID, checkoutRequest("A1"), "checkout-metric-cancel"
+        );
+
+        checkoutCancellationService.cancel(USERNAME, CONCERT_ID, prepared.getMerchantUid());
+        checkoutCancellationService.cancel(USERNAME, CONCERT_ID, prepared.getMerchantUid());
+
+        assertThat(meterRegistry.get(CheckoutMetrics.TRANSITION_METRIC)
+                .tag("operation", "cancel").tag("transition", "canceled").counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get(CheckoutMetrics.TRANSITION_METRIC)
+                .tag("operation", "cancel").tag("transition", "cancel_reused").counter().count()).isEqualTo(1.0);
     }
 
     @Test
@@ -908,6 +930,15 @@ class CheckoutIntegrationTest {
         @Primary
         MutableClock mutableClock() {
             return new MutableClock(BASE_TIME.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        }
+    }
+
+    @TestConfiguration
+    static class MetricsConfiguration {
+
+        @Bean
+        SimpleMeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
         }
     }
 

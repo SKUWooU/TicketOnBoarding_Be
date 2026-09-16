@@ -9,6 +9,8 @@ import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.SeatRepository;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class CheckoutCancellationService {
     private final CheckoutSeatAssignmentRepository assignmentRepository;
     private final SeatRepository seatRepository;
     private final Clock clock;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
     @Transactional(
             rollbackFor = Exception.class,
@@ -38,12 +41,16 @@ public class CheckoutCancellationService {
             String concertId,
             String merchantUid
     ) {
+        CheckoutMetrics.Tracker tracker = new CheckoutMetrics(meterRegistryProvider.getIfAvailable())
+                .start(CheckoutMetrics.Operation.CANCEL);
+        try {
         validateIdentifiers(username, concertId, merchantUid);
         Checkout checkout = checkoutRepository.findByMerchantUidWithLock(merchantUid)
                 .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
         validateOwnerAndConcert(checkout, username, concertId);
 
         if (checkout.getStatus() == CheckoutStatus.CANCELED) {
+            tracker.succeed(CheckoutMetrics.Transition.CANCEL_REUSED);
             return response(checkout);
         }
 
@@ -79,7 +86,12 @@ public class CheckoutCancellationService {
         checkout.cancel(now);
         lockedAssignments.forEach(assignment -> assignment.release(now));
         lockedSeats.forEach(Seat::clearHold);
+        tracker.succeed(CheckoutMetrics.Transition.CANCELED);
         return response(checkout);
+        } catch (RuntimeException exception) {
+            tracker.fail(exception);
+            throw exception;
+        }
     }
 
     private void validateLockedState(
