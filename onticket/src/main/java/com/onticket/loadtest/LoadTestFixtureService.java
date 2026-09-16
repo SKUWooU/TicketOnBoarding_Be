@@ -286,7 +286,7 @@ public class LoadTestFixtureService {
 
     private static String validateRunId(String runId) {
         if (runId == null || !RUN_ID_PATTERN.matcher(runId).matches()) {
-            throw new IllegalArgumentException("loadtest runId는 영문·숫자·하이픈 1~32자여야 합니다.");
+            throw new InvalidLoadTestRunIdException();
         }
         return runId;
     }

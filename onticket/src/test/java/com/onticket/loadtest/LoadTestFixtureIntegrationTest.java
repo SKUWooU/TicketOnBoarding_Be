@@ -7,6 +7,8 @@ import com.onticket.concert.domain.Seat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.ConcertDetailRepository;
+import com.onticket.concert.repository.ConcertRepository;
+import com.onticket.concert.repository.ConcertTimeRepository;
 import com.onticket.concert.repository.PaymentRepository;
 import com.onticket.concert.repository.PlaceRepository;
 import com.onticket.concert.repository.SeatRepository;
@@ -31,6 +33,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=create",
@@ -69,6 +72,12 @@ class LoadTestFixtureIntegrationTest {
 
     @Autowired
     private BookingRepository bookingRepository;
+
+    @Autowired
+    private ConcertRepository concertRepository;
+
+    @Autowired
+    private ConcertTimeRepository concertTimeRepository;
 
     @Autowired
     private PaymentRepository paymentRepository;
@@ -176,6 +185,18 @@ class LoadTestFixtureIntegrationTest {
     void usesFixedWidthCanonicalSeatNumbers() {
         assertThat(LoadTestFixtureService.seatNumber(1, 1)).isEqualTo("R001-S001");
         assertThat(LoadTestFixtureService.seatNumber(50, 40)).isEqualTo("R050-S040");
+    }
+
+    @Test
+    void rejectsInvalidRunIdBeforeChangingFixtureData() {
+        assertThatThrownBy(() -> fixtureService.initialize("invalid_run_id"))
+                .isInstanceOf(InvalidLoadTestRunIdException.class)
+                .hasMessage("loadtest runId는 영문·숫자·하이픈 1~32자여야 합니다.");
+
+        assertThat(concertRepository.count()).isZero();
+        assertThat(concertTimeRepository.count()).isZero();
+        assertThat(seatRepository.count()).isZero();
+        assertThat(placeRepository.count()).isZero();
     }
 
     @Test
