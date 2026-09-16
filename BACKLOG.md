@@ -24,6 +24,8 @@ pool 24의 system CPU 포화는 JVM·MariaDB 어느 한쪽으로 단정하지 �
 
 loadtest 보조 API의 `runId` 입력 오류는 400 JSON으로 고정하고, 실패가 fixture 데이터를 만들지 않는 Testcontainers 회귀를 추가했다. 운영 API 오류 포맷 통일이나 외부 연동 정책으로 확장하지 않는다 ([#118](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/118)).
 
+Checkout 취소·결제 검증은 commit된 상태 전이만 집계하는 Micrometer 계약을 추가했다. 이는 대시보드·운영 성능 측정이 아니라 다음 고경합 fixture에서 HTTP 결과와 도메인 수렴을 교차할 최소 근거다 ([#120](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/120)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`

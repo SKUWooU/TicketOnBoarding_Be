@@ -10,6 +10,8 @@ import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.SeatRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,12 +32,14 @@ public class CheckoutPaymentVerificationTransactionService {
     private final SeatRepository seatRepository;
     private final Clock clock;
     private final Duration verificationGraceDuration;
+    private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
     public CheckoutPaymentVerificationTransactionService(
             CheckoutRepository checkoutRepository,
             CheckoutSeatAssignmentRepository assignmentRepository,
             SeatRepository seatRepository,
             Clock clock,
+            ObjectProvider<MeterRegistry> meterRegistryProvider,
             @Value("${onticket.ticket.checkout-payment-verification-grace-duration:PT30S}")
             Duration verificationGraceDuration
     ) {
@@ -48,6 +52,7 @@ public class CheckoutPaymentVerificationTransactionService {
         this.assignmentRepository = assignmentRepository;
         this.seatRepository = seatRepository;
         this.clock = clock;
+        this.meterRegistryProvider = meterRegistryProvider;
         this.verificationGraceDuration = verificationGraceDuration;
     }
 
@@ -64,6 +69,9 @@ public class CheckoutPaymentVerificationTransactionService {
             String checkoutFingerprint,
             String bookingFingerprint
     ) {
+        CheckoutMetrics.Tracker tracker = new CheckoutMetrics(meterRegistryProvider.getIfAvailable())
+                .start(CheckoutMetrics.Operation.VERIFY_CLAIM);
+        try {
         Checkout checkout = checkoutRepository.findByMerchantUidWithLock(request.getMerchantUid())
                 .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
         validateCheckout(checkout, username, concertId, request, checkoutFingerprint);
@@ -84,6 +92,7 @@ public class CheckoutPaymentVerificationTransactionService {
         if (checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFYING) {
             if (checkout.isPaymentVerificationTimedOut(now)) {
                 checkout.markPaymentVerificationUnknown();
+                tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_UNKNOWN);
                 throw new PaymentVerificationUnknownException();
             }
             throw new CheckoutConflictException("결제 검증이 진행 중인 Checkout입니다.");
@@ -124,7 +133,12 @@ public class CheckoutPaymentVerificationTransactionService {
                 .filter(seat -> seat.getHeldUntil().isBefore(deadline))
                 .forEach(seat -> seat.extendOwnedHoldUntil(username, now, deadline));
 
+        tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_CLAIMED);
         return CheckoutPaymentVerificationClaim.claimed(checkout.getExpectedAmount());
+        } catch (RuntimeException exception) {
+            tracker.fail(exception);
+            throw exception;
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -237,6 +251,8 @@ public class CheckoutPaymentVerificationTransactionService {
             String reservationIdempotencyKey,
             String bookingFingerprint
     ) {
+        CheckoutMetrics.Tracker tracker = new CheckoutMetrics(meterRegistryProvider.getIfAvailable())
+                .start(CheckoutMetrics.Operation.VERIFY_CLAIM);
         Checkout checkout = checkoutRepository.findByMerchantUidWithLock(merchantUid)
                 .orElse(null);
         if (isMatchingActiveClaim(
@@ -247,6 +263,9 @@ public class CheckoutPaymentVerificationTransactionService {
                 bookingFingerprint
         )) {
             checkout.markPaymentVerificationUnknown();
+            tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_UNKNOWN);
+        } else {
+            tracker.succeed(null);
         }
     }
 
