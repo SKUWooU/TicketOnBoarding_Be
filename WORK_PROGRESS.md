@@ -13,7 +13,11 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #122 — Checkout 고경합 결과·도메인 상태 교차 검증
+
+- Branch: `test/#122-checkout-contention-gate`
+- 범위: local mock PG·가상 fixture에서 k6 결과와 Checkout commit metric·snapshot을 교차 검증
+- 제외: 실제 PG·운영 SLA·Grafana·Kafka·대기열·Frontend
 
 ## 완료
 
