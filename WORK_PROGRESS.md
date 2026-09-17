@@ -13,15 +13,14 @@
 
 ## 진행 중
 
+## 완료
+
 ### Backend Issue #124 — Checkout 고경합 시나리오별 관측 기준선
 
-- Branch: `test/#124-checkout-contention-observability`
-- PR: [#125](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/125)
-- 결과: distributed·hot-seat Checkout의 k6 결과·도메인 상태·Hikari·MariaDB 관측 기준선 구성
-- 검증: parser/gate 8 assertions·k6 inspect·local fixture 3개 run 통과; CI 확인 대기
+- PR: [#125](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/125) / squash `f3e5056`
+- 결과: distributed·hot-seat Checkout의 k6·domain state·Hikari·MariaDB run 단위 관측 기준선 구성
+- 검증: parser/gate 8 assertions·k6 inspect·local fixture 3개 run·CI 240 tests 통과
 - 제외: 실제 PG·운영 SLA·Prometheus/Grafana server·Kafka·대기열·Frontend
-
-## 완료
 
 ### Backend Issue #122 — Checkout 고경합 결과·도메인 상태 교차 검증
 
