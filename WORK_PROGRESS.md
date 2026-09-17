@@ -13,13 +13,14 @@
 
 ## 진행 중
 
+## 완료
+
 ### Backend Issue #128 — 활성 Checkout 귀속 제약 경합 해소
 
-- 상태: active assignment 제약·준비 경로 lock 범위 설계 및 Testcontainers A/B 검증 진행 중
-- 범위: 활성 귀속 단일성, release/expire/rollback, #126 deadlock 재현과 동일 local fixture 비교
-- 제외: 운영 migration, 실제 PG, pool 재조정, Frontend
-
-## 완료
+- PR: [#129](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/129) / squash `44607ee`
+- 결과: active assignment history·unique key 분리와 준비 range lock 제거로 #126 barrier deadlock 해소
+- 검증: Checkout Testcontainers 52건·integration 30건·PowerShell 11 assertions·k6 inspect·local mock fixture deadlock 0·CI 성공
+- 제외: 기존 DB migration, 운영 성능 주장, 실제 PG, pool 재조정, Frontend
 
 ### Backend Issue #126 — Checkout distributed deadlock 재현 기준선
 
