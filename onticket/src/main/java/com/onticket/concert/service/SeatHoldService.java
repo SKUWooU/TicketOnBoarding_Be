@@ -116,7 +116,7 @@ public class SeatHoldService {
                 lockedSeats.add(seat);
             }
 
-            if (!lockedSeats.isEmpty() && !checkoutSeatAssignmentRepository.findActiveBySeatIdsWithLock(
+            if (!lockedSeats.isEmpty() && !checkoutSeatAssignmentRepository.findByActiveSeatIdsWithLock(
                     lockedSeats.stream().map(Seat::getId).toList(),
                     now
             ).isEmpty()) {

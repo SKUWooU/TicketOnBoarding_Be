@@ -88,10 +88,15 @@ public class CheckoutPreparationTransactionService {
         }
 
         List<CheckoutSeatAssignment> activeAssignments = checkoutSeatAssignmentRepository
-                .findActiveBySeatIdsWithLock(
-                        lockedSeats.stream().map(Seat::getId).toList(),
-                        now
+                .findByActiveSeatIds(
+                        lockedSeats.stream().map(Seat::getId).toList()
                 );
+        if (activeAssignments.stream().anyMatch(assignment -> assignment.clearExpiredActiveSeat(now))) {
+            checkoutSeatAssignmentRepository.flush();
+        }
+        activeAssignments = activeAssignments.stream()
+                .filter(assignment -> assignment.isActiveAt(now))
+                .toList();
         if (!activeAssignments.isEmpty()) {
             Set<Long> checkoutIds = activeAssignments.stream()
                     .map(assignment -> assignment.getCheckout().getId())

@@ -13,6 +13,12 @@
 
 ## 진행 중
 
+### Backend Issue #128 — 활성 Checkout 귀속 제약 경합 해소
+
+- 상태: active assignment 제약·준비 경로 lock 범위 설계 및 Testcontainers A/B 검증 진행 중
+- 범위: 활성 귀속 단일성, release/expire/rollback, #126 deadlock 재현과 동일 local fixture 비교
+- 제외: 운영 migration, 실제 PG, pool 재조정, Frontend
+
 ## 완료
 
 ### Backend Issue #126 — Checkout distributed deadlock 재현 기준선
