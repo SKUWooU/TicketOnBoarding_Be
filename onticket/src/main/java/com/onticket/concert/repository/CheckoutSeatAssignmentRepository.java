@@ -17,14 +17,25 @@ public interface CheckoutSeatAssignmentRepository
     @Query("""
             SELECT assignment
             FROM CheckoutSeatAssignment assignment
-            WHERE assignment.seat.id IN :seatIds
+            WHERE assignment.activeSeatId IN :seatIds
               AND assignment.releasedAt IS NULL
               AND COALESCE(assignment.verificationLeaseUntil, assignment.activeUntil) > :now
             ORDER BY assignment.seat.id
             """)
-    List<CheckoutSeatAssignment> findActiveBySeatIdsWithLock(
+    List<CheckoutSeatAssignment> findByActiveSeatIdsWithLock(
             @Param("seatIds") List<Long> seatIds,
             @Param("now") LocalDateTime now
+    );
+
+    @Query("""
+            SELECT assignment
+            FROM CheckoutSeatAssignment assignment
+            WHERE assignment.activeSeatId IN :seatIds
+              AND assignment.releasedAt IS NULL
+            ORDER BY assignment.activeSeatId
+            """)
+    List<CheckoutSeatAssignment> findByActiveSeatIds(
+            @Param("seatIds") List<Long> seatIds
     );
 
     @Query("""
