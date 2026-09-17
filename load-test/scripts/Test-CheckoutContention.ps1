@@ -20,4 +20,8 @@ Assert-Equal (Assert-CheckoutDomainState -Result ([pscustomobject]@{ iterations 
 Assert-Throws { Assert-CheckoutContentionGate -Result $result -Snapshot $snapshot -TransitionDelta ([pscustomobject]@{ reservationConfirmed = 49; verificationClaimed = 50 }) }
 Assert-Throws { ConvertFrom-CheckoutK6Result 'missing' }
 Assert-Throws { ConvertFrom-CheckoutFinalSnapshot 'missing' }
+$runner = Get-Content -Raw -Encoding utf8 (Join-Path $PSScriptRoot 'Measure-CheckoutContention.ps1')
+Assert-Equal ($runner.Contains('Save-MariaDbLatestDeadlock')) $true 'deadlock diagnostic collector contract'
+Assert-Equal ($runner.Contains('DeadlockDiagnosticsFile')) $true 'deadlock diagnostic summary contract'
+Assert-Equal ($runner.Contains('metrics.Deltas.DbDeadlocks')) $true 'deadlock delta source contract'
 Write-Output "CheckoutContention checks passed: $assertions assertions."

@@ -110,6 +110,8 @@ class CheckoutVerifiedReservationIntegrationTest {
             new AtomicReference<>();
     private static final AtomicReference<CheckoutCancellationRaceBarrier> CHECKOUT_CANCELLATION_BARRIER =
             new AtomicReference<>();
+    private static final AtomicReference<CheckoutPreparationGapBarrier> CHECKOUT_PREPARATION_GAP_BARRIER =
+            new AtomicReference<>();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -197,6 +199,7 @@ class CheckoutVerifiedReservationIntegrationTest {
         FINALIZATION_FAILURE_MERCHANT_UID.set(null);
         CHECKOUT_RELEASE_BARRIER.set(null);
         CHECKOUT_CANCELLATION_BARRIER.set(null);
+        CHECKOUT_PREPARATION_GAP_BARRIER.set(null);
         paymentRepository.deleteAllInBatch();
         reservationRepository.deleteAllInBatch();
         checkoutSeatAssignmentRepository.deleteAllInBatch();
@@ -1658,6 +1661,50 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
     }
 
+    @RepeatedTest(3)
+    void concurrentDistinctCheckoutPreparationsReproduceAssignmentGapDeadlockAndRollback() throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutPreparationGapBarrier barrier = new CheckoutPreparationGapBarrier();
+        CHECKOUT_PREPARATION_GAP_BARRIER.set(barrier);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AttemptResult> first = executor.submit(() -> checkoutPreparationAttempt(
+                    checkoutRequest("A1"),
+                    "checkout-gap-a1"
+            ));
+            Future<AttemptResult> second = executor.submit(() -> checkoutPreparationAttempt(
+                    checkoutRequest("A2"),
+                    "checkout-gap-a2"
+            ));
+            assertThat(barrier.awaitBothActiveAssignmentLocks()).isTrue();
+            barrier.allowInserts();
+
+            List<AttemptResult> results = List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            );
+            assertThat(results).filteredOn(AttemptResult::success).hasSize(1);
+            assertThat(results).filteredOn(result -> !result.success()).singleElement()
+                    .satisfies(result -> {
+                        assertThat(result.exceptionType()).isNotEqualTo("Timeout");
+                        assertThat(result.message()).contains("Deadlock found");
+                    });
+        } finally {
+            CHECKOUT_PREPARATION_GAP_BARRIER.compareAndSet(barrier, null);
+            barrier.allowInserts();
+        }
+
+        entityManager.clear();
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(1);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
+        assertThat(List.of(
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
+                seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
+        )).allSatisfy(seat -> assertThat(seat.isHeldBy(USERNAME, BASE_TIME)).isTrue());
+        assertEmptyReservationSnapshot(2);
+    }
+
     private AttemptResult attempt(
             VerifiedReservRequest request,
             String idempotencyKey,
@@ -1694,6 +1741,15 @@ class CheckoutVerifiedReservationIntegrationTest {
     private AttemptResult releaseAttempt(String... seatNumbers) {
         try {
             seatHoldService.release(USERNAME, CONCERT_ID, holdRequest(seatNumbers));
+            return AttemptResult.succeeded();
+        } catch (Exception exception) {
+            return AttemptResult.failure(exception.getClass().getSimpleName(), exception.getMessage());
+        }
+    }
+
+    private AttemptResult checkoutPreparationAttempt(CheckoutRequest request, String idempotencyKey) {
+        try {
+            checkoutService.prepare(USERNAME, CONCERT_ID, request, idempotencyKey);
             return AttemptResult.succeeded();
         } catch (Exception exception) {
             return AttemptResult.failure(exception.getClass().getSimpleName(), exception.getMessage());
@@ -2037,6 +2093,31 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    private static final class CheckoutPreparationGapBarrier {
+
+        private final AtomicInteger activeAssignmentLockCount = new AtomicInteger();
+        private final CountDownLatch bothActiveAssignmentLocks = new CountDownLatch(2);
+        private final CountDownLatch allowInserts = new CountDownLatch(1);
+
+        void activeAssignmentsLocked() throws InterruptedException {
+            if (activeAssignmentLockCount.incrementAndGet() > 2) {
+                return;
+            }
+            bothActiveAssignmentLocks.countDown();
+            if (!allowInserts.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("assignment insert 경합 진행 허용을 기다리지 못했습니다.");
+            }
+        }
+
+        boolean awaitBothActiveAssignmentLocks() throws InterruptedException {
+            return bothActiveAssignmentLocks.await(5, TimeUnit.SECONDS);
+        }
+
+        void allowInserts() {
+            allowInserts.countDown();
+        }
+    }
+
     @TestConfiguration
     static class ClockConfiguration {
 
@@ -2124,6 +2205,12 @@ class CheckoutVerifiedReservationIntegrationTest {
                                     if (releaseBarrier != null
                                             && method.getName().equals("findActiveBySeatIdsWithLock")) {
                                         releaseBarrier.releaseAssignmentsLocked();
+                                    }
+                                    CheckoutPreparationGapBarrier preparationGapBarrier =
+                                            CHECKOUT_PREPARATION_GAP_BARRIER.get();
+                                    if (preparationGapBarrier != null
+                                            && method.getName().equals("findActiveBySeatIdsWithLock")) {
+                                        preparationGapBarrier.activeAssignmentsLocked();
                                     }
                                     String targetMerchantUid = FINALIZATION_FAILURE_MERCHANT_UID.get();
                                     if (targetMerchantUid != null

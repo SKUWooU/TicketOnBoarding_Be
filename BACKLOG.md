@@ -26,6 +26,8 @@ loadtest 보조 API의 `runId` 입력 오류는 400 JSON으로 고정하고, 실
 
 Checkout 취소·결제 검증은 commit된 상태 전이만 집계하는 Micrometer 계약을 추가했다. 이는 대시보드·운영 성능 측정이 아니라 다음 고경합 fixture에서 HTTP 결과와 도메인 수렴을 교차할 최소 근거다 ([#120](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/120)).
 
+Checkout distributed 100 RPS에서 발생한 deadlock은 최신 InnoDB 진단으로 `reservation_checkout_seat_assignment`의 `(seat_id, active_until)` unique index 끝 gap insert-intention 순환 후보까지 좁혔다. 다음 변경은 해당 제약과 active-assignment 조회의 필요 범위를 분리해 같은 local fixture·rollback 불변식으로 비교한 뒤 결정하며, pool·재시도·일반 좌석 lock 순서는 이 근거만으로 조정하지 않는다 ([#126](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/126)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`

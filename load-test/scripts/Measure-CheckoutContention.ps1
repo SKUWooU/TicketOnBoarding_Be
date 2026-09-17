@@ -12,6 +12,7 @@ param(
     [string]$OutputDirectory = '',
     [string]$DatabaseUser = 'onticket',
     [string]$DatabasePassword = 'onticket',
+    [string]$DatabaseRootPassword = 'onticket-root',
     [switch]$DisablePerformanceThresholds
 )
 
@@ -38,6 +39,7 @@ $paths = [ordered]@{
     Summary = Join-Path $resolvedOutput "$RunId-summary.json"
     Stdout = Join-Path $resolvedOutput "$RunId-k6.stdout.log"
     Stderr = Join-Path $resolvedOutput "$RunId-k6.stderr.log"
+    Deadlock = Join-Path $resolvedOutput "$RunId-innodb-deadlock.txt"
     Failure = Join-Path $resolvedOutput "$RunId-failure.json"
 }
 foreach ($path in $paths.Values) { if (Test-Path -LiteralPath $path) { throw "Refusing to overwrite an existing measurement result: $path" } }
@@ -51,6 +53,15 @@ function Get-MariaDbStatus {
     $output = & docker compose -f $composeFile exec -T mariadb mariadb "-u$DatabaseUser" "-p$DatabasePassword" -N -e $statusQuery 2>&1
     if ($LASTEXITCODE -ne 0) { throw "MariaDB status query failed with exit code $LASTEXITCODE." }
     ConvertFrom-MariaDbStatus -Lines $output
+}
+function Save-MariaDbLatestDeadlock {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $output = & docker compose -f $composeFile exec -T mariadb mariadb "-uroot" "-p$DatabaseRootPassword" -e 'SHOW ENGINE INNODB STATUS;' 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "MariaDB deadlock diagnostic query failed with exit code $LASTEXITCODE." }
+    $text = ($output -join "`n")
+    if ($text -notmatch 'LATEST DETECTED DEADLOCK') { throw 'MariaDB did not return a latest deadlock diagnostic.' }
+    Set-Content -LiteralPath $Path -Value $text -Encoding UTF8
 }
 function Get-MetricSample {
     param([Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch)
@@ -105,8 +116,13 @@ try {
     $snapshot = ConvertFrom-CheckoutFinalSnapshot -Text $text; $delta = ConvertFrom-CheckoutTransitionDelta -Text $text
     Assert-CheckoutDomainState -Result $result -Snapshot $snapshot -TransitionDelta $delta | Out-Null
     $metrics = New-ContentionMetricsSummary -Samples $samples.ToArray(); $samples | Export-Csv -LiteralPath $paths.Samples -NoTypeInformation -Encoding UTF8
+    $deadlockDiagnosticsFile = $null
+    if ([long]$metrics.Deltas.DbDeadlocks -gt 0) {
+        Save-MariaDbLatestDeadlock -Path $paths.Deadlock
+        $deadlockDiagnosticsFile = [IO.Path]::GetFileName($paths.Deadlock)
+    }
     $thresholdsPassed = $process.ExitCode -eq 0
-    [ordered]@{ SchemaVersion = 1; ValidMeasurement = $true; Run = [ordered]@{ Id = $RunId; Scenario = $Scenario; RatePerSecond = $Rate; DurationSeconds = $DurationSeconds; StartedAtUtc = $startedAt.ToString('o') }; Fixture = [ordered]@{ TotalSeats = 2000; PreparedBeforeSampling = $true }; K6 = [ordered]@{ ExitCode = $process.ExitCode; ThresholdsPassed = $thresholdsPassed; Result = $result; FinalSnapshot = $snapshot; TransitionDelta = $delta }; Metrics = $metrics; SamplesFile = [IO.Path]::GetFileName($paths.Samples); ObserverEffects = $metrics.ObserverEffects } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $paths.Summary -Encoding UTF8
+    [ordered]@{ SchemaVersion = 1; ValidMeasurement = $true; Run = [ordered]@{ Id = $RunId; Scenario = $Scenario; RatePerSecond = $Rate; DurationSeconds = $DurationSeconds; StartedAtUtc = $startedAt.ToString('o') }; Fixture = [ordered]@{ TotalSeats = 2000; PreparedBeforeSampling = $true }; K6 = [ordered]@{ ExitCode = $process.ExitCode; ThresholdsPassed = $thresholdsPassed; Result = $result; FinalSnapshot = $snapshot; TransitionDelta = $delta }; Metrics = $metrics; SamplesFile = [IO.Path]::GetFileName($paths.Samples); DeadlockDiagnosticsFile = $deadlockDiagnosticsFile; ObserverEffects = $metrics.ObserverEffects } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $paths.Summary -Encoding UTF8
     Write-Output "VALID_CHECKOUT_MEASUREMENT runId=$RunId scenario=$Scenario thresholdsPassed=$thresholdsPassed samples=$($metrics.SampleCount)"
     Write-Output "SUMMARY_PATH $($paths.Summary)"
 } catch {
