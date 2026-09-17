@@ -21,13 +21,15 @@ Checkout에서 많은 409가 발생하면 DB 또는 connection pool 포화로 �
 
 조건: Windows 로컬 단일 Backend, Java 21, Docker Compose MariaDB 10.11.8, Hikari 24, local mock PG, 가상 좌석 2,000개, 10초. 실제 PG·운영 좌석·운영 트래픽은 사용하지 않았다.
 
-| 시나리오 | 목표 | 실행/확정/기대 경합 | p95 | dropped | 예상 밖 실패율 | Hikari pending peak | DB deadlock delta |
+| 시나리오 | 목표 | 실행/확정/기대 경합 | Checkout p95* | dropped | 예상 밖 실패율 | Hikari pending peak | DB deadlock delta |
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
 | distributed | 20 RPS | 200 / 200 / 0 | 132 ms | 0 | 0% | 0 | 0 |
 | distributed | 100 RPS | 672 / 542 / 0 | 4,804 ms | 328 | 19.35% | 174 | 260 |
 | hot-seat | 100 RPS | 1,001 / 1 / 1,000 | 112 ms | 0 | 0% | 0 | 0 |
 
 distributed 100 RPS에서는 pool이 24/24 active에 도달하고 row lock wait 654회·128,083ms가 증가했다. 하지만 확정 542건에 대해 reserved seat·Reservation·Booking·Payment 및 두 commit transition delta가 모두 542로 일치했다. 따라서 이 fixture에서 확인한 것은 **고부하 시 품질 저하와 DB 경합 신호**, 그리고 그 와중에도 확정된 재고 상태가 수렴한다는 사실이다.
+
+`*` Checkout p95는 `verified-reservation` 호출까지 도달한 요청의 경과 시간이다. hold 409이나 Checkout 준비 단계에서 끝난 요청은 이 Trend에 포함되지 않으므로, 전체 시도 요청의 end-to-end p95로 해석하지 않는다.
 
 hot-seat의 다수 409은 동일 좌석이 첫 성공 뒤 이미 HELD/RESERVED여서 생긴 의도된 충돌이다. Hikari pending과 deadlock delta가 0이므로 이를 distributed 100 RPS의 포화와 같은 현상으로 해석하지 않는다.
 
