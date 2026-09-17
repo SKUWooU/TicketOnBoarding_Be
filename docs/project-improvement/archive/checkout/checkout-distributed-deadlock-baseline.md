@@ -4,9 +4,16 @@
 
 Issue #124의 distributed Checkout 100 RPS 결과에서 deadlock이 관찰됐지만, HTTP 결과·global counter만으로는 서비스 메서드의 lock order 문제인지 assignment index의 insert 경합인지 구분할 수 없었다.
 
-## 이번 기준선
+## 잠금 경로와 이번 기준선
 
-`Measure-CheckoutContention.ps1`는 run의 MariaDB deadlock delta가 0보다 크면 run 종료 뒤 local Compose 연결로 `SHOW ENGINE INNODB STATUS`의 최신 deadlock을 raw 결과 디렉터리에 남긴다. 진단 수집은 k6 요청 경로나 트랜잭션에 추가 쿼리를 넣지 않는다.
+| 경로 | 실제 잠금/쓰기 순서 |
+| --- | --- |
+| Checkout 준비 | canonical `Seat` → active `CheckoutSeatAssignment` range lock → `Checkout` insert → assignment insert → request key insert |
+| 결제 검증 claim | `Checkout` → canonical `Seat` → checkout assignment |
+| 예약 확정 | `Checkout` → `Booking`·`Payment` insert → canonical `Seat`/예약 → checkout assignment |
+| READY Checkout 취소 | `Checkout` → canonical `Seat` → checkout assignment |
+
+이번 기준선은 준비 경로의 서로 다른 두 Seat가 active assignment range lock을 각각 얻은 직후 barrier로 대기한 뒤 동시에 assignment insert를 시도하게 한다. `Measure-CheckoutContention.ps1`는 run의 MariaDB deadlock delta가 0보다 크면 run 종료 뒤 local Compose 연결로 `SHOW ENGINE INNODB STATUS`의 최신 deadlock을 raw 결과 디렉터리에 남긴다. 진단 수집은 k6 요청 경로나 트랜잭션에 추가 쿼리를 넣지 않는다.
 
 ## 관찰 결과
 
@@ -23,6 +30,8 @@ Issue #124의 distributed Checkout 100 RPS 결과에서 deadlock이 관찰됐지
 
 최신 InnoDB deadlock에는 서로 다른 `seat_id`의 두 `insert into reservation_checkout_seat_assignment`가 `uk_checkout_seat_assignment_seat_active_until` index의 `supremum` insert-intention lock에서 서로 대기한 것으로 기록됐다. 이는 좌석 번호 역순 `PESSIMISTIC_WRITE` deadlock의 재발이 아니라 활성 assignment unique index의 끝 gap 경합 후보다.
 
+동일 원인을 MariaDB Testcontainers에서 재현했다. `A1`·`A2` hold 뒤 두 Checkout 준비가 active assignment range lock을 모두 얻은 시점에 barrier를 해제하면, 3회 모두 한 쪽은 `1213/40001` deadlock이고 다른 한 쪽만 READY Checkout·request key·assignment를 commit했다. rollback 뒤 두 Seat hold는 보존되고 Booking·Payment·Reservation·reserved Seat는 모두 0이다.
+
 ## 한계와 다음 판단
 
 - `SHOW ENGINE INNODB STATUS`는 최신 1건만 보존하므로 모든 deadlock의 비율이나 원인을 대표하지 않는다.
@@ -31,6 +40,7 @@ Issue #124의 distributed Checkout 100 RPS 결과에서 deadlock이 관찰됐지
 
 ## 검증
 
+- `CheckoutVerifiedReservationIntegrationTest`: MariaDB Testcontainers barrier deadlock·rollback 3회
 - `Test-CheckoutContention.ps1`: collector·summary contract 포함 11 assertions
 - `k6 inspect load-test/k6/checkout-contention.js`
 - local measurement: `checkout126d2` (raw 결과는 Git 제외)
