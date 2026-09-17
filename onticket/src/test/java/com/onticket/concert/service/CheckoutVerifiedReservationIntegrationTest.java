@@ -1662,7 +1662,7 @@ class CheckoutVerifiedReservationIntegrationTest {
     }
 
     @RepeatedTest(3)
-    void concurrentDistinctCheckoutPreparationsReproduceAssignmentGapDeadlockAndRollback() throws Exception {
+    void concurrentDistinctCheckoutPreparationsAvoidAssignmentGapDeadlockAndPreserveAssignments() throws Exception {
         seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
         CheckoutPreparationGapBarrier barrier = new CheckoutPreparationGapBarrier();
         CHECKOUT_PREPARATION_GAP_BARRIER.set(barrier);
@@ -1683,21 +1683,16 @@ class CheckoutVerifiedReservationIntegrationTest {
                     first.get(10, TimeUnit.SECONDS),
                     second.get(10, TimeUnit.SECONDS)
             );
-            assertThat(results).filteredOn(AttemptResult::success).hasSize(1);
-            assertThat(results).filteredOn(result -> !result.success()).singleElement()
-                    .satisfies(result -> {
-                        assertThat(result.exceptionType()).isNotEqualTo("Timeout");
-                        assertThat(result.message()).contains("Deadlock found");
-                    });
+            assertThat(results).allSatisfy(result -> assertThat(result.success()).isTrue());
         } finally {
             CHECKOUT_PREPARATION_GAP_BARRIER.compareAndSet(barrier, null);
             barrier.allowInserts();
         }
 
         entityManager.clear();
-        assertThat(checkoutRepository.count()).isEqualTo(1);
-        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(1);
-        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(1);
+        assertThat(checkoutRepository.count()).isEqualTo(2);
+        assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
         assertThat(List.of(
                 seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1"),
                 seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2")
@@ -1886,6 +1881,8 @@ class CheckoutVerifiedReservationIntegrationTest {
         Checkout checkout = checkoutRepository.findByMerchantUid(merchantUid).orElseThrow();
         assertThat(checkout.getStatus()).isEqualTo(CheckoutStatus.RESERVATION_CONFIRMED);
         assertThat(checkout.getBooking()).isNotNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(checkout.getId()))
+                .allSatisfy(assignment -> assertThat(assignment.getActiveSeatId()).isNull());
         assertThat(bookingRepository.count()).isEqualTo(1);
         assertThat(paymentRepository.count()).isEqualTo(1);
         Payment payment = paymentRepository.findAll().getFirst();
@@ -2203,13 +2200,13 @@ class CheckoutVerifiedReservationIntegrationTest {
                                     Object result = invoke(assignmentRepository, method, args);
                                     CheckoutReleaseBarrier releaseBarrier = CHECKOUT_RELEASE_BARRIER.get();
                                     if (releaseBarrier != null
-                                            && method.getName().equals("findActiveBySeatIdsWithLock")) {
+                                            && method.getName().equals("findByActiveSeatIdsWithLock")) {
                                         releaseBarrier.releaseAssignmentsLocked();
                                     }
                                     CheckoutPreparationGapBarrier preparationGapBarrier =
                                             CHECKOUT_PREPARATION_GAP_BARRIER.get();
                                     if (preparationGapBarrier != null
-                                            && method.getName().equals("findActiveBySeatIdsWithLock")) {
+                                            && method.getName().equals("findByActiveSeatIds")) {
                                         preparationGapBarrier.activeAssignmentsLocked();
                                     }
                                     String targetMerchantUid = FINALIZATION_FAILURE_MERCHANT_UID.get();

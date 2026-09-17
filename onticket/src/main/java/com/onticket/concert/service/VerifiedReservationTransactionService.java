@@ -123,8 +123,10 @@ public class VerifiedReservationTransactionService {
         seatReservationService.reserveSeat(username, concertId, request, booking);
         payment.confirmReservation();
         checkoutSeatAssignmentRepository.findByCheckoutIdWithLock(checkout.getId())
-                .forEach(assignment ->
-                        assignment.clearVerificationLease(checkout.getVerificationDeadline()));
+                .forEach(assignment -> {
+                    assignment.clearVerificationLease(checkout.getVerificationDeadline());
+                    assignment.deactivateActiveSeat();
+                });
         checkout.confirmReservation(booking);
         tracker.succeed(CheckoutMetrics.Transition.RESERVATION_CONFIRMED);
         return booking.getCreatedAt();

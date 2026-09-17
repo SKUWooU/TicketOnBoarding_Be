@@ -28,8 +28,8 @@ import java.util.Objects;
                         columnNames = {"checkout_id", "seat_id"}
                 ),
                 @UniqueConstraint(
-                        name = "uk_checkout_seat_assignment_seat_active_until",
-                        columnNames = {"seat_id", "active_until"}
+                        name = "uk_checkout_seat_assignment_active_seat",
+                        columnNames = "active_seat_id"
                 )
         }
 )
@@ -46,6 +46,9 @@ public class CheckoutSeatAssignment {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "seat_id", nullable = false)
     private Seat seat;
+
+    @Column(name = "active_seat_id", unique = true)
+    private Long activeSeatId;
 
     @Column(name = "request_fingerprint", nullable = false, length = 64)
     private String requestFingerprint;
@@ -76,6 +79,7 @@ public class CheckoutSeatAssignment {
         CheckoutSeatAssignment assignment = new CheckoutSeatAssignment();
         assignment.checkout = Objects.requireNonNull(checkout, "귀속할 Checkout이 필요합니다.");
         assignment.seat = Objects.requireNonNull(seat, "귀속할 좌석이 필요합니다.");
+        assignment.activeSeatId = seat.getId();
         assignment.requestFingerprint = requestFingerprint;
         assignment.originalHoldExpiresAt = Objects.requireNonNull(
                 originalHoldExpiresAt,
@@ -122,6 +126,23 @@ public class CheckoutSeatAssignment {
         return verificationLeaseUntil == null ? activeUntil : verificationLeaseUntil;
     }
 
+    public boolean isActiveAt(LocalDateTime now) {
+        Objects.requireNonNull(now, "Checkout 좌석 귀속 확인 시각이 필요합니다.");
+        return activeSeatId != null && releasedAt == null && effectiveActiveUntil().isAfter(now);
+    }
+
+    public boolean clearExpiredActiveSeat(LocalDateTime now) {
+        if (activeSeatId == null || releasedAt != null || effectiveActiveUntil().isAfter(now)) {
+            return false;
+        }
+        activeSeatId = null;
+        return true;
+    }
+
+    public void deactivateActiveSeat() {
+        activeSeatId = null;
+    }
+
     public void release(LocalDateTime now) {
         Objects.requireNonNull(now, "Checkout 좌석 귀속 해제 시각이 필요합니다.");
         if (releasedAt != null) {
@@ -130,6 +151,7 @@ public class CheckoutSeatAssignment {
         if (verificationLeaseUntil != null) {
             throw new IllegalStateException("결제 검증 중인 Checkout 좌석 귀속은 해제할 수 없습니다.");
         }
+        deactivateActiveSeat();
         releasedAt = now;
     }
 }
