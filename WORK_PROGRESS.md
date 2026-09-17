@@ -16,7 +16,9 @@
 ### Backend Issue #124 — Checkout 고경합 시나리오별 관측 기준선
 
 - Branch: `test/#124-checkout-contention-observability`
-- 범위: local mock PG·2,000석 fixture에서 Checkout 결과·도메인 상태와 Hikari·MariaDB 관측을 run 단위로 교차
+- PR: [#125](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/125)
+- 결과: distributed·hot-seat Checkout의 k6 결과·도메인 상태·Hikari·MariaDB 관측 기준선 구성
+- 검증: parser/gate 8 assertions·k6 inspect·local fixture 3개 run 통과; CI 확인 대기
 - 제외: 실제 PG·운영 SLA·Prometheus/Grafana server·Kafka·대기열·Frontend
 
 ## 완료
