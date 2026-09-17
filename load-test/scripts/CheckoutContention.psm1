@@ -5,7 +5,7 @@ function ConvertFrom-CheckoutK6Result {
     $lines = @((($Text -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.StartsWith('CHECKOUT_RESULT ') }))
     if ($lines.Count -ne 1) { throw "Expected exactly one Checkout result, found $($lines.Count)." }
     try { $result = $lines[0].Substring(16) | ConvertFrom-Json } catch { throw 'Checkout result is not valid JSON.' }
-    foreach ($property in @('schemaVersion','scenario','targetRatePerSecond','duration','iterations','droppedIterations','checkoutConfirmed','expectedContention','unexpectedNonSuccessful','unexpectedFailureRate','checkoutDurationMs')) {
+    foreach ($property in @('schemaVersion','scenario','targetRatePerSecond','duration','thresholdsEnforced','iterations','droppedIterations','checkoutConfirmed','expectedContention','unexpectedNonSuccessful','unexpectedFailureRate','checkoutDurationMs')) {
         if ($property -notin $result.PSObject.Properties.Name) { throw "Checkout result is missing: $property" }
     }
     if ([int]$result.schemaVersion -ne 1) { throw 'Unsupported Checkout result schema.' }
@@ -40,13 +40,38 @@ function Assert-CheckoutContentionGate {
         [Parameter(Mandatory = $true)][object]$Snapshot,
         [Parameter(Mandatory = $true)][object]$TransitionDelta
     )
+    Assert-CheckoutDomainState -Result $Result -Snapshot $Snapshot -TransitionDelta $TransitionDelta | Out-Null
+    if ([double]$Result.unexpectedFailureRate -ne 0 -or [long]$Result.unexpectedNonSuccessful -ne 0) { throw 'Checkout run contains unexpected failures.' }
+    $true
+}
+
+function Assert-CheckoutDomainState {
+    param(
+        [Parameter(Mandatory = $true)][object]$Result,
+        [Parameter(Mandatory = $true)][object]$Snapshot,
+        [Parameter(Mandatory = $true)][object]$TransitionDelta
+    )
     $confirmed = [long]$Result.checkoutConfirmed
     if ([long]$Result.iterations -ne ($confirmed + [long]$Result.expectedContention + [long]$Result.unexpectedNonSuccessful)) { throw 'Checkout k6 counters do not match iterations.' }
-    if ([double]$Result.unexpectedFailureRate -ne 0 -or [long]$Result.unexpectedNonSuccessful -ne 0) { throw 'Checkout run contains unexpected failures.' }
     if (-not [bool]$Snapshot.invariantSatisfied) { throw 'Checkout inventory invariant is false.' }
     foreach ($property in @('reservedSeats','reservations','bookings','payments')) {
         if ([long]$Snapshot.$property -ne $confirmed) { throw "Checkout final $property does not match confirmed responses." }
     }
     if ([long]$TransitionDelta.reservationConfirmed -ne $confirmed -or [long]$TransitionDelta.verificationClaimed -ne $confirmed) { throw 'Checkout committed transition delta does not match confirmed responses.' }
+    $true
+}
+
+function Assert-CheckoutRunIdentity {
+    param(
+        [Parameter(Mandatory = $true)][object]$Result,
+        [Parameter(Mandatory = $true)][string]$Scenario,
+        [Parameter(Mandatory = $true)][int]$Rate,
+        [Parameter(Mandatory = $true)][int]$DurationSeconds,
+        [Parameter(Mandatory = $true)][bool]$ThresholdsEnforced
+    )
+    if ($Result.scenario -ne $Scenario -or [int]$Result.targetRatePerSecond -ne $Rate -or
+        $Result.duration -ne "${DurationSeconds}s" -or [bool]$Result.thresholdsEnforced -ne $ThresholdsEnforced) {
+        throw 'Checkout k6 result does not match the requested run identity.'
+    }
     $true
 }
