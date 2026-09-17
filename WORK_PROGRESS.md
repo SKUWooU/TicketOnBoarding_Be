@@ -13,13 +13,14 @@
 
 ## 진행 중
 
+## 완료
+
 ### Backend Issue #126 — Checkout distributed deadlock 재현 기준선
 
-- 상태: 잠금 경로 조사·MariaDB Testcontainers 재현 설계 진행 중
-- 범위: Checkout 준비·결제 검증의 `Seat`·`Checkout`·assignment 잠금 순환과 rollback 상태 검증
-- 제외: 원인 근거 없는 lock/pool 조정, 실제 PG·운영 성능 주장, Frontend
-
-## 완료
+- PR: [#127](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/127) / squash `802a1de`
+- 결과: assignment active unique index의 supremum insert-intention deadlock을 Testcontainers barrier·local diagnostic으로 재현·기록
+- 검증: Testcontainers 3회 deadlock/rollback·PowerShell 11 assertions·k6 inspect·CI 성공
+- 제외: index/lock/pool 변경, 실제 PG·운영 성능 주장, Frontend
 
 ### Backend Issue #124 — Checkout 고경합 시나리오별 관측 기준선
 
