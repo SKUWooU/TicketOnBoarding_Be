@@ -10,6 +10,8 @@ const DURATION = __ENV.DURATION || '10s';
 const PRE_ALLOCATED_VUS = Number(__ENV.PRE_ALLOCATED_VUS || 20);
 const MAX_VUS = Number(__ENV.MAX_VUS || 100);
 const TOKEN_COUNT = Number(__ENV.TOKEN_COUNT || Math.min(MAX_VUS, 100));
+const FIXTURE_PREPARED = (__ENV.FIXTURE_PREPARED || 'false').toLowerCase() === 'true';
+const ENFORCE_THRESHOLDS = (__ENV.ENFORCE_THRESHOLDS || 'true').toLowerCase() === 'true';
 const UNIT_PRICE = 30000;
 
 const checkoutConfirmed = new Counter('checkout_confirmed');
@@ -25,16 +27,17 @@ export const options = {
       preAllocatedVUs: PRE_ALLOCATED_VUS, maxVUs: MAX_VUS,
     },
   },
-  thresholds: {
+  thresholds: ENFORCE_THRESHOLDS ? {
     checkout_unexpected_failure: ['rate<0.05'],
     checkout_duration: ['p(95)<3000'],
-  },
+  } : {},
 };
 
 export function setup() {
   const runId = (__ENV.RUN_ID || `checkout-${Date.now()}`).trim();
   if (!/^[A-Za-z0-9-]{1,32}$/.test(runId)) throw new Error('RUN_ID format is invalid.');
-  const fixtureResponse = http.post(`${BASE_URL}/loadtest/runs?runId=${encodeURIComponent(runId)}`, null);
+  const fixtureUrl = `${BASE_URL}/loadtest/${FIXTURE_PREPARED ? 'fixture' : 'runs'}?runId=${encodeURIComponent(runId)}`;
+  const fixtureResponse = FIXTURE_PREPARED ? http.get(fixtureUrl) : http.post(fixtureUrl, null);
   const tokenResponse = http.get(`${BASE_URL}/loadtest/tokens?runId=${encodeURIComponent(runId)}&count=${TOKEN_COUNT}`);
   const metricsResponse = http.get(`${MANAGEMENT_BASE_URL}/actuator/prometheus`);
   if (fixtureResponse.status !== 200 || tokenResponse.status !== 200 || metricsResponse.status !== 200) {
@@ -94,6 +97,7 @@ export function handleSummary(data) {
   const values = (name) => (data.metrics[name] ? data.metrics[name].values : {});
   const result = {
     schemaVersion: 1, scenario: TEST_SCENARIO, targetRatePerSecond: RATE, duration: DURATION,
+    thresholdsEnforced: ENFORCE_THRESHOLDS,
     iterations: Number(values('iterations').count || 0),
     droppedIterations: Number(values('dropped_iterations').count || 0),
     checkoutConfirmed: Number(values('checkout_confirmed').count || 0),

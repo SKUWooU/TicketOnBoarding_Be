@@ -13,6 +13,12 @@
 
 ## 진행 중
 
+### Backend Issue #124 — Checkout 고경합 시나리오별 관측 기준선
+
+- Branch: `test/#124-checkout-contention-observability`
+- 범위: local mock PG·2,000석 fixture에서 Checkout 결과·도메인 상태와 Hikari·MariaDB 관측을 run 단위로 교차
+- 제외: 실제 PG·운영 SLA·Prometheus/Grafana server·Kafka·대기열·Frontend
+
 ## 완료
 
 ### Backend Issue #122 — Checkout 고경합 결과·도메인 상태 교차 검증
