@@ -13,13 +13,16 @@
 
 ## 진행 중
 
-### Backend Issue #132 — Checkout deadlock 해소 반복 측정
-
-- 상태: warm-up·repeat measurement contract와 local fixture 비교 설계 진행 중
-- 범위: 2,000석 mock fixture distributed 100 RPS의 deadlock·unexpected·domain convergence 반복 관찰
-- 제외: pool tuning, retry, queue/broker, 운영 성능 주장, Frontend
+- 없음
 
 ## 완료
+
+### Backend Issue #132 — Checkout deadlock 해소 반복 측정
+
+- 결과: 동일 2,000석 local mock fixture 100 RPS·10초의 warm-up 제외 3회에서 deadlock·unexpected 0과 재고 invariant 수렴 확인; p95 5,165.8–5,573.0ms·dropped 374–410·pending 173–175의 host 포화 신호는 별도 관찰로 기록
+- 검증: repeat runner 7·Checkout parser 11 assertions·k6 inspect·local Docker MariaDB/mock PG 3회·CI 성공·Reviewer `MERGE_READY: YES`
+- 근거: [Checkout deadlock 해소 반복 측정](docs/project-improvement/archive/checkout/checkout-deadlock-repeat-measurement.md)
+- 제외: pool tuning, retry, queue/broker, 운영 성능 주장, Frontend
 
 ### Backend Issue #130 — active assignment unique 제약 단일화
 
