@@ -13,6 +13,12 @@
 
 ## 진행 중
 
+### Backend Issue #132 — Checkout deadlock 해소 반복 측정
+
+- 상태: warm-up·repeat measurement contract와 local fixture 비교 설계 진행 중
+- 범위: 2,000석 mock fixture distributed 100 RPS의 deadlock·unexpected·domain convergence 반복 관찰
+- 제외: pool tuning, retry, queue/broker, 운영 성능 주장, Frontend
+
 ## 완료
 
 ### Backend Issue #130 — active assignment unique 제약 단일화

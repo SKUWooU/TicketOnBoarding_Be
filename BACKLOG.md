@@ -28,7 +28,7 @@ Checkout 취소·결제 검증은 commit된 상태 전이만 집계하는 Microm
 
 Checkout distributed 100 RPS에서 발생한 deadlock은 최신 InnoDB 진단으로 `reservation_checkout_seat_assignment`의 `(seat_id, active_until)` unique index 끝 gap insert-intention 순환 후보까지 좁혔다. 다음 변경은 해당 제약과 active-assignment 조회의 필요 범위를 분리해 같은 local fixture·rollback 불변식으로 비교한 뒤 결정하며, pool·재시도·일반 좌석 lock 순서는 이 근거만으로 조정하지 않는다 ([#126](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/126)).
 
-active assignment는 history seat FK와 nullable active seat unique key를 분리하고, 이미 Seat lock을 보유한 Checkout 준비에는 non-locking 조회를 적용했다. Testcontainers barrier와 local mock fixture 모두에서 deadlock은 관찰되지 않았고 도메인 수렴을 유지했다. dropped iteration·host 포화는 남아 있으므로 이를 pool·재시도·대기열 도입 근거로 확대하지 않으며, 반복 측정 전 성능 수치 비교도 보류한다 ([#128](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/128)).
+active assignment는 history seat FK와 nullable active seat unique key를 분리하고, 이미 Seat lock을 보유한 Checkout 준비에는 non-locking 조회를 적용했다. Testcontainers barrier와 local mock fixture 모두에서 deadlock은 관찰되지 않았고 도메인 수렴을 유지했다. 같은 2,000석·100 RPS 조건의 warm-up 제외 3회 repeat에서도 deadlock·예상 밖 실패 0과 invariant 수렴을 확인했다. 다만 p95 5,165.8–5,573.0ms·dropped 374–410·pending 173–175의 단일 host 포화 신호는 남아 있다. 이를 pool·재시도·대기열 도입 근거로 확대하지 않으며, 다음 후보는 부하 생성 한계와 서버·DB 자원 포화를 구분하는 관측 계약이다 ([#128](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/128), [#132](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/132)).
 
 ## Phase 1–2 첫 기술 Issue 후보
 
