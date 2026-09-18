@@ -96,7 +96,7 @@ export function teardown(data) {
 export function handleSummary(data) {
   const values = (name) => (data.metrics[name] ? data.metrics[name].values : {});
   const result = {
-    schemaVersion: 1, scenario: TEST_SCENARIO, targetRatePerSecond: RATE, duration: DURATION,
+    schemaVersion: 2, scenario: TEST_SCENARIO, targetRatePerSecond: RATE, duration: DURATION,
     thresholdsEnforced: ENFORCE_THRESHOLDS,
     iterations: Number(values('iterations').count || 0),
     droppedIterations: Number(values('dropped_iterations').count || 0),
@@ -108,6 +108,10 @@ export function handleSummary(data) {
       p95: Number(values('checkout_duration')['p(95)'] || 0),
       average: Number(values('checkout_duration').avg || 0),
     },
+    maxObservedVus: Number(values('vus').max || 0),
+    maxAllocatedVus: Number(values('vus_max').max || 0),
+    preAllocatedVus: PRE_ALLOCATED_VUS,
+    configuredMaxVus: MAX_VUS,
   };
   return { stdout: `CHECKOUT_RESULT ${JSON.stringify(result)}\n` };
 }
