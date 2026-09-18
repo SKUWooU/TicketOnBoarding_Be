@@ -13,6 +13,12 @@
 
 ## 진행 중
 
+### Backend Issue #130 — active assignment unique 제약 단일화
+
+- 상태: JPA mapping·MariaDB generated schema index 검증 진행 중
+- 범위: `active_seat_id` 단일 named unique constraint와 Checkout 상태 전이 회귀
+- 제외: 운영 migration, 실제 PG, 성능 수치 변경, Frontend
+
 ## 완료
 
 ### Backend Issue #128 — 활성 Checkout 귀속 제약 경합 해소

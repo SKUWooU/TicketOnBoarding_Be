@@ -37,6 +37,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
@@ -174,6 +175,9 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private MutableClock clock;
@@ -1659,6 +1663,19 @@ class CheckoutVerifiedReservationIntegrationTest {
         assertThat(checkoutRepository.count()).isEqualTo(1);
         assertThat(checkoutRequestKeyRepository.count()).isEqualTo(2);
         assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
+    }
+
+    @Test
+    void generatedSchemaHasOneNamedUniqueIndexForActiveSeatAssignment() {
+        List<java.util.Map<String, Object>> indexes = jdbcTemplate.queryForList(
+                "SHOW INDEX FROM reservation_checkout_seat_assignment"
+        );
+
+        assertThat(indexes)
+                .filteredOn(index -> "active_seat_id".equals(index.get("Column_name"))
+                        && ((Number) index.get("Non_unique")).intValue() == 0)
+                .extracting(index -> index.get("Key_name"))
+                .containsExactly("uk_checkout_seat_assignment_active_seat");
     }
 
     @RepeatedTest(3)

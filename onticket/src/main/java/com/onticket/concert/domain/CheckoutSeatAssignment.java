@@ -47,7 +47,7 @@ public class CheckoutSeatAssignment {
     @JoinColumn(name = "seat_id", nullable = false)
     private Seat seat;
 
-    @Column(name = "active_seat_id", unique = true)
+    @Column(name = "active_seat_id")
     private Long activeSeatId;
 
     @Column(name = "request_fingerprint", nullable = false, length = 64)
