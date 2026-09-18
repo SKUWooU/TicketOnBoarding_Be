@@ -30,6 +30,8 @@ Checkout distributed 100 RPS에서 발생한 deadlock은 최신 InnoDB 진단으
 
 active assignment는 history seat FK와 nullable active seat unique key를 분리하고, 이미 Seat lock을 보유한 Checkout 준비에는 non-locking 조회를 적용했다. Testcontainers barrier와 local mock fixture 모두에서 deadlock은 관찰되지 않았고 도메인 수렴을 유지했다. 같은 2,000석·100 RPS 조건의 warm-up 제외 3회 repeat에서도 deadlock·예상 밖 실패 0과 invariant 수렴을 확인했다. 다만 p95 5,165.8–5,573.0ms·dropped 374–410·pending 173–175의 단일 host 포화 신호는 남아 있다. 이를 pool·재시도·대기열 도입 근거로 확대하지 않으며, 다음 후보는 부하 생성 한계와 서버·DB 자원 포화를 구분하는 관측 계약이다 ([#128](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/128), [#132](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/132)).
 
+Checkout 50·75·100 RPS attribution baseline에서 50 RPS는 VU 상한 미도달에도 pool pending·DB lock 신호를 함께 보였고, 75·100 RPS는 VU 200 상한 도달로 원인 분리가 제한됐다. 따라서 dropped iteration을 k6 단독 한계로 단정할 수 없지만, pool·DB 중 하나의 단독 root cause나 서버 최대 처리량도 주장하지 않는다. 다음 진단은 pool 대기 시간과 DB query/lock 대기를 더 직접적으로 상관시키는 최소 계약이며, pool size·retry·queue/broker·JVM tuning은 보류한다 ([#134](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/134)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`

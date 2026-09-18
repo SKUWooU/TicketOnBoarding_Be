@@ -13,7 +13,11 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #134 — Checkout 고경합 포화 원인 분리 관측 기준선
+
+- 상태: 기존 collector·k6 summary·MariaDB 상태 지표의 attribution 가능 범위 조사 중
+- 범위: 2,000석 mock fixture 단계별 부하의 generator·pool·DB 후보와 domain convergence 반복 관찰
+- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
 
 ## 완료
 
