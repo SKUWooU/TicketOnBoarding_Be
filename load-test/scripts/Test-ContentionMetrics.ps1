@@ -204,4 +204,23 @@ Assert-Issue51Equal $issue53Snapshot.remainingSeats 1010 'Final snapshot invento
 Assert-Issue51Equal $issue53Snapshot.invariantSatisfied $true 'Final snapshot invariant must be parsed.'
 Assert-Issue51Throws { ConvertFrom-K6FinalSnapshot -Text 'missing snapshot' } 'Missing final snapshots must fail.'
 
+$issue136HikariTiming = ConvertFrom-PrometheusHikariAcquireTiming -Text @'
+hikaricp_connections_acquire_seconds_count{pool="HikariPool-1"} 10
+hikaricp_connections_acquire_seconds_sum{pool="HikariPool-1"} 1.5
+hikaricp_connections_timeout_total{pool="HikariPool-1"} 0
+'@
+$issue136HikariTimingAfter = [pscustomobject]@{ AcquireCount=14; AcquireSeconds=2.5; TimeoutCount=1 }
+$issue136HikariDelta = New-HikariAcquireTimingDelta -Before $issue136HikariTiming -After $issue136HikariTimingAfter
+Assert-Issue51Equal $issue136HikariDelta.AcquireCount 4 'Hikari acquire count delta must be calculated.'
+Assert-Issue51Equal $issue136HikariDelta.AcquireWaitMilliseconds 1000 'Hikari acquire wait delta must be converted to milliseconds.'
+Assert-Issue51Equal $issue136HikariDelta.AverageAcquireWaitMilliseconds 250 'Hikari acquire average wait must be calculated.'
+
+$issue136Before = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-a	SELECT * FROM seat	2	1000000000	100000000')
+$issue136After = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-a	SELECT * FROM seat	5	4000000000	700000000', 'digest-b	UPDATE seat	1	2000000000	0')
+$issue136DigestDelta = New-MariaDbStatementDigestDelta -Before $issue136Before -After $issue136After
+Assert-Issue51Equal $issue136DigestDelta.StatementCount 4 'Statement digest count delta must include changed and new digests.'
+Assert-Issue51Equal $issue136DigestDelta.ExecutionMilliseconds 5 'Statement digest time must convert picoseconds to milliseconds.'
+Assert-Issue51Equal $issue136DigestDelta.LockMilliseconds 0.6 'Statement digest lock time must convert picoseconds to milliseconds.'
+Assert-Issue51Throws { New-MariaDbStatementDigestDelta -Before $issue136Before -After @() } 'Disappeared statement digests must invalidate a timing measurement.'
+
 Write-Output "ContentionMetrics checks passed: $issue51Assertions assertions."
