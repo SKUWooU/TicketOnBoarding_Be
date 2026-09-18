@@ -8,7 +8,13 @@ function ConvertFrom-CheckoutK6Result {
     foreach ($property in @('schemaVersion','scenario','targetRatePerSecond','duration','thresholdsEnforced','iterations','droppedIterations','checkoutConfirmed','expectedContention','unexpectedNonSuccessful','unexpectedFailureRate','checkoutDurationMs')) {
         if ($property -notin $result.PSObject.Properties.Name) { throw "Checkout result is missing: $property" }
     }
-    if ([int]$result.schemaVersion -ne 1) { throw 'Unsupported Checkout result schema.' }
+    $schemaVersion = [int]$result.schemaVersion
+    if ($schemaVersion -notin @(1, 2)) { throw 'Unsupported Checkout result schema.' }
+    if ($schemaVersion -eq 2) {
+        foreach ($property in @('maxObservedVus','maxAllocatedVus','preAllocatedVus','configuredMaxVus')) {
+            if ($property -notin $result.PSObject.Properties.Name) { throw "Checkout schema v2 result is missing: $property" }
+        }
+    }
     $result
 }
 
