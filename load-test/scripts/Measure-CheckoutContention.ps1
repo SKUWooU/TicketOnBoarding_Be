@@ -13,6 +13,8 @@ param(
     [string]$DatabaseUser = 'onticket',
     [string]$DatabasePassword = 'onticket',
     [string]$DatabaseRootPassword = 'onticket-root',
+    [string]$DatabaseName = 'onticket_local',
+    [switch]$EnableStatementDiagnostics,
     [switch]$DisablePerformanceThresholds
 )
 
@@ -23,16 +25,20 @@ $scriptDirectory = $PSScriptRoot
 $repositoryRoot = (Resolve-Path (Join-Path $scriptDirectory '..\..')).Path
 $k6Script = Join-Path $repositoryRoot 'load-test\k6\checkout-contention.js'
 $composeFile = Join-Path $repositoryRoot 'compose.yml'
+$statementDiagnosticsComposeFile = Join-Path $repositoryRoot 'compose.statement-diagnostics.yml'
 Import-Module (Join-Path $scriptDirectory 'ContentionMetrics.psm1') -Force
 Import-Module (Join-Path $scriptDirectory 'CheckoutContention.psm1') -Force
 
 if ($PreAllocatedVus -gt $MaxVus) { throw 'PreAllocatedVus must not exceed MaxVus.' }
+if ($EnableStatementDiagnostics -and -not (Test-Path -LiteralPath $statementDiagnosticsComposeFile)) { throw 'Statement diagnostics Compose overlay is missing.' }
 $RunId = Assert-ContentionRunId -RunId $RunId
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) { $OutputDirectory = Join-Path $repositoryRoot 'load-test\results' }
 $resolvedOutput = [IO.Path]::GetFullPath($OutputDirectory)
 $allowedOutput = [IO.Path]::GetFullPath((Join-Path $repositoryRoot 'load-test\results'))
 if (-not $resolvedOutput.StartsWith($allowedOutput, [StringComparison]::OrdinalIgnoreCase)) { throw "OutputDirectory must stay under $allowedOutput" }
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
+$composeArguments = @('-f', $composeFile)
+if ($EnableStatementDiagnostics) { $composeArguments += @('-f', $statementDiagnosticsComposeFile) }
 
 $paths = [ordered]@{
     Samples = Join-Path $resolvedOutput "$RunId-metrics.csv"
@@ -50,18 +56,29 @@ if ((Invoke-RestMethod -Uri "$ManagementBaseUrl/actuator/health" -Method Get).st
 
 $statusQuery = "SHOW GLOBAL STATUS WHERE Variable_name IN ('Innodb_deadlocks','Innodb_row_lock_current_waits','Innodb_row_lock_time','Innodb_row_lock_waits','Threads_connected','Threads_running');"
 function Get-MariaDbStatus {
-    $output = & docker compose -f $composeFile exec -T mariadb mariadb "-u$DatabaseUser" "-p$DatabasePassword" -N -e $statusQuery 2>&1
+    $output = & docker compose @composeArguments exec -T mariadb mariadb "-u$DatabaseUser" "-p$DatabasePassword" -N -e $statusQuery 2>&1
     if ($LASTEXITCODE -ne 0) { throw "MariaDB status query failed with exit code $LASTEXITCODE." }
     ConvertFrom-MariaDbStatus -Lines $output
 }
 function Save-MariaDbLatestDeadlock {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $output = & docker compose -f $composeFile exec -T mariadb mariadb "-uroot" "-p$DatabaseRootPassword" -e 'SHOW ENGINE INNODB STATUS;' 2>&1
+    $output = & docker compose @composeArguments exec -T mariadb mariadb "-uroot" "-p$DatabaseRootPassword" -e 'SHOW ENGINE INNODB STATUS;' 2>&1
     if ($LASTEXITCODE -ne 0) { throw "MariaDB deadlock diagnostic query failed with exit code $LASTEXITCODE." }
     $text = ($output -join "`n")
     if ($text -notmatch 'LATEST DETECTED DEADLOCK') { throw 'MariaDB did not return a latest deadlock diagnostic.' }
     Set-Content -LiteralPath $Path -Value $text -Encoding UTF8
+}
+function Get-MariaDbStatementDigestSnapshot {
+    if (-not $EnableStatementDiagnostics) { return $null }
+    $enabled = & docker compose @composeArguments exec -T mariadb mariadb "-uroot" "-p$DatabaseRootPassword" -N -e "SHOW VARIABLES LIKE 'performance_schema';" 2>&1
+    if ($LASTEXITCODE -ne 0 -or (($enabled -join "`n") -notmatch 'performance_schema\s+ON')) { throw 'Statement diagnostics require a running MariaDB with performance_schema=ON.' }
+    $query = "SELECT DIGEST, REPLACE(DIGEST_TEXT, CHAR(9), ' '), COUNT_STAR, SUM_TIMER_WAIT, SUM_LOCK_TIME FROM performance_schema.events_statements_summary_by_digest WHERE SCHEMA_NAME = '$DatabaseName' AND DIGEST IS NOT NULL;"
+    $output = & docker compose @composeArguments exec -T mariadb mariadb "-uroot" "-p$DatabaseRootPassword" -N -B -e $query 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "MariaDB statement digest query failed with exit code $LASTEXITCODE." }
+    $snapshot = ConvertFrom-MariaDbStatementDigestSnapshot -Lines $output
+    if ($snapshot.Count -eq 0) { throw 'MariaDB statement digest snapshot is empty.' }
+    $snapshot
 }
 function Get-MetricSample {
     param([Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch)
@@ -83,6 +100,9 @@ function Get-MetricSample {
 
 $fixture = Invoke-RestMethod -Uri "$BaseUrl/loadtest/runs?runId=$RunId" -Method Post
 if ([int]$fixture.totalSeats -ne 2000) { throw 'Checkout fixture must contain 2,000 seats.' }
+$initialPrometheus = (Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get).Content
+$hikariAcquireBefore = ConvertFrom-PrometheusHikariAcquireTiming -Text $initialPrometheus
+$statementDigestBefore = Get-MariaDbStatementDigestSnapshot
 $startedAt = (Get-Date).ToUniversalTime()
 $stopwatch = [Diagnostics.Stopwatch]::StartNew()
 $samples = New-Object 'Collections.Generic.List[object]'
@@ -116,13 +136,16 @@ try {
     $snapshot = ConvertFrom-CheckoutFinalSnapshot -Text $text; $delta = ConvertFrom-CheckoutTransitionDelta -Text $text
     Assert-CheckoutDomainState -Result $result -Snapshot $snapshot -TransitionDelta $delta | Out-Null
     $metrics = New-ContentionMetricsSummary -Samples $samples.ToArray(); $samples | Export-Csv -LiteralPath $paths.Samples -NoTypeInformation -Encoding UTF8
+    $finalPrometheus = (Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get).Content
+    $hikariAcquire = New-HikariAcquireTimingDelta -Before $hikariAcquireBefore -After (ConvertFrom-PrometheusHikariAcquireTiming -Text $finalPrometheus)
+    $statementDiagnostics = if ($EnableStatementDiagnostics) { New-MariaDbStatementDigestDelta -Before $statementDigestBefore -After (Get-MariaDbStatementDigestSnapshot) } else { $null }
     $deadlockDiagnosticsFile = $null
     if ([long]$metrics.Deltas.DbDeadlocks -gt 0) {
         Save-MariaDbLatestDeadlock -Path $paths.Deadlock
         $deadlockDiagnosticsFile = [IO.Path]::GetFileName($paths.Deadlock)
     }
     $thresholdsPassed = $process.ExitCode -eq 0
-    [ordered]@{ SchemaVersion = 1; ValidMeasurement = $true; Run = [ordered]@{ Id = $RunId; Scenario = $Scenario; RatePerSecond = $Rate; DurationSeconds = $DurationSeconds; StartedAtUtc = $startedAt.ToString('o') }; Fixture = [ordered]@{ TotalSeats = 2000; PreparedBeforeSampling = $true }; K6 = [ordered]@{ ExitCode = $process.ExitCode; ThresholdsPassed = $thresholdsPassed; Result = $result; FinalSnapshot = $snapshot; TransitionDelta = $delta }; Metrics = $metrics; SamplesFile = [IO.Path]::GetFileName($paths.Samples); DeadlockDiagnosticsFile = $deadlockDiagnosticsFile; ObserverEffects = $metrics.ObserverEffects } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $paths.Summary -Encoding UTF8
+    [ordered]@{ SchemaVersion = 1; ValidMeasurement = $true; Run = [ordered]@{ Id = $RunId; Scenario = $Scenario; RatePerSecond = $Rate; DurationSeconds = $DurationSeconds; StartedAtUtc = $startedAt.ToString('o') }; Fixture = [ordered]@{ TotalSeats = 2000; PreparedBeforeSampling = $true }; K6 = [ordered]@{ ExitCode = $process.ExitCode; ThresholdsPassed = $thresholdsPassed; Result = $result; FinalSnapshot = $snapshot; TransitionDelta = $delta }; Metrics = $metrics; HikariAcquire = $hikariAcquire; StatementDiagnostics = $statementDiagnostics; SamplesFile = [IO.Path]::GetFileName($paths.Samples); DeadlockDiagnosticsFile = $deadlockDiagnosticsFile; ObserverEffects = $metrics.ObserverEffects } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $paths.Summary -Encoding UTF8
     Write-Output "VALID_CHECKOUT_MEASUREMENT runId=$RunId scenario=$Scenario thresholdsPassed=$thresholdsPassed samples=$($metrics.SampleCount)"
     Write-Output "SUMMARY_PATH $($paths.Summary)"
 } catch {
