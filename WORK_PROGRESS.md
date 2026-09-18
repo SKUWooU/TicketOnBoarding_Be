@@ -13,13 +13,16 @@
 
 ## 진행 중
 
-### Backend Issue #134 — Checkout 고경합 포화 원인 분리 관측 기준선
-
-- 상태: 기존 collector·k6 summary·MariaDB 상태 지표의 attribution 가능 범위 조사 중
-- 범위: 2,000석 mock fixture 단계별 부하의 generator·pool·DB 후보와 domain convergence 반복 관찰
-- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
+- 없음
 
 ## 완료
+
+### Backend Issue #134 — Checkout 고경합 포화 원인 분리 관측 기준선
+
+- 결과: legacy v1·VU 필수 v2 k6 계약을 분리하고, 50 RPS VU cap 미도달에도 pool·DB lock 신호를 확인; 75·100 RPS는 VU 200 cap 도달로 root cause 귀속을 제한
+- 검증: Checkout parser 14·repeat attribution 9·deadlock repeat 7 assertions·k6 inspect·local Docker MariaDB/mock PG rate별 3회·CI 성공·Reviewer 재검토 `MERGE_READY: YES`
+- 근거: [Checkout 고경합 포화 원인 분리 관측 기준선](docs/project-improvement/archive/checkout/checkout-saturation-attribution-baseline.md)
+- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
 
 ### Backend Issue #132 — Checkout deadlock 해소 반복 측정
 
