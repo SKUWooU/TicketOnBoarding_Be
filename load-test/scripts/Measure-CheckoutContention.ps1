@@ -138,7 +138,10 @@ try {
     $metrics = New-ContentionMetricsSummary -Samples $samples.ToArray(); $samples | Export-Csv -LiteralPath $paths.Samples -NoTypeInformation -Encoding UTF8
     $finalPrometheus = (Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get).Content
     $hikariAcquire = New-HikariAcquireTimingDelta -Before $hikariAcquireBefore -After (ConvertFrom-PrometheusHikariAcquireTiming -Text $finalPrometheus)
-    $statementDiagnostics = if ($EnableStatementDiagnostics) { New-MariaDbStatementDigestDelta -Before $statementDigestBefore -After (Get-MariaDbStatementDigestSnapshot) } else { $null }
+    $statementDiagnostics = if ($EnableStatementDiagnostics) {
+        $statementDelta = New-MariaDbStatementDigestDelta -Before $statementDigestBefore -After (Get-MariaDbStatementDigestSnapshot)
+        New-K6CompletedIterationStatementDiagnostics -Diagnostics $statementDelta -Result $result
+    } else { $null }
     $deadlockDiagnosticsFile = $null
     if ([long]$metrics.Deltas.DbDeadlocks -gt 0) {
         Save-MariaDbLatestDeadlock -Path $paths.Deadlock
