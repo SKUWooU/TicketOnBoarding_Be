@@ -32,6 +32,8 @@ active assignment는 history seat FK와 nullable active seat unique key를 분�
 
 Checkout 50·75·100 RPS attribution baseline에서 50 RPS는 VU 상한 미도달에도 pool pending·DB lock 신호를 함께 보였고, 75·100 RPS는 VU 200 상한 도달로 원인 분리가 제한됐다. 따라서 dropped iteration을 k6 단독 한계로 단정할 수 없지만, pool·DB 중 하나의 단독 root cause나 서버 최대 처리량도 주장하지 않는다. 다음 진단은 pool 대기 시간과 DB query/lock 대기를 더 직접적으로 상관시키는 최소 계약이며, pool size·retry·queue/broker·JVM tuning은 보류한다 ([#134](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/134)).
 
+진단 전용 Performance Schema와 Hikari acquire timer를 같은 Checkout run에 결합해 acquire 평균 대기 증가와 statement lock 누적을 확인했다. 다만 concurrent statement time은 wall-clock 시간이 아니고 VU cap 이후 request 도달량도 달라 단독 원인을 확정하지 않는다. pool·retry·queue/broker·JVM tuning은 계속 보류하며, digest를 request 도달량으로 정규화할 수 있는 경우에만 후속 진단을 검토한다 ([#136](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/136)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`

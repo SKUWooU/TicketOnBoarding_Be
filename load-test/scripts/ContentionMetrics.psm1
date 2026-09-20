@@ -48,6 +48,83 @@ function ConvertFrom-PrometheusHikari {
     }
 }
 
+function ConvertFrom-PrometheusHikariAcquireTiming {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $values = @{}
+    foreach ($name in @('hikaricp_connections_acquire_seconds_count', 'hikaricp_connections_acquire_seconds_sum', 'hikaricp_connections_timeout_total')) {
+        $matches = @([regex]::Matches($Text, "(?m)^$([regex]::Escape($name))(?:\{[^}]*\})?\s+([0-9.eE+-]+)\s*$"))
+        if ($matches.Count -ne 1) { throw "Required Hikari timing metric is missing or ambiguous: $name" }
+        $values[$name] = [double]::Parse($matches[0].Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
+    }
+    [pscustomobject]@{
+        AcquireCount = [long]$values['hikaricp_connections_acquire_seconds_count']
+        AcquireSeconds = [double]$values['hikaricp_connections_acquire_seconds_sum']
+        TimeoutCount = [long]$values['hikaricp_connections_timeout_total']
+    }
+}
+
+function New-HikariAcquireTimingDelta {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][object]$Before, [Parameter(Mandatory = $true)][object]$After)
+
+    foreach ($name in @('AcquireCount', 'AcquireSeconds', 'TimeoutCount')) {
+        if ($After.$name -lt $Before.$name) { throw "Hikari acquire timing counter decreased: $name" }
+    }
+    $count = [long]$After.AcquireCount - [long]$Before.AcquireCount
+    $seconds = [double]$After.AcquireSeconds - [double]$Before.AcquireSeconds
+    [pscustomobject]@{
+        AcquireCount = $count
+        AcquireWaitMilliseconds = $seconds * 1000.0
+        AverageAcquireWaitMilliseconds = if ($count -eq 0) { 0.0 } else { ($seconds * 1000.0) / $count }
+        TimeoutCount = [long]$After.TimeoutCount - [long]$Before.TimeoutCount
+    }
+}
+
+function ConvertFrom-MariaDbStatementDigestSnapshot {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string[]]$Lines)
+
+    $rows = New-Object 'Collections.Generic.List[object]'
+    foreach ($line in $Lines) {
+        $parts = [string]$line -split "`t", 5
+        if ($parts.Count -ne 5) { throw 'MariaDB statement digest row must contain five tab-separated fields.' }
+        $rows.Add([pscustomobject]@{ Digest=$parts[0]; DigestText=$parts[1]; Count=[long]$parts[2]; TimerWaitPicoseconds=[double]$parts[3]; LockTimePicoseconds=[double]$parts[4] })
+    }
+    $rows.ToArray()
+}
+
+function New-MariaDbStatementDigestDelta {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][object[]]$Before, [Parameter(Mandatory = $true)][object[]]$After)
+
+    $beforeByDigest = @{}
+    foreach ($row in $Before) { $beforeByDigest[$row.Digest] = $row }
+    $afterByDigest = @{}
+    foreach ($row in $After) { $afterByDigest[$row.Digest] = $row }
+    foreach ($beforeRow in $Before) {
+        if (-not $afterByDigest.ContainsKey($beforeRow.Digest)) { throw "MariaDB statement digest disappeared between snapshots: $($beforeRow.Digest)" }
+    }
+    $deltas = New-Object 'Collections.Generic.List[object]'
+    foreach ($afterRow in $After) {
+        $beforeRow = $beforeByDigest[$afterRow.Digest]
+        $beforeCount = if ($null -eq $beforeRow) { 0 } else { [long]$beforeRow.Count }
+        $beforeWait = if ($null -eq $beforeRow) { 0.0 } else { [double]$beforeRow.TimerWaitPicoseconds }
+        $beforeLock = if ($null -eq $beforeRow) { 0.0 } else { [double]$beforeRow.LockTimePicoseconds }
+        if ($afterRow.Count -lt $beforeCount -or $afterRow.TimerWaitPicoseconds -lt $beforeWait -or $afterRow.LockTimePicoseconds -lt $beforeLock) { throw "MariaDB statement digest counter decreased: $($afterRow.Digest)" }
+        $count = [long]$afterRow.Count - $beforeCount
+        if ($count -gt 0) { $deltas.Add([pscustomobject]@{ Digest=$afterRow.Digest; DigestText=$afterRow.DigestText; Count=$count; ExecutionMilliseconds=([double]$afterRow.TimerWaitPicoseconds-$beforeWait)/1000000000.0; LockMilliseconds=([double]$afterRow.LockTimePicoseconds-$beforeLock)/1000000000.0 }) }
+    }
+    $items = @($deltas.ToArray())
+    [pscustomobject]@{
+        StatementCount = [long](($items | Measure-Object -Property Count -Sum).Sum)
+        ExecutionMilliseconds = [double](($items | Measure-Object -Property ExecutionMilliseconds -Sum).Sum)
+        LockMilliseconds = [double](($items | Measure-Object -Property LockMilliseconds -Sum).Sum)
+        TopStatements = @($items | Sort-Object ExecutionMilliseconds -Descending | Select-Object -First 10)
+    }
+}
+
 function ConvertFrom-PrometheusRuntimeMetrics {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Text)
@@ -424,6 +501,10 @@ function Assert-K6ContentionRunIdentity {
 
 Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusHikari',
+    'ConvertFrom-PrometheusHikariAcquireTiming',
+    'New-HikariAcquireTimingDelta',
+    'ConvertFrom-MariaDbStatementDigestSnapshot',
+    'New-MariaDbStatementDigestDelta',
     'ConvertFrom-PrometheusRuntimeMetrics',
     'ConvertFrom-PrometheusJvmContentionMetrics',
     'ConvertFrom-DockerContainerStats',
