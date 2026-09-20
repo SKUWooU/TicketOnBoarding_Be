@@ -13,7 +13,8 @@ function Assert-CheckoutTimingCorrelationSummary {
     param([Parameter(Mandatory = $true)][object]$Summary, [Parameter(Mandatory = $true)][string]$RunId, [Parameter(Mandatory = $true)][int]$Rate)
     Assert-CheckoutSaturationSummary -Summary $Summary -RunId $RunId -Rate $Rate | Out-Null
     if ($null -eq $Summary.HikariAcquire -or $null -eq $Summary.StatementDiagnostics) { throw "Timing diagnostics are missing: $RunId" }
-    foreach ($value in @($Summary.HikariAcquire.AcquireCount, $Summary.HikariAcquire.AcquireWaitMilliseconds, $Summary.HikariAcquire.TimeoutCount, $Summary.StatementDiagnostics.StatementCount, $Summary.StatementDiagnostics.ExecutionMilliseconds, $Summary.StatementDiagnostics.LockMilliseconds)) { if ([double]$value -lt 0) { throw "Negative timing diagnostic: $RunId" } }
+    foreach ($value in @($Summary.HikariAcquire.AcquireCount, $Summary.HikariAcquire.AcquireWaitMilliseconds, $Summary.HikariAcquire.TimeoutCount, $Summary.StatementDiagnostics.StatementCount, $Summary.StatementDiagnostics.ExecutionMilliseconds, $Summary.StatementDiagnostics.LockMilliseconds, $Summary.StatementDiagnostics.CompletedIterations, $Summary.StatementDiagnostics.DroppedIterations, $Summary.StatementDiagnostics.ScheduledIterations, $Summary.StatementDiagnostics.StatementsPerCompletedIteration, $Summary.StatementDiagnostics.ExecutionMillisecondsPerCompletedIteration, $Summary.StatementDiagnostics.LockMillisecondsPerCompletedIteration)) { if ([double]$value -lt 0) { throw "Negative timing diagnostic: $RunId" } }
+    if ([long]$Summary.StatementDiagnostics.CompletedIterations -le 0 -or [long]$Summary.StatementDiagnostics.CompletedIterations + [long]$Summary.StatementDiagnostics.DroppedIterations -ne [long]$Summary.StatementDiagnostics.ScheduledIterations) { throw "Invalid completed iteration normalization: $RunId" }
     $true
 }
 
@@ -31,6 +32,11 @@ function New-CheckoutTimingCorrelationAggregate {
             DbStatementExecutionMilliseconds=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.ExecutionMilliseconds})
             DbStatementLockMilliseconds=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.LockMilliseconds})
             DbStatementCount=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.StatementCount})
+            DbStatementExecutionMillisecondsPerCompletedIteration=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.ExecutionMillisecondsPerCompletedIteration})
+            DbStatementLockMillisecondsPerCompletedIteration=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.LockMillisecondsPerCompletedIteration})
+            DbStatementsPerCompletedIteration=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.StatementsPerCompletedIteration})
+            CompletedIterations=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.CompletedIterations})
+            DroppedIterations=New-CheckoutTimingRange @($summaries|ForEach-Object {[double]$_.StatementDiagnostics.DroppedIterations})
         } })
     }
     @($out.ToArray() | Sort-Object RatePerSecond)
