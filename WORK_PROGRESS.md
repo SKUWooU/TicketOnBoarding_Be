@@ -13,13 +13,16 @@
 
 ## 진행 중
 
-### Backend Issue #136 — Checkout pool·DB 지연 상관 진단 기준선
-
-- 상태: Hikari acquire timer·MariaDB Performance Schema statement digest의 local 사용 가능 범위 조사 중
-- 범위: 2,000석 mock fixture rate별 pool acquire·DB statement/lock·VU cap·domain convergence 반복 관찰
-- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
+- 없음
 
 ## 완료
+
+### Backend Issue #136 — Checkout pool·DB 지연 상관 진단 기준선
+
+- 결과: 진단 전용 Performance Schema overlay와 Hikari acquire timer를 같은 Checkout run에 결합하고, 성공·실패 모두 기본 Compose 설정으로 복구하도록 구성
+- 검증: collector 66·timing aggregate 5 assertions, 2,000석 local mock fixture 50/75/100 RPS 측정, 복구 후 `performance_schema=OFF`·MariaDB health 확인, Backend CI 및 Reviewer `MERGE_READY: YES`
+- 근거: [Checkout pool·DB 지연 상관 진단](docs/project-improvement/archive/checkout/checkout-pool-db-timing-correlation.md)
+- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
 
 ### Backend Issue #134 — Checkout 고경합 포화 원인 분리 관측 기준선
 
