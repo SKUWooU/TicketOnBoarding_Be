@@ -209,6 +209,21 @@ hikaricp_connections_acquire_seconds_count{pool="HikariPool-1"} 10
 hikaricp_connections_acquire_seconds_sum{pool="HikariPool-1"} 1.5
 hikaricp_connections_timeout_total{pool="HikariPool-1"} 0
 '@
+$issue140HttpBefore = ConvertFrom-PrometheusCheckoutHttpRequests -Text @'
+http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/{concertId}/seat-holds"} 10
+http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/{concertId}/checkouts"} 10
+http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/{concertId}/checkouts/{merchantUid}/verified-reservation"} 10
+'@
+$issue140HttpAfter = ConvertFrom-PrometheusCheckoutHttpRequests -Text @'
+http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/{concertId}/seat-holds"} 14
+http_server_requests_seconds_count{method="POST",status="409",uri="/main/detail/{concertId}/seat-holds"} 2
+http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/{concertId}/checkouts"} 14
+http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/{concertId}/checkouts/{merchantUid}/verified-reservation"} 14
+'@
+$issue140HttpDelta = New-PrometheusCheckoutHttpRequestDelta -Before $issue140HttpBefore -After $issue140HttpAfter
+Assert-Issue51Equal $issue140HttpDelta.SeatHold.Success 4 'Seat hold HTTP 200 delta must be parsed.'
+Assert-Issue51Equal $issue140HttpDelta.SeatHold.NonSuccess 2 'Seat hold non-200 delta must be parsed.'
+Assert-Issue51Equal (Assert-CheckoutHttpIterationAgreement -HttpRequests $issue140HttpDelta -Result ([pscustomobject]@{ checkoutConfirmed=4 })) $true 'Successful Checkout iterations must match all three HTTP 200 endpoint deltas.'
 $issue136HikariTimingAfter = [pscustomobject]@{ AcquireCount=14; AcquireSeconds=2.5; TimeoutCount=1 }
 $issue136HikariDelta = New-HikariAcquireTimingDelta -Before $issue136HikariTiming -After $issue136HikariTimingAfter
 Assert-Issue51Equal $issue136HikariDelta.AcquireCount 4 'Hikari acquire count delta must be calculated.'
