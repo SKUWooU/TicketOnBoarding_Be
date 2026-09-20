@@ -13,7 +13,10 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #138 — Checkout digest 요청 정규화·관측 간섭 분리
+
+- 범위: k6 완료 요청 수와 MariaDB statement digest delta의 run 단위 결합, 관측 쿼리 제외, 정규화 계약·근거 문서
+- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
 
 ## 완료
 

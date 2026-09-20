@@ -117,11 +117,53 @@ function New-MariaDbStatementDigestDelta {
         if ($count -gt 0) { $deltas.Add([pscustomobject]@{ Digest=$afterRow.Digest; DigestText=$afterRow.DigestText; Count=$count; ExecutionMilliseconds=([double]$afterRow.TimerWaitPicoseconds-$beforeWait)/1000000000.0; LockMilliseconds=([double]$afterRow.LockTimePicoseconds-$beforeLock)/1000000000.0 }) }
     }
     $items = @($deltas.ToArray())
+    $observerItems = @($items | Where-Object { $_.DigestText -match '(?i)\bperformance_schema\b' })
+    $businessItems = @($items | Where-Object { $_.DigestText -notmatch '(?i)\bperformance_schema\b' })
+    $businessStatementCount = 0L; $businessExecutionMilliseconds = 0.0; $businessLockMilliseconds = 0.0
+    foreach ($item in $businessItems) { $businessStatementCount += [long]$item.Count; $businessExecutionMilliseconds += [double]$item.ExecutionMilliseconds; $businessLockMilliseconds += [double]$item.LockMilliseconds }
+    $observerStatementCount = 0L; $observerExecutionMilliseconds = 0.0; $observerLockMilliseconds = 0.0
+    foreach ($item in $observerItems) { $observerStatementCount += [long]$item.Count; $observerExecutionMilliseconds += [double]$item.ExecutionMilliseconds; $observerLockMilliseconds += [double]$item.LockMilliseconds }
     [pscustomobject]@{
-        StatementCount = [long](($items | Measure-Object -Property Count -Sum).Sum)
-        ExecutionMilliseconds = [double](($items | Measure-Object -Property ExecutionMilliseconds -Sum).Sum)
-        LockMilliseconds = [double](($items | Measure-Object -Property LockMilliseconds -Sum).Sum)
-        TopStatements = @($items | Sort-Object ExecutionMilliseconds -Descending | Select-Object -First 10)
+        StatementCount = $businessStatementCount
+        ExecutionMilliseconds = $businessExecutionMilliseconds
+        LockMilliseconds = $businessLockMilliseconds
+        TopStatements = @($businessItems | Sort-Object ExecutionMilliseconds -Descending | Select-Object -First 10)
+        ExcludedObserverStatementCount = $observerStatementCount
+        ExcludedObserverExecutionMilliseconds = $observerExecutionMilliseconds
+        ExcludedObserverLockMilliseconds = $observerLockMilliseconds
+    }
+}
+
+function New-K6CompletedIterationStatementDiagnostics {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object]$Diagnostics,
+        [Parameter(Mandatory = $true)][object]$Result
+    )
+
+    foreach ($property in @('iterations', 'droppedIterations', 'checkoutConfirmed', 'expectedContention', 'unexpectedNonSuccessful')) {
+        if ($property -notin $Result.PSObject.Properties.Name) { throw "k6 result is missing iteration normalization field: $property" }
+    }
+    $completed = [long]$Result.iterations
+    $dropped = [long]$Result.droppedIterations
+    $classified = [long]$Result.checkoutConfirmed + [long]$Result.expectedContention + [long]$Result.unexpectedNonSuccessful
+    if ($completed -le 0 -or $dropped -lt 0 -or $classified -ne $completed) { throw 'k6 completed iteration normalization is invalid.' }
+    $scheduled = $completed + $dropped
+    [pscustomobject]@{
+        StatementCount = [long]$Diagnostics.StatementCount
+        ExecutionMilliseconds = [double]$Diagnostics.ExecutionMilliseconds
+        LockMilliseconds = [double]$Diagnostics.LockMilliseconds
+        TopStatements = @($Diagnostics.TopStatements)
+        ExcludedObserverStatementCount = [long]$Diagnostics.ExcludedObserverStatementCount
+        ExcludedObserverExecutionMilliseconds = [double]$Diagnostics.ExcludedObserverExecutionMilliseconds
+        ExcludedObserverLockMilliseconds = [double]$Diagnostics.ExcludedObserverLockMilliseconds
+        CompletedIterations = $completed
+        DroppedIterations = $dropped
+        ScheduledIterations = $scheduled
+        CompletionAttainmentRate = [double]$completed / $scheduled
+        StatementsPerCompletedIteration = [double]$Diagnostics.StatementCount / $completed
+        ExecutionMillisecondsPerCompletedIteration = [double]$Diagnostics.ExecutionMilliseconds / $completed
+        LockMillisecondsPerCompletedIteration = [double]$Diagnostics.LockMilliseconds / $completed
     }
 }
 
@@ -505,6 +547,7 @@ Export-ModuleMember -Function @(
     'New-HikariAcquireTimingDelta',
     'ConvertFrom-MariaDbStatementDigestSnapshot',
     'New-MariaDbStatementDigestDelta',
+    'New-K6CompletedIterationStatementDiagnostics',
     'ConvertFrom-PrometheusRuntimeMetrics',
     'ConvertFrom-PrometheusJvmContentionMetrics',
     'ConvertFrom-DockerContainerStats',

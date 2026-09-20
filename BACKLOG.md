@@ -34,6 +34,8 @@ Checkout 50·75·100 RPS attribution baseline에서 50 RPS는 VU 상한 미도�
 
 진단 전용 Performance Schema와 Hikari acquire timer를 같은 Checkout run에 결합해 acquire 평균 대기 증가와 statement lock 누적을 확인했다. 다만 concurrent statement time은 wall-clock 시간이 아니고 VU cap 이후 request 도달량도 달라 단독 원인을 확정하지 않는다. pool·retry·queue/broker·JVM tuning은 계속 보류하며, digest를 request 도달량으로 정규화할 수 있는 경우에만 후속 진단을 검토한다 ([#136](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/136)).
 
+Checkout digest는 `performance_schema` 관측 statement를 제외하고 완료 Checkout iteration당으로 정규화했다. 50/75/100 RPS의 statement 수는 완료 iteration당 약 47.6건으로 안정적이었고, 75·100 RPS의 dropped 증가를 local VU cap과 함께 기록했다. 한 iteration은 복수 HTTP 호출을 포함할 수 있으므로 누적 SQL 시간과 HTTP request wall-clock을 같게 해석하지 않으며, 이 근거만으로 pool·retry·queue/broker·JVM tuning을 도입하지 않는다 ([#138](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/138)).
+
 ## Phase 1–2 첫 기술 Issue 후보
 
 `[TEST] 가상 좌석 fixture로 예매 트랜잭션과 경합 정합성 기준선 검증`

@@ -216,11 +216,20 @@ Assert-Issue51Equal $issue136HikariDelta.AcquireWaitMilliseconds 1000 'Hikari ac
 Assert-Issue51Equal $issue136HikariDelta.AverageAcquireWaitMilliseconds 250 'Hikari acquire average wait must be calculated.'
 
 $issue136Before = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-a	SELECT * FROM seat	2	1000000000	100000000')
-$issue136After = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-a	SELECT * FROM seat	5	4000000000	700000000', 'digest-b	UPDATE seat	1	2000000000	0')
+$issue136After = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-a	SELECT * FROM seat	5	4000000000	700000000', 'digest-b	UPDATE seat	1	2000000000	0', 'digest-observer	SELECT * FROM performance_schema.events_statements_summary_by_digest	2	9000000000	500000000')
 $issue136DigestDelta = New-MariaDbStatementDigestDelta -Before $issue136Before -After $issue136After
 Assert-Issue51Equal $issue136DigestDelta.StatementCount 4 'Statement digest count delta must include changed and new digests.'
 Assert-Issue51Equal $issue136DigestDelta.ExecutionMilliseconds 5 'Statement digest time must convert picoseconds to milliseconds.'
 Assert-Issue51Equal $issue136DigestDelta.LockMilliseconds 0.6 'Statement digest lock time must convert picoseconds to milliseconds.'
+Assert-Issue51Equal $issue136DigestDelta.ExcludedObserverStatementCount 2 'Performance Schema observer statements must be excluded from business digest totals.'
+$issue138Normalized = New-K6CompletedIterationStatementDiagnostics -Diagnostics $issue136DigestDelta -Result ([pscustomobject]@{ iterations=4; droppedIterations=1; checkoutConfirmed=3; expectedContention=1; unexpectedNonSuccessful=0 })
+Assert-Issue51Equal $issue138Normalized.ScheduledIterations 5 'Completed and dropped k6 iterations must form the scheduled iteration count.'
+Assert-Issue51Equal $issue138Normalized.ExecutionMillisecondsPerCompletedIteration 1.25 'Digest execution time must be normalized by completed k6 iterations.'
+Assert-Issue51Throws { New-K6CompletedIterationStatementDiagnostics -Diagnostics $issue136DigestDelta -Result ([pscustomobject]@{ iterations=4; droppedIterations=0; checkoutConfirmed=3; expectedContention=0; unexpectedNonSuccessful=0 }) } 'Mismatched k6 classification must invalidate iteration normalization.'
+$issue138ObserverOnlyBefore = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-observer	SELECT * FROM performance_schema.events_statements_summary_by_digest	1	1000000000	0')
+$issue138ObserverOnlyAfter = ConvertFrom-MariaDbStatementDigestSnapshot -Lines @('digest-observer	SELECT * FROM performance_schema.events_statements_summary_by_digest	2	2000000000	0')
+$issue138ObserverOnly = New-MariaDbStatementDigestDelta -Before $issue138ObserverOnlyBefore -After $issue138ObserverOnlyAfter
+Assert-Issue51Equal $issue138ObserverOnly.StatementCount 0 'Observer-only digest deltas must produce zero business statement totals.'
 Assert-Issue51Throws { New-MariaDbStatementDigestDelta -Before $issue136Before -After @() } 'Disappeared statement digests must invalidate a timing measurement.'
 
 Write-Output "ContentionMetrics checks passed: $issue51Assertions assertions."
