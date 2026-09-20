@@ -82,6 +82,56 @@ function New-HikariAcquireTimingDelta {
     }
 }
 
+function ConvertFrom-PrometheusCheckoutHttpRequests {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $paths = @{
+        '/main/detail/{concertId}/seat-holds' = 'seat_hold'
+        '/main/detail/{concertId}/checkouts' = 'checkout_prepare'
+        '/main/detail/{concertId}/checkouts/{merchantUid}/verified-reservation' = 'checkout_verify'
+    }
+    $counts = @{}
+    foreach ($line in ($Text -split "`r?`n")) {
+        if ($line -notmatch '^http_server_requests_seconds_count\{(.+)\}\s+([0-9.eE+-]+)\s*$') { continue }
+        $labels = @{}; foreach ($match in [regex]::Matches($Matches[1], '([A-Za-z_][A-Za-z0-9_]*)="([^"]*)"')) { $labels[$match.Groups[1].Value] = $match.Groups[2].Value }
+        if ($labels.method -ne 'POST' -or -not $paths.ContainsKey($labels.uri)) { continue }
+        $key = "$($paths[$labels.uri])|$($labels.status)"
+        if ($counts.ContainsKey($key)) { throw "Ambiguous Checkout HTTP metric series: $key" }
+        $counts[$key] = [double]::Parse($Matches[2], [Globalization.CultureInfo]::InvariantCulture)
+    }
+    $counts
+}
+
+function New-PrometheusCheckoutHttpRequestDelta {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][hashtable]$Before, [Parameter(Mandatory = $true)][hashtable]$After)
+
+    $deltas = @{}
+    foreach ($key in $Before.Keys) {
+        if (-not $After.ContainsKey($key)) { throw "Checkout HTTP metric disappeared: $key" }
+        if ($After[$key] -lt $Before[$key]) { throw "Checkout HTTP metric counter decreased: $key" }
+    }
+    foreach ($key in $After.Keys) { $beforeValue = if ($Before.ContainsKey($key)) { [double]$Before[$key] } else { 0.0 }; $deltas[$key] = [double]$After[$key] - $beforeValue }
+    function Get-CheckoutHttpDelta([string]$Key) { if ($deltas.ContainsKey($Key)) { return [long]$deltas[$Key] }; return 0L }
+    function Get-CheckoutHttpNonSuccess([string]$Endpoint) { $total = 0L; foreach ($item in $deltas.GetEnumerator()) { if ($item.Key -like "$Endpoint|*" -and $item.Key -ne "$Endpoint|200") { $total += [long]$item.Value } }; return $total }
+    [pscustomobject]@{
+        SeatHold = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'seat_hold|200'; NonSuccess = Get-CheckoutHttpNonSuccess 'seat_hold' }
+        CheckoutPrepare = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'checkout_prepare|200'; NonSuccess = Get-CheckoutHttpNonSuccess 'checkout_prepare' }
+        CheckoutVerify = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'checkout_verify|200'; NonSuccess = Get-CheckoutHttpNonSuccess 'checkout_verify' }
+    }
+}
+
+function Assert-CheckoutHttpIterationAgreement {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][object]$HttpRequests, [Parameter(Mandatory = $true)][object]$Result)
+    $confirmed = [long]$Result.checkoutConfirmed
+    foreach ($endpoint in @($HttpRequests.SeatHold, $HttpRequests.CheckoutPrepare, $HttpRequests.CheckoutVerify)) {
+        if ([long]$endpoint.Success -ne $confirmed) { throw 'Checkout successful iteration count does not match the corresponding HTTP 200 delta.' }
+    }
+    $true
+}
+
 function ConvertFrom-MariaDbStatementDigestSnapshot {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string[]]$Lines)
@@ -545,6 +595,9 @@ Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusHikari',
     'ConvertFrom-PrometheusHikariAcquireTiming',
     'New-HikariAcquireTimingDelta',
+    'ConvertFrom-PrometheusCheckoutHttpRequests',
+    'New-PrometheusCheckoutHttpRequestDelta',
+    'Assert-CheckoutHttpIterationAgreement',
     'ConvertFrom-MariaDbStatementDigestSnapshot',
     'New-MariaDbStatementDigestDelta',
     'New-K6CompletedIterationStatementDiagnostics',
