@@ -13,12 +13,16 @@
 
 ## 진행 중
 
-### Backend Issue #140 — Checkout HTTP 요청·iteration 단위 분리
-
-- 범위: Checkout 흐름 endpoint별 저카디널리티 HTTP metric, k6 iteration·서버 HTTP metric delta 교차 검증, local fixture 근거 문서
-- 제외: 사용자·좌석·merchantUid 태그, 실제 PG·KOPIS, 운영 throughput/SLA, pool tuning, retry, queue/broker, Frontend
+- 없음
 
 ## 완료
+
+### Backend Issue #140 — Checkout HTTP 요청·iteration 단위 분리
+
+- 결과: 표준 Actuator endpoint counter delta와 완료 Checkout iteration을 교차하고, URI template·method·status만 사용해 HTTP·transaction·DB 단위를 분리
+- 검증: collector 74 assertions, Backend CI 성공, local 2,000석 mock fixture 50/100 RPS에서 성공 iteration과 hold/prepare/verify HTTP 200 delta 일치, Reviewer `MERGE_READY: YES`
+- 근거: [Checkout HTTP 요청·iteration 단위 분리](docs/project-improvement/archive/checkout/checkout-http-iteration-metrics.md)
+- 제외: 사용자·좌석·merchantUid 태그, 실제 PG·KOPIS, 운영 throughput/SLA, pool tuning, retry, queue/broker, Frontend
 
 ### Backend Issue #138 — Checkout digest 요청 정규화·관측 간섭 분리
 
