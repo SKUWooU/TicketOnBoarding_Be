@@ -13,12 +13,16 @@
 
 ## 진행 중
 
-### Backend Issue #138 — Checkout digest 요청 정규화·관측 간섭 분리
-
-- 범위: k6 완료 요청 수와 MariaDB statement digest delta의 run 단위 결합, 관측 쿼리 제외, 정규화 계약·근거 문서
-- 제외: pool tuning, retry, queue/broker, Grafana, 운영 성능 주장, Frontend
+- 없음
 
 ## 완료
+
+### Backend Issue #138 — Checkout digest 요청 정규화·관측 간섭 분리
+
+- 결과: `performance_schema` observer digest를 업무 schema 집계에서 분리하고, SQL count·실행·lock 누적을 완료 Checkout iteration 기준으로 정규화
+- 검증: collector 71·timing aggregate 7 assertions, 최신 runner local 2,000석 mock fixture 50/75/100 RPS 본 측정 9회, `performance_schema=OFF`·health 복구, Backend CI·Reviewer `MERGE_READY: YES`
+- 근거: [Checkout digest 요청 정규화](docs/project-improvement/archive/checkout/checkout-digest-request-normalization.md)
+- 제외: HTTP 요청당 SQL 비용·운영 성능·pool tuning, retry, queue/broker, Grafana, Frontend
 
 ### Backend Issue #136 — Checkout pool·DB 지연 상관 진단 기준선
 
