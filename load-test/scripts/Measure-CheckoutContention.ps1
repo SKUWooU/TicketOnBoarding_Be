@@ -102,6 +102,7 @@ $fixture = Invoke-RestMethod -Uri "$BaseUrl/loadtest/runs?runId=$RunId" -Method 
 if ([int]$fixture.totalSeats -ne 2000) { throw 'Checkout fixture must contain 2,000 seats.' }
 $initialPrometheus = (Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get).Content
 $hikariAcquireBefore = ConvertFrom-PrometheusHikariAcquireTiming -Text $initialPrometheus
+$checkoutHttpBefore = ConvertFrom-PrometheusCheckoutHttpRequests -Text $initialPrometheus
 $statementDigestBefore = Get-MariaDbStatementDigestSnapshot
 $startedAt = (Get-Date).ToUniversalTime()
 $stopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -138,6 +139,8 @@ try {
     $metrics = New-ContentionMetricsSummary -Samples $samples.ToArray(); $samples | Export-Csv -LiteralPath $paths.Samples -NoTypeInformation -Encoding UTF8
     $finalPrometheus = (Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get).Content
     $hikariAcquire = New-HikariAcquireTimingDelta -Before $hikariAcquireBefore -After (ConvertFrom-PrometheusHikariAcquireTiming -Text $finalPrometheus)
+    $checkoutHttpRequests = New-PrometheusCheckoutHttpRequestDelta -Before $checkoutHttpBefore -After (ConvertFrom-PrometheusCheckoutHttpRequests -Text $finalPrometheus)
+    Assert-CheckoutHttpIterationAgreement -HttpRequests $checkoutHttpRequests -Result $result | Out-Null
     $statementDiagnostics = if ($EnableStatementDiagnostics) {
         $statementDelta = New-MariaDbStatementDigestDelta -Before $statementDigestBefore -After (Get-MariaDbStatementDigestSnapshot)
         New-K6CompletedIterationStatementDiagnostics -Diagnostics $statementDelta -Result $result
@@ -148,7 +151,7 @@ try {
         $deadlockDiagnosticsFile = [IO.Path]::GetFileName($paths.Deadlock)
     }
     $thresholdsPassed = $process.ExitCode -eq 0
-    [ordered]@{ SchemaVersion = 1; ValidMeasurement = $true; Run = [ordered]@{ Id = $RunId; Scenario = $Scenario; RatePerSecond = $Rate; DurationSeconds = $DurationSeconds; StartedAtUtc = $startedAt.ToString('o') }; Fixture = [ordered]@{ TotalSeats = 2000; PreparedBeforeSampling = $true }; K6 = [ordered]@{ ExitCode = $process.ExitCode; ThresholdsPassed = $thresholdsPassed; Result = $result; FinalSnapshot = $snapshot; TransitionDelta = $delta }; Metrics = $metrics; HikariAcquire = $hikariAcquire; StatementDiagnostics = $statementDiagnostics; SamplesFile = [IO.Path]::GetFileName($paths.Samples); DeadlockDiagnosticsFile = $deadlockDiagnosticsFile; ObserverEffects = $metrics.ObserverEffects } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $paths.Summary -Encoding UTF8
+    [ordered]@{ SchemaVersion = 1; ValidMeasurement = $true; Run = [ordered]@{ Id = $RunId; Scenario = $Scenario; RatePerSecond = $Rate; DurationSeconds = $DurationSeconds; StartedAtUtc = $startedAt.ToString('o') }; Fixture = [ordered]@{ TotalSeats = 2000; PreparedBeforeSampling = $true }; K6 = [ordered]@{ ExitCode = $process.ExitCode; ThresholdsPassed = $thresholdsPassed; Result = $result; FinalSnapshot = $snapshot; TransitionDelta = $delta }; Metrics = $metrics; CheckoutHttpRequests = $checkoutHttpRequests; HikariAcquire = $hikariAcquire; StatementDiagnostics = $statementDiagnostics; SamplesFile = [IO.Path]::GetFileName($paths.Samples); DeadlockDiagnosticsFile = $deadlockDiagnosticsFile; ObserverEffects = $metrics.ObserverEffects } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $paths.Summary -Encoding UTF8
     Write-Output "VALID_CHECKOUT_MEASUREMENT runId=$RunId scenario=$Scenario thresholdsPassed=$thresholdsPassed samples=$($metrics.SampleCount)"
     Write-Output "SUMMARY_PATH $($paths.Summary)"
 } catch {
