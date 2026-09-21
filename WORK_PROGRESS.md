@@ -13,12 +13,16 @@
 
 ## 진행 중
 
-### Backend Issue #142 — Hot-seat 409 HTTP 흐름 귀속 검증
-
-- 범위: hot-seat expected contention·endpoint HTTP delta·final snapshot 교차 contract와 local fixture 근거
-- 제외: 새 인프라·실제 PG, 운영 오류율/SLA, pool tuning, retry, queue/broker, Frontend
+- 없음
 
 ## 완료
+
+### Backend Issue #142 — Hot-seat 409 HTTP 흐름 귀속 검증
+
+- 결과: hot-seat의 hold HTTP 409을 k6 예상 경합과 교차하고, 경합 요청이 Checkout 준비·Mock PG 검증으로 전파되지 않는 endpoint 흐름 계약 추가
+- 검증: collector 76 assertions·Backend CI 성공·local 2,000석 Mock PG 100 RPS에서 확정 1·hold 409 1,000·downstream non-200 0·deadlock/pending 0·재고 invariant 충족·Reviewer `MERGE_READY: YES`
+- 근거: [Hot-seat 409 HTTP 흐름 귀속 검증](docs/project-improvement/archive/checkout/hot-seat-http-contention-attribution.md)
+- 제외: 실제 PG·KOPIS, 운영 오류율/SLA, pool tuning, retry, queue/broker, Frontend
 
 ### Backend Issue #140 — Checkout HTTP 요청·iteration 단위 분리
 
