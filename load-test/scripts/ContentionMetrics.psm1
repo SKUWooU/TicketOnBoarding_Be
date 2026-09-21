@@ -116,7 +116,7 @@ function New-PrometheusCheckoutHttpRequestDelta {
     function Get-CheckoutHttpDelta([string]$Key) { if ($deltas.ContainsKey($Key)) { return [long]$deltas[$Key] }; return 0L }
     function Get-CheckoutHttpNonSuccess([string]$Endpoint) { $total = 0L; foreach ($item in $deltas.GetEnumerator()) { if ($item.Key -like "$Endpoint|*" -and $item.Key -ne "$Endpoint|200") { $total += [long]$item.Value } }; return $total }
     [pscustomobject]@{
-        SeatHold = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'seat_hold|200'; NonSuccess = Get-CheckoutHttpNonSuccess 'seat_hold' }
+        SeatHold = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'seat_hold|200'; Conflict = Get-CheckoutHttpDelta 'seat_hold|409'; NonSuccess = Get-CheckoutHttpNonSuccess 'seat_hold' }
         CheckoutPrepare = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'checkout_prepare|200'; NonSuccess = Get-CheckoutHttpNonSuccess 'checkout_prepare' }
         CheckoutVerify = [pscustomobject]@{ Success = Get-CheckoutHttpDelta 'checkout_verify|200'; NonSuccess = Get-CheckoutHttpNonSuccess 'checkout_verify' }
     }
@@ -129,6 +129,16 @@ function Assert-CheckoutHttpIterationAgreement {
     foreach ($endpoint in @($HttpRequests.SeatHold, $HttpRequests.CheckoutPrepare, $HttpRequests.CheckoutVerify)) {
         if ([long]$endpoint.Success -ne $confirmed) { throw 'Checkout successful iteration count does not match the corresponding HTTP 200 delta.' }
     }
+    $true
+}
+
+function Assert-CheckoutHotSeatHttpContentionAgreement {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][object]$HttpRequests, [Parameter(Mandatory = $true)][object]$Result)
+    $confirmed = [long]$Result.checkoutConfirmed; $contention = [long]$Result.expectedContention
+    if ([long]$HttpRequests.SeatHold.Success -ne $confirmed -or [long]$HttpRequests.SeatHold.Conflict -ne $contention -or [long]$HttpRequests.SeatHold.NonSuccess -ne $contention) { throw 'Hot-seat hold HTTP 200/409 deltas do not match confirmed and expected contention iterations.' }
+    if ([long]$HttpRequests.CheckoutPrepare.Success -ne $confirmed -or [long]$HttpRequests.CheckoutVerify.Success -ne $confirmed) { throw 'Hot-seat contention entered a downstream Checkout endpoint.' }
+    if ([long]$HttpRequests.CheckoutPrepare.NonSuccess -ne 0 -or [long]$HttpRequests.CheckoutVerify.NonSuccess -ne 0) { throw 'Unexpected downstream Checkout non-success response observed.' }
     $true
 }
 
@@ -598,6 +608,7 @@ Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusCheckoutHttpRequests',
     'New-PrometheusCheckoutHttpRequestDelta',
     'Assert-CheckoutHttpIterationAgreement',
+    'Assert-CheckoutHotSeatHttpContentionAgreement',
     'ConvertFrom-MariaDbStatementDigestSnapshot',
     'New-MariaDbStatementDigestDelta',
     'New-K6CompletedIterationStatementDiagnostics',
