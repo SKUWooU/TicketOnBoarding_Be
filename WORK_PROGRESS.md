@@ -13,7 +13,10 @@
 
 ## 진행 중
 
-- 없음
+### Backend Issue #142 — Hot-seat 409 HTTP 흐름 귀속 검증
+
+- 범위: hot-seat expected contention·endpoint HTTP delta·final snapshot 교차 contract와 local fixture 근거
+- 제외: 새 인프라·실제 PG, 운영 오류율/SLA, pool tuning, retry, queue/broker, Frontend
 
 ## 완료
 

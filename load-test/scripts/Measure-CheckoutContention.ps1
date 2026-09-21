@@ -141,6 +141,7 @@ try {
     $hikariAcquire = New-HikariAcquireTimingDelta -Before $hikariAcquireBefore -After (ConvertFrom-PrometheusHikariAcquireTiming -Text $finalPrometheus)
     $checkoutHttpRequests = New-PrometheusCheckoutHttpRequestDelta -Before $checkoutHttpBefore -After (ConvertFrom-PrometheusCheckoutHttpRequests -Text $finalPrometheus)
     Assert-CheckoutHttpIterationAgreement -HttpRequests $checkoutHttpRequests -Result $result | Out-Null
+    if ($Scenario -eq 'hot-seat') { Assert-CheckoutHotSeatHttpContentionAgreement -HttpRequests $checkoutHttpRequests -Result $result | Out-Null }
     $statementDiagnostics = if ($EnableStatementDiagnostics) {
         $statementDelta = New-MariaDbStatementDigestDelta -Before $statementDigestBefore -After (Get-MariaDbStatementDigestSnapshot)
         New-K6CompletedIterationStatementDiagnostics -Diagnostics $statementDelta -Result $result

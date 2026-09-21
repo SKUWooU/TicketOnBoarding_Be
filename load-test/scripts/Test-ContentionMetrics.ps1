@@ -222,8 +222,10 @@ http_server_requests_seconds_count{method="POST",status="200",uri="/main/detail/
 '@
 $issue140HttpDelta = New-PrometheusCheckoutHttpRequestDelta -Before $issue140HttpBefore -After $issue140HttpAfter
 Assert-Issue51Equal $issue140HttpDelta.SeatHold.Success 4 'Seat hold HTTP 200 delta must be parsed.'
+Assert-Issue51Equal $issue140HttpDelta.SeatHold.Conflict 2 'Seat hold HTTP 409 delta must be parsed.'
 Assert-Issue51Equal $issue140HttpDelta.SeatHold.NonSuccess 2 'Seat hold non-200 delta must be parsed.'
 Assert-Issue51Equal (Assert-CheckoutHttpIterationAgreement -HttpRequests $issue140HttpDelta -Result ([pscustomobject]@{ checkoutConfirmed=4 })) $true 'Successful Checkout iterations must match all three HTTP 200 endpoint deltas.'
+Assert-Issue51Equal (Assert-CheckoutHotSeatHttpContentionAgreement -HttpRequests $issue140HttpDelta -Result ([pscustomobject]@{ checkoutConfirmed=4; expectedContention=2 })) $true 'Hot-seat contention must stop before downstream Checkout endpoints.'
 $issue136HikariTimingAfter = [pscustomobject]@{ AcquireCount=14; AcquireSeconds=2.5; TimeoutCount=1 }
 $issue136HikariDelta = New-HikariAcquireTimingDelta -Before $issue136HikariTiming -After $issue136HikariTimingAfter
 Assert-Issue51Equal $issue136HikariDelta.AcquireCount 4 'Hikari acquire count delta must be calculated.'
