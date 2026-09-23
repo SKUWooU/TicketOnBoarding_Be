@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.stream.IntStream;
 
 @RestController
 @RequestMapping("/loadtest")
@@ -64,11 +63,8 @@ public class LoadTestController {
         if (count <= 0 || count > MAX_TOKEN_COUNT) {
             throw new IllegalArgumentException("loadtest token count는 1~500 범위여야 합니다.");
         }
-        return IntStream.rangeClosed(1, count)
-                .mapToObj(index -> {
-                    String username = (LoadTestFixtureService.usernamePrefix(runId) + "%03d").formatted(index);
-                    return new LoadTestToken(username, jwtUtil.generateAccessToken(username));
-                })
+        return fixtureService.ensureUsers(runId, count).stream()
+                .map(username -> new LoadTestToken(username, jwtUtil.generateAccessToken(username)))
                 .toList();
     }
 

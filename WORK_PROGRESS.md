@@ -13,7 +13,10 @@
 
 ## 진행 중
 
-- 없음
+- Backend Issue #144 — loadtest 사용자 fixture·인증 계약
+  - 범위: `loadtest` profile의 토큰 발급 전에 격리된 `SiteUser` fixture를 idempotent하게 생성해 `/auth/valid`를 실제 사용자 조회 경로로 검증
+  - 검증: MariaDB Testcontainers `LoadTestFixtureIntegrationTest` 12건·`LoadTestControllerTest` 2건 성공
+  - 제외: 운영 사용자 생성, OAuth·KOPIS·PG 호출, Frontend 변경
 
 ## 완료
 
