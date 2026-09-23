@@ -13,12 +13,17 @@
 
 ## 진행 중
 
-- Backend Issue #144 — loadtest 사용자 fixture·인증 계약
-  - 범위: `loadtest` profile의 토큰 발급 전에 격리된 `SiteUser` fixture를 idempotent하게 생성해 `/auth/valid`를 실제 사용자 조회 경로로 검증
-  - 검증: MariaDB Testcontainers `LoadTestFixtureIntegrationTest` 12건·`LoadTestControllerTest` 2건 성공
-  - 제외: 운영 사용자 생성, OAuth·KOPIS·PG 호출, Frontend 변경
+- 없음
 
 ## 완료
+
+### Backend Issue #144 — loadtest 사용자 fixture·인증 계약
+
+- PR: [#145](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/145) / squash `989f70a`
+- 결과: loadtest token 발급 전에 runId별 `SiteUser` fixture를 원자 upsert로 생성하고, 실제 `/auth/valid`의 사용자 조회 계약까지 연결
+- 검증: MariaDB Testcontainers 12건·controller 2건·동시 재시도 사용자 1건 수렴·Backend CI 성공·Reviewer `MERGE_READY: YES`
+- 근거: [loadtest 사용자 fixture·인증 계약](docs/project-improvement/archive/load-testing/loadtest-user-auth-fixture.md)
+- 제외: 운영 사용자 생성·OAuth, KOPIS·PG 호출, 운영 인증 성능, Frontend 변경
 
 ### Backend Issue #142 — Hot-seat 409 HTTP 흐름 귀속 검증
 

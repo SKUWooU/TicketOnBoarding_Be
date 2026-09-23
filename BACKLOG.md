@@ -51,7 +51,7 @@ Checkout digest는 `performance_schema` 관측 statement를 제외하고 완료 
 
 - Backend Issue #85: 24석·2,000석 fixture의 구역·행·순서 계약과 구역 요약/상세 API
 - Backend Issue #88: loadtest fixture의 공연 상세·장소 계약과 lazy review 직렬화 복구 완료 ([#88](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/88), [PR #89](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/89))
-- Backend Issue #144: loadtest 토큰과 `SiteUser` fixture를 결합해 실제 `/auth/valid` 계약을 검증 중. 병합 뒤 Frontend browser E2E의 인증 route mock 제거를 별도 Issue로 검토
+- Backend Issue #144: loadtest 토큰과 `SiteUser` fixture를 결합해 실제 `/auth/valid` 계약을 검증 완료 ([#144](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/144), [PR #145](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/145)). Frontend browser E2E의 인증 route mock 제거는 별도 Issue로 검토
 - 후속: Frontend가 상세 envelope mock 없이 local E2E를 재검증
 - 보류: 실제 공연장 좌석도, 운영 migration, WebSocket·대기열·브로커, 근거 없는 virtualization
 
