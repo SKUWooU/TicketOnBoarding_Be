@@ -14,6 +14,7 @@ import com.onticket.concert.repository.PlaceRepository;
 import com.onticket.concert.repository.ReservationRepository;
 import com.onticket.concert.repository.SeatRepository;
 import com.onticket.concert.service.VirtualSeatLayoutFactory;
+import com.onticket.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class LoadTestFixtureService {
     private final ReservationRepository reservationRepository;
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
+    private final UserRepository userRepository;
     private final Clock clock;
     private final VirtualSeatLayoutFactory seatLayoutFactory;
     private final int rows;
@@ -59,6 +61,7 @@ public class LoadTestFixtureService {
             ReservationRepository reservationRepository,
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
+            UserRepository userRepository,
             Clock clock,
             VirtualSeatLayoutFactory seatLayoutFactory,
             @Value("${onticket.loadtest.fixture.rows:50}") int rows,
@@ -75,6 +78,7 @@ public class LoadTestFixtureService {
         this.reservationRepository = reservationRepository;
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
+        this.userRepository = userRepository;
         this.clock = clock;
         this.seatLayoutFactory = seatLayoutFactory;
         this.rows = rows;
@@ -140,6 +144,29 @@ public class LoadTestFixtureService {
         }
         seatRepository.saveAllAndFlush(seats);
         return metadata(normalizedRunId, concertTime.getId());
+    }
+
+    @Transactional
+    public List<String> ensureUsers(String runId, int count) {
+        String normalizedRunId = validateRunId(runId);
+        if (count <= 0) {
+            throw new IllegalArgumentException("loadtest 사용자 수는 1명 이상이어야 합니다.");
+        }
+
+        List<String> usernames = new ArrayList<>(count);
+        for (int index = 1; index <= count; index++) {
+            String username = username(normalizedRunId, index);
+            usernames.add(username);
+            userRepository.insertLoadTestFixtureUser(
+                    username,
+                    "{noop}loadtest-fixture",
+                    username + "@loadtest.invalid",
+                    "loadtest-" + normalizedRunId + "-" + index,
+                    "loadtest-" + username,
+                    1
+            );
+        }
+        return List.copyOf(usernames);
     }
 
     private Place createOrGetPlace(String runId) {
@@ -258,6 +285,13 @@ public class LoadTestFixtureService {
 
     static String usernamePrefix(String runId) {
         return USERNAME_PREFIX + validateRunId(runId) + ".";
+    }
+
+    static String username(String runId, int index) {
+        if (index <= 0) {
+            throw new IllegalArgumentException("loadtest 사용자 번호는 1 이상이어야 합니다.");
+        }
+        return (usernamePrefix(runId) + "%03d").formatted(index);
     }
 
     static String idempotencyKeyPrefix(String runId) {

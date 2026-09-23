@@ -15,6 +15,13 @@ import com.onticket.concert.repository.SeatRepository;
 import com.onticket.concert.service.ConcertService;
 import com.onticket.concert.service.SeatLayoutQueryService;
 import com.onticket.concert.service.VirtualSeatLayoutFactory;
+import com.onticket.user.domain.SiteUser;
+import com.onticket.user.controller.AuthController;
+import com.onticket.user.dto.UserInfoDto;
+import com.onticket.user.jwt.JwtUtil;
+import com.onticket.user.repository.UserRepository;
+import com.onticket.user.service.RefreshTokenService;
+import com.onticket.user.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -26,11 +33,19 @@ import org.springframework.test.context.DynamicPropertySource;
 import jakarta.persistence.EntityManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.http.ResponseEntity;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -99,6 +114,9 @@ class LoadTestFixtureIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Test
     void createsTwoThousandSeatsAndKeepsInitializationIdempotent() {
@@ -247,5 +265,80 @@ class LoadTestFixtureIntegrationTest {
         assertThat(reset.holdRows()).isZero();
         assertThat(reset.remainingSeats()).isEqualTo(2_000);
         assertThat(reset.invariantSatisfied()).isTrue();
+    }
+
+    @Test
+    void createsIsolatedFixtureUsersIdempotently() {
+        java.util.List<String> first = fixtureService.ensureUsers("browser-auth", 2);
+        java.util.List<String> retry = fixtureService.ensureUsers("browser-auth", 2);
+        java.util.List<String> secondRun = fixtureService.ensureUsers("browser-auth-other", 1);
+
+        assertThat(retry).isEqualTo(first);
+        assertThat(first).containsExactly("load-user-browser-auth.001", "load-user-browser-auth.002");
+        assertThat(secondRun).containsExactly("load-user-browser-auth-other.001");
+        assertThat(userRepository.findByUsername(first.get(0)))
+                .extracting(SiteUser::getNickname, SiteUser::getCode)
+                .containsExactly("loadtest-browser-auth-1", 1);
+        assertThat(userRepository.countByUsernameStartingWith("load-user-browser-auth")).isEqualTo(3);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void createsOneFixtureUserForConcurrentRetriesOfTheSameRun() throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            java.util.concurrent.Future<java.util.List<String>> first = executor.submit(() -> {
+                ready.countDown();
+                assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
+                return fixtureService.ensureUsers("concurrent-user", 1);
+            });
+            java.util.concurrent.Future<java.util.List<String>> second = executor.submit(() -> {
+                ready.countDown();
+                assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
+                return fixtureService.ensureUsers("concurrent-user", 1);
+            });
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS)).containsExactly("load-user-concurrent-user.001");
+            assertThat(second.get(10, TimeUnit.SECONDS)).containsExactly("load-user-concurrent-user.001");
+            assertThat(userRepository.countByUsernameStartingWith("load-user-concurrent-user")).isOne();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void validatesFixtureJwtThroughTheAuthContract() {
+        String username = fixtureService.ensureUsers("browser-auth-contract", 1).get(0);
+        JwtUtil jwtUtil = new JwtUtil();
+        ReflectionTestUtils.setField(jwtUtil, "issuer", "loadtest-fixture-test");
+        jwtUtil.init();
+        AuthController authController = new AuthController(
+                org.mockito.Mockito.mock(PasswordEncoder.class),
+                org.mockito.Mockito.mock(AuthenticationManager.class),
+                jwtUtil,
+                org.mockito.Mockito.mock(RefreshTokenService.class),
+                userRepository,
+                org.mockito.Mockito.mock(UserService.class)
+        );
+
+        ResponseEntity<?> response = authController.validateToken(jwtUtil.generateAccessToken(username));
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isInstanceOf(UserInfoDto.class);
+        assertThat(((UserInfoDto) response.getBody()).isValid()).isTrue();
+        assertThat(((UserInfoDto) response.getBody()).getUserName()).isEqualTo(username);
+    }
+
+    @Test
+    void rejectsInvalidRunIdBeforeCreatingFixtureUsers() {
+        assertThatThrownBy(() -> fixtureService.ensureUsers("invalid_run_id", 1))
+                .isInstanceOf(InvalidLoadTestRunIdException.class);
+
+        assertThat(userRepository.countByUsernameStartingWith("load-user-invalid")).isZero();
     }
 }

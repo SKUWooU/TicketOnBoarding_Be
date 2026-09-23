@@ -8,7 +8,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,5 +37,25 @@ class LoadTestControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_LOADTEST_RUN_ID"))
                 .andExpect(jsonPath("$.message").value("loadtest runId는 영문·숫자·하이픈 1~32자여야 합니다."));
+    }
+
+    @Test
+    void createsFixtureUsersBeforeIssuingTokens() throws Exception {
+        JwtUtil jwtUtil = mock(JwtUtil.class);
+        fixtureService = mock(LoadTestFixtureService.class);
+        mockMvc = standaloneSetup(new LoadTestController(fixtureService, jwtUtil))
+                .setMessageConverters(new MappingJackson2HttpMessageConverter())
+                .build();
+        when(fixtureService.ensureUsers("browser-run", 2))
+                .thenReturn(java.util.List.of("load-user-browser-run.001", "load-user-browser-run.002"));
+        when(jwtUtil.generateAccessToken("load-user-browser-run.001")).thenReturn("token-1");
+        when(jwtUtil.generateAccessToken("load-user-browser-run.002")).thenReturn("token-2");
+
+        mockMvc.perform(get("/loadtest/tokens").param("runId", "browser-run").param("count", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].username").value("load-user-browser-run.001"))
+                .andExpect(jsonPath("$[0].accessToken").value("token-1"));
+
+        verify(fixtureService).ensureUsers("browser-run", 2);
     }
 }
