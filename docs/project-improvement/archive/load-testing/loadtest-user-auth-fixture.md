@@ -1,6 +1,6 @@
 # loadtest 사용자 fixture·인증 계약
 
-연결: [Issue #144](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/144)
+연결: [Issue #144](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/144), [PR #145](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/145)
 
 ## 문제
 
