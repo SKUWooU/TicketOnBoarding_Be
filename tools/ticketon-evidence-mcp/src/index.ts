@@ -8,16 +8,21 @@ import { createInvariantReport, EvidenceError, EvidenceRepository } from "./evid
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultResultsRoot = path.resolve(here, "../../../load-test/results");
 const repository = new EvidenceRepository({ resultsRoot: defaultResultsRoot });
-const server = new McpServer({ name: "ticketon-evidence-mcp", version: "0.1.0" });
+const server = new McpServer(
+  { name: "ticketon-evidence-mcp", version: "0.1.0" },
+  {
+    instructions: "로컬 가상 좌석 고경합 fixture의 summary만 조회합니다. 목록→요약→불변식 순서로 확인하고, PASS를 운영 성능이나 실제 공연장 보증으로 해석하지 마세요."
+  }
+);
 
 server.tool("list_evidence_runs", "로컬 고경합 측정 실행과 허용된 요약 파일 목록을 조회합니다.", {
   limit: z.number().int().min(1).max(50).optional()
-}, async ({ limit }) => success(await repository.listRuns(limit)));
+}, { readOnlyHint: true, openWorldHint: false }, async ({ limit }) => success(await repository.listRuns(limit)));
 
 server.tool("get_run_summary", "JWT·쿠키·요청 본문을 제외한 단일 k6 측정 요약을 조회합니다.", {
   runId: z.string(),
   artifact: z.string().optional()
-}, async ({ runId, artifact }) => withEvidenceError(async () => {
+}, { readOnlyHint: true, openWorldHint: false }, async ({ runId, artifact }) => withEvidenceError(async () => {
   const result = await repository.readSummary(runId, artifact);
   return success(result);
 }));
@@ -25,7 +30,7 @@ server.tool("get_run_summary", "JWT·쿠키·요청 본문을 제외한 단일 k
 server.tool("verify_domain_invariants", "측정 종료 후 좌석 수와 예약 상태 불변식을 검증합니다.", {
   runId: z.string(),
   artifact: z.string().optional()
-}, async ({ runId, artifact }) => withEvidenceError(async () => {
+}, { readOnlyHint: true, openWorldHint: false }, async ({ runId, artifact }) => withEvidenceError(async () => {
   const result = await repository.readSummary(runId, artifact);
   return success({ artifact: result.artifact, report: createInvariantReport(result.summary) });
 }));
