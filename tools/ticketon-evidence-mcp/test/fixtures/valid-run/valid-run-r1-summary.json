@@ -1,0 +1,11 @@
+{
+  "SchemaVersion": 1,
+  "ValidMeasurement": true,
+  "Run": { "Id": "valid-run-r1", "Scenario": "distributed", "RatePerSecond": 100, "DurationSeconds": 10 },
+  "K6": {
+    "ExitCode": 0,
+    "Result": { "checkoutConfirmed": 100, "jwt": "must-not-be-exposed" },
+    "FinalSnapshot": { "expectedTotalSeats": 2000, "actualSeatCount": 2000, "invariantSatisfied": true }
+  },
+  "nested": { "authorization": "must-not-be-exposed", "safe": "fixture-data" }
+}
