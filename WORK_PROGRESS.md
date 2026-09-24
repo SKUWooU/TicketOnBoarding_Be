@@ -17,6 +17,13 @@
 
 ## 완료
 
+### Backend Issue #146 — 고경합 측정 근거 MCP 서버 구성
+
+- 결과: `load-test/results`의 허용된 `*-summary.json`만 읽는 stdio MCP 도구(`list_evidence_runs`, `get_run_summary`, `verify_domain_invariants`)를 추가하고, 민감 키 제거·실제 경로 기반 이탈 거부·근거 부족 시 `INSUFFICIENT_EVIDENCE` 반환을 고정
+- 검증: TypeScript build, MCP fixture 계약 7건 통과(BOM·run/root Windows junction 포함)
+- 근거: [고경합 측정 근거 MCP](docs/project-improvement/mcp-evidence-server.md)
+- 제외: k6/Docker 실행, DB 변경, KOPIS·PG·OAuth 호출, 원시 로그·CSV 노출, 운영 성능 주장
+
 ### Backend Issue #144 — loadtest 사용자 fixture·인증 계약
 
 - PR: [#145](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/145) / squash `989f70a`
