@@ -27,7 +27,7 @@ npm start
 빌드 후 사용자의 Codex 로컬 설정에서 아래 명령을 등록합니다. 이 저장소에는 개인 전역 설정을 커밋하지 않습니다.
 
 ```powershell
-codex mcp add ticketon-evidence -- node D:\project2\TicketOnBoarding_Be\tools\ticketon-evidence-mcp\dist\index.js
+codex mcp add ticketonEvidence -- node D:\project2\TicketOnBoarding_Be\tools\ticketon-evidence-mcp\dist\index.js
 codex mcp list
 ```
 
