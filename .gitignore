@@ -1,3 +1,7 @@
 # Load-test output can contain ephemeral JWTs from k6 setup data.
 .work-k6-*.json
 load-test/results/
+
+# Local dependencies and compiled output for the read-only evidence MCP server.
+tools/ticketon-evidence-mcp/node_modules/
+tools/ticketon-evidence-mcp/dist/
