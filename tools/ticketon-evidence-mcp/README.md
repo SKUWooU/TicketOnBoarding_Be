@@ -28,6 +28,7 @@ npm start
 
 ```powershell
 codex mcp add ticketon-evidence -- node D:\project2\TicketOnBoarding_Be\tools\ticketon-evidence-mcp\dist\index.js
+codex mcp list
 ```
 
-등록 후에는 이 서버의 세 도구로 측정 결과를 근거로 조회할 수 있습니다. 실행·DB 변경·외부 API 호출 도구는 의도적으로 제공하지 않습니다.
+등록 후 새 Codex 로컬 세션에서 이 서버의 세 도구로 측정 결과를 근거로 조회할 수 있습니다. 실행·DB 변경·외부 API 호출 도구는 의도적으로 제공하지 않습니다. 전체 등록·해석 계약은 [고경합 측정 근거 MCP 로컬 연동](../../docs/project-improvement/mcp-local-integration.md)을 확인합니다.
