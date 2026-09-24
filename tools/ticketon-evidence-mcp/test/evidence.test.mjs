@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import test from "node:test";
@@ -73,3 +74,26 @@ test("PowerShell 결과의 UTF-8 BOM도 안전하게 읽는다", async () => {
 test("불완전한 요약은 PASS로 과장하지 않는다", () => {
   assert.equal(createInvariantReport({ ValidMeasurement: true }).status, "INSUFFICIENT_EVIDENCE");
 });
+
+test("stdio 초기화는 읽기 전용 분석 지침과 세 도구를 광고한다", async () => {
+  const output = await runServerHandshake();
+  assert.match(output, /가상 좌석 고경합 fixture/);
+  assert.match(output, /"name":"list_evidence_runs"/);
+  assert.match(output, /"readOnlyHint":true/);
+  assert.match(output, /"openWorldHint":false/);
+});
+
+function runServerHandshake() {
+  return new Promise((resolve, reject) => {
+    const server = spawn(process.execPath, ["dist/index.js"], { cwd: path.resolve(here, "..") });
+    let output = "";
+    server.stdout.on("data", (chunk) => { output += chunk; });
+    server.on("error", reject);
+    server.on("close", () => resolve(output));
+    server.stdin.end([
+      JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "contract-test", version: "1" } } }),
+      JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }),
+      JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+    ].join("\n") + "\n");
+  });
+}
