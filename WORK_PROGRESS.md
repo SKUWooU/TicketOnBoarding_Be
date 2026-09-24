@@ -19,6 +19,7 @@
 
 ### Backend Issue #148 — 고경합 측정 근거 MCP 로컬 연동·조회 계약
 
+- PR: [#149](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/149) / squash `5ceab0e`
 - 결과: `ticketonEvidence`를 Codex 개인 로컬 MCP 설정에 등록하고, 목록→요약→불변식 조회 순서와 fixture 해석 경계를 문서화
 - 검증: MCP fixture·stdio 지침/도구 주석 계약 8건, 실제 local summary protocol smoke, `codex mcp list` enabled 확인
 - 근거: [고경합 측정 근거 MCP 로컬 연동](docs/project-improvement/mcp-local-integration.md)
