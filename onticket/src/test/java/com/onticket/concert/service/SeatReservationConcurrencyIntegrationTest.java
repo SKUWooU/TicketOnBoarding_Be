@@ -70,7 +70,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @DataJpaTest(properties = {
-        "spring.jpa.hibernate.ddl-auto=create",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.show-sql=false"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)

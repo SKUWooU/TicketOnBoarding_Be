@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음
+- [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152) — 예약·결제 스키마 Flyway baseline 및 migration contract
 
 ## 완료
 

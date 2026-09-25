@@ -59,7 +59,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest(properties = {
-        "spring.jpa.hibernate.ddl-auto=create",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.show-sql=false",
         "onticket.ticket.seat-hold-duration=PT5M"
 })
