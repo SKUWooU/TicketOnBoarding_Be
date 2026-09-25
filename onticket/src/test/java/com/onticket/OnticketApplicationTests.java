@@ -12,6 +12,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "spring.jpa.hibernate.ddl-auto=create",
         "spring.batch.job.enabled=false",
         "jwt.issuer=onticket-context-test",
+        "jwt.secret=b250aWNrZXQtdGVzdC1qd3Qtc2hhcmVkLXNlY3JldC1rZXktMDAwMDAw",
         "spring.coolsms.apiKey=not-used",
         "spring.coolsms.apiSecret=not-used",
         "naver.client.id=not-used",

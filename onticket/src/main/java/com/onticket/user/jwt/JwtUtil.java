@@ -2,13 +2,11 @@ package com.onticket.user.jwt;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.security.Key;
-import java.util.Base64;
 import java.util.Date;
 import java.util.function.Function;
 
@@ -18,13 +16,19 @@ public class JwtUtil {
     @Value("${jwt.issuer}")
     private String issuer;
 
+    @Value("${jwt.secret}")
+    private String secret;
 
 
     private Key key;
 
     @PostConstruct
     public void init() {
-        this.key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+        try {
+            this.key = Keys.hmacShaKeyFor(io.jsonwebtoken.io.Decoders.BASE64.decode(secret));
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("jwt.secret must be a Base64-encoded HMAC key with at least 256 bits.", exception);
+        }
     }
 
     private static final long ACCESS_TOKEN_EXPIRATION_TIME = 3600 * 1000; // 1 day

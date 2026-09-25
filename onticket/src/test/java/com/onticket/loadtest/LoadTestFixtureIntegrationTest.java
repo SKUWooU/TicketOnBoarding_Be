@@ -316,6 +316,7 @@ class LoadTestFixtureIntegrationTest {
         String username = fixtureService.ensureUsers("browser-auth-contract", 1).get(0);
         JwtUtil jwtUtil = new JwtUtil();
         ReflectionTestUtils.setField(jwtUtil, "issuer", "loadtest-fixture-test");
+        ReflectionTestUtils.setField(jwtUtil, "secret", "b250aWNrZXQtdGVzdC1qd3Qtc2hhcmVkLXNlY3JldC1rZXktMDAwMDAw");
         jwtUtil.init();
         AuthController authController = new AuthController(
                 org.mockito.Mockito.mock(PasswordEncoder.class),
