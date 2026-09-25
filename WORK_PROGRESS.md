@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음
+- [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150) — 2-instance 좌석 hold·Checkout 정합성 smoke
 
 ## 완료
 
