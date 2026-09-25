@@ -9,7 +9,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(properties = {
-        "spring.jpa.hibernate.ddl-auto=create",
+        "spring.jpa.hibernate.ddl-auto=validate",
         "spring.batch.job.enabled=false",
         "jwt.issuer=onticket-context-test",
         "jwt.secret=b250aWNrZXQtdGVzdC1qd3Qtc2hhcmVkLXNlY3JldC1rZXktMDAwMDAw",
