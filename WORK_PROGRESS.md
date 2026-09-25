@@ -13,9 +13,15 @@
 
 ## 진행 중
 
-- [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150) — 2-instance 좌석 hold·Checkout 정합성 smoke
+- 없음
 
 ## 완료
+
+### Backend Issue #150 — 2-instance 좌석 hold·Checkout 정합성 smoke
+
+- PR: [#151](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/151) / squash `c8828bc`
+- 결과: 공유 `JWT_SECRET` 경계를 고정하고, loopback proxy를 통한 두 instance의 fixture hold/release·Checkout 종료 snapshot을 검증했다.
+- 검증: Backend CI, JWT·hold 통합·proxy contract, Reviewer `MERGE_READY: YES`; local 2,000석 fixture이며 운영 scale-out 성능 주장은 제외한다.
 
 ### Backend Issue #148 — 고경합 측정 근거 MCP 로컬 연동·조회 계약
 
