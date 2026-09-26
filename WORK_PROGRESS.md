@@ -13,9 +13,16 @@
 
 ## 진행 중
 
-- [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152) — 예약·결제 스키마 Flyway baseline 및 migration contract
+- 없음
 
 ## 완료
+
+### Backend Issue #152 — 예약·결제 스키마 Flyway baseline 및 migration contract
+
+- PR: [#153](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/153) / squash `22a3788`
+- 결과: 전체 schema V1을 versioned SQL로 고정하고, local·통합 테스트를 Flyway 적용 후 Hibernate `validate` 경로로 전환했다.
+- 검증: fresh migration·non-empty fail-fast·V1-equivalent explicit baseline Testcontainers contract, 전체 Backend CI, Reviewer `MERGE_READY: YES`.
+- 한계: 실제 legacy 운영 DB의 data migration·backfill·자동 schema 보정은 별도 승인과 upgrade 계획 전까지 제외한다.
 
 ### Backend Issue #150 — 2-instance 좌석 hold·Checkout 정합성 smoke
 
