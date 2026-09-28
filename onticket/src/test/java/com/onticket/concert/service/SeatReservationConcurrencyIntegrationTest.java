@@ -521,6 +521,51 @@ class SeatReservationConcurrencyIntegrationTest {
     }
 
     @Test
+    void overlappingMultiSeatRequestsKeepInventoryConsistentWithoutSqlDeadlock() throws Exception {
+        List<List<String>> overlappingBundles = List.of(
+                List.of("A1", "A2", "A3", "A4"),
+                List.of("A4", "A3", "A2", "A1"),
+                List.of("A5", "A6", "A7", "A8"),
+                List.of("A8", "A7", "A6", "A5"),
+                List.of("A3", "A4", "A5", "A6"),
+                List.of("A6", "A5", "A4", "A3"),
+                List.of("A7", "A8", "B1", "B2"),
+                List.of("B2", "B1", "A8", "A7")
+        );
+        SEAT_LOCK_QUERY_ORDER.clear();
+
+        List<LockAttemptResult> results = runRequestsConcurrently(overlappingBundles);
+        InventorySnapshot snapshot = inventorySnapshot();
+        long successes = results.stream().filter(LockAttemptResult::success).count();
+        long conflicts = results.size() - successes;
+        List<List<String>> lockQueryOrders = SEAT_LOCK_QUERY_ORDER.values().stream()
+                .map(List::copyOf)
+                .toList();
+
+        System.out.printf(
+                "OVERLAPPING_MULTI_SEAT attempts=%d successes=%d conflicts=%d sqlDeadlocks=%d remaining=%d reserved=%d reservations=%d invariant=%s%n",
+                results.size(), successes, conflicts, results.stream().filter(result -> result.sqlState() != null).count(),
+                snapshot.remainingSeats(), snapshot.successfullyReservedSeats(), snapshot.reservations(), snapshot.inventoryEquationHolds()
+        );
+
+        assertThat(results).hasSize(8);
+        assertThat(successes).isEqualTo(2);
+        assertThat(conflicts).isEqualTo(6);
+        assertThat(results).filteredOn(result -> !result.success())
+                .allSatisfy(result -> {
+                    assertThat(result.exceptionType()).isEqualTo("SeatReservationConflictException");
+                    assertThat(result.sqlState()).isNull();
+                    assertThat(result.errorCode()).isNull();
+                });
+        assertThat(lockQueryOrders).hasSize(8)
+                .allSatisfy(order -> assertThat(order).isSorted());
+        assertThat(snapshot.successfullyReservedSeats()).isEqualTo(8);
+        assertThat(snapshot.reservations()).isEqualTo(8);
+        assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 8);
+        assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
     void reservationSortsCopiedSeatNumbersWithoutMutatingRequest() throws Exception {
         List<String> requestedSeatNumbers = new ArrayList<>(List.of("A2", "A1"));
         ReservRequest reservRequest = request();
