@@ -87,6 +87,8 @@ class SeatReservationConcurrencyIntegrationTest {
 
     private static final int TOTAL_SEATS = 24;
     private static final int OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS = 50;
+    private static final int IDEMPOTENCY_CONTENTION_ROUNDS = 50;
+    private static final int IDEMPOTENCY_CONCURRENT_REQUESTS = 8;
     private static final String CONCERT_ID = "BASELINE-CONCERT";
     private static final String USERNAME = "baseline-user";
     private static final String SEAT_COMPOSITE_UNIQUE_INDEX = "uk_seat_concert_time_number";
@@ -320,6 +322,59 @@ class SeatReservationConcurrencyIntegrationTest {
         } finally {
             IDEMPOTENCY_LOOKUP_BARRIER.set(null);
         }
+    }
+
+    @Test
+    void repeatedSameIdempotencyKeyContentionCreatesOneBookingPerRound() throws Exception {
+        int totalAttempts = 0;
+        int totalCreatedBookings = 0;
+        int totalReusedResults = 0;
+        int totalDuplicateBookings = 0;
+        int totalUnexpectedFailures = 0;
+
+        for (int round = 1; round <= IDEMPOTENCY_CONTENTION_ROUNDS; round++) {
+            String idempotencyKey = "repeated-idempotency-key-" + round;
+            IDEMPOTENCY_LOOKUP_COUNT.set(0);
+            IDEMPOTENCY_LOOKUP_BARRIER.set(new CyclicBarrier(IDEMPOTENCY_CONCURRENT_REQUESTS));
+
+            try {
+                List<LocalDateTime> results = runIdempotentRequestsConcurrently(
+                        idempotencyKey, request("A1"), IDEMPOTENCY_CONCURRENT_REQUESTS
+                );
+                InventorySnapshot snapshot = inventorySnapshot();
+
+                assertThat(results).hasSize(IDEMPOTENCY_CONCURRENT_REQUESTS)
+                        .allMatch(results.getFirst()::equals);
+                assertThat(bookingRepository.count()).isEqualTo(1);
+                assertThat(snapshot).isEqualTo(new InventorySnapshot(TOTAL_SEATS - 1, 1, 1));
+
+                totalAttempts += results.size();
+                totalCreatedBookings++;
+                totalReusedResults += results.size() - 1;
+            } catch (Exception exception) {
+                totalUnexpectedFailures++;
+                throw exception;
+            } finally {
+                IDEMPOTENCY_LOOKUP_BARRIER.set(null);
+            }
+
+            if (round < IDEMPOTENCY_CONTENTION_ROUNDS) {
+                deleteFixture();
+                concertTimeId = createFixture();
+            }
+        }
+
+        System.out.printf(
+                "REPEATED_IDEMPOTENCY rounds=%d attempts=%d createdBookings=%d reusedResults=%d duplicateBookings=%d unexpectedFailures=%d%n",
+                IDEMPOTENCY_CONTENTION_ROUNDS, totalAttempts, totalCreatedBookings,
+                totalReusedResults, totalDuplicateBookings, totalUnexpectedFailures
+        );
+
+        assertThat(totalAttempts).isEqualTo(IDEMPOTENCY_CONTENTION_ROUNDS * IDEMPOTENCY_CONCURRENT_REQUESTS);
+        assertThat(totalCreatedBookings).isEqualTo(IDEMPOTENCY_CONTENTION_ROUNDS);
+        assertThat(totalReusedResults).isEqualTo(IDEMPOTENCY_CONTENTION_ROUNDS * (IDEMPOTENCY_CONCURRENT_REQUESTS - 1));
+        assertThat(totalDuplicateBookings).isZero();
+        assertThat(totalUnexpectedFailures).isZero();
     }
 
     @Test
@@ -874,13 +929,21 @@ class SeatReservationConcurrencyIntegrationTest {
             String idempotencyKey,
             ReservRequest reservRequest
     ) throws Exception {
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        CountDownLatch ready = new CountDownLatch(2);
+        return runIdempotentRequestsConcurrently(idempotencyKey, reservRequest, 2);
+    }
+
+    private List<LocalDateTime> runIdempotentRequestsConcurrently(
+            String idempotencyKey,
+            ReservRequest reservRequest,
+            int concurrentRequests
+    ) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(concurrentRequests);
+        CountDownLatch ready = new CountDownLatch(concurrentRequests);
         CountDownLatch start = new CountDownLatch(1);
         List<Future<LocalDateTime>> futures = new ArrayList<>();
 
         try {
-            for (int index = 0; index < 2; index++) {
+            for (int index = 0; index < concurrentRequests; index++) {
                 futures.add(executor.submit(() -> {
                     ready.countDown();
                     if (!start.await(5, TimeUnit.SECONDS)) {
@@ -1170,7 +1233,7 @@ class SeatReservationConcurrencyIntegrationTest {
                                     if (method.getName().equals("findByUsernameAndIdempotencyKey")) {
                                         int lookupCount = IDEMPOTENCY_LOOKUP_COUNT.incrementAndGet();
                                         CyclicBarrier barrier = IDEMPOTENCY_LOOKUP_BARRIER.get();
-                                        if (barrier != null && lookupCount <= 2) {
+                                        if (barrier != null && lookupCount <= barrier.getParties()) {
                                             barrier.await(5, TimeUnit.SECONDS);
                                         }
                                     }
