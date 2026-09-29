@@ -36,7 +36,7 @@ request bundle
   -> full rollback when the transaction fails
 ```
 
-## Observed result
+## Single-round observed result
 
 Command:
 
@@ -60,15 +60,43 @@ invariant=true
 
 The test also verifies that every observed lock-query sequence is sorted, so reverse input order does not become reverse database lock order.
 
+## Repeated contention aggregate
+
+The same eight-request workload is repeated 50 times. The fixture is deleted and recreated between rounds, so a reservation from one round cannot reduce inventory in the next one.
+
+Command:
+
+```powershell
+cd onticket
+.\gradlew.bat test --tests "com.onticket.concert.service.SeatReservationConcurrencyIntegrationTest.repeatedOverlappingMultiSeatContentionKeepsInventoryConsistentWithoutSqlDeadlock"
+```
+
+Observed Testcontainers aggregate:
+
+```text
+rounds=50
+attempts=400
+successes=100
+conflicts=300
+sqlDeadlocks=0
+unexpectedFailures=0
+inventoryInvariantViolations=0
+```
+
+Every round also asserts eight canonical lock-query sequences, eight reserved seats, sixteen remaining seats, and eight reservation rows. The 300 conflicts are expected domain outcomes from intentionally overlapping seat bundles; they are not server errors or failed requests.
+
 ## Interpretation and limits
 
-- This strengthens the multi-seat correctness evidence beyond a two-request case.
+- This strengthens the multi-seat correctness evidence beyond a two-request case with 50 isolated contention rounds.
 - The count is a bounded concurrency scenario, not an RPS capacity claim or p95 comparison.
+- Test execution duration is intentionally not used as a throughput or latency claim.
 - The result must not be presented as real venue traffic or a production deadlock rate.
 - The separate 2,000-seat k6 index experiment remains the performance evidence for this project.
 
 ## Links
 
 - Issue #154
+- Issue #156
 - `SeatReservationConcurrencyIntegrationTest.overlappingMultiSeatRequestsKeepInventoryConsistentWithoutSqlDeadlock`
+- `SeatReservationConcurrencyIntegrationTest.repeatedOverlappingMultiSeatContentionKeepsInventoryConsistentWithoutSqlDeadlock`
 - [Multi-seat lock-order baseline](multi-seat-lock-order-deadlock-baseline.md)

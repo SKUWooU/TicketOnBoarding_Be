@@ -86,6 +86,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class SeatReservationConcurrencyIntegrationTest {
 
     private static final int TOTAL_SEATS = 24;
+    private static final int OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS = 50;
     private static final String CONCERT_ID = "BASELINE-CONCERT";
     private static final String USERNAME = "baseline-user";
     private static final String SEAT_COMPOSITE_UNIQUE_INDEX = "uk_seat_concert_time_number";
@@ -522,16 +523,7 @@ class SeatReservationConcurrencyIntegrationTest {
 
     @Test
     void overlappingMultiSeatRequestsKeepInventoryConsistentWithoutSqlDeadlock() throws Exception {
-        List<List<String>> overlappingBundles = List.of(
-                List.of("A1", "A2", "A3", "A4"),
-                List.of("A4", "A3", "A2", "A1"),
-                List.of("A5", "A6", "A7", "A8"),
-                List.of("A8", "A7", "A6", "A5"),
-                List.of("A3", "A4", "A5", "A6"),
-                List.of("A6", "A5", "A4", "A3"),
-                List.of("A7", "A8", "B1", "B2"),
-                List.of("B2", "B1", "A8", "A7")
-        );
+        List<List<String>> overlappingBundles = overlappingMultiSeatBundles();
         SEAT_LOCK_QUERY_ORDER.clear();
 
         List<LockAttemptResult> results = runRequestsConcurrently(overlappingBundles);
@@ -563,6 +555,98 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(snapshot.reservations()).isEqualTo(8);
         assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 8);
         assertThat(snapshot.inventoryEquationHolds()).isTrue();
+    }
+
+    @Test
+    void repeatedOverlappingMultiSeatContentionKeepsInventoryConsistentWithoutSqlDeadlock() throws Exception {
+        int totalAttempts = 0;
+        int totalSuccesses = 0;
+        int totalConflicts = 0;
+        int totalSqlDeadlocks = 0;
+        int totalUnexpectedFailures = 0;
+        int totalInvariantViolations = 0;
+
+        for (int round = 1; round <= OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS; round++) {
+            SEAT_LOCK_QUERY_ORDER.clear();
+            List<LockAttemptResult> results = runRequestsConcurrently(overlappingMultiSeatBundles());
+            InventorySnapshot snapshot = inventorySnapshot();
+            List<LockAttemptResult> failures = results.stream()
+                    .filter(result -> !result.success())
+                    .toList();
+            long successes = results.stream().filter(LockAttemptResult::success).count();
+            long conflicts = failures.stream()
+                    .filter(result -> "SeatReservationConflictException".equals(result.exceptionType()))
+                    .count();
+            long sqlDeadlocks = failures.stream()
+                    .filter(this::isSqlDeadlock)
+                    .count();
+            long unexpectedFailures = failures.stream()
+                    .filter(result -> !"SeatReservationConflictException".equals(result.exceptionType()))
+                    .filter(result -> !isSqlDeadlock(result))
+                    .count();
+            List<List<String>> lockQueryOrders = SEAT_LOCK_QUERY_ORDER.values().stream()
+                    .map(List::copyOf)
+                    .toList();
+
+            assertThat(results).hasSize(8);
+            assertThat(successes).isEqualTo(2);
+            assertThat(conflicts).isEqualTo(6);
+            assertThat(sqlDeadlocks).isZero();
+            assertThat(unexpectedFailures).isZero();
+            assertThat(lockQueryOrders).hasSize(8)
+                    .allSatisfy(order -> assertThat(order).isSorted());
+            assertThat(snapshot.successfullyReservedSeats()).isEqualTo(8);
+            assertThat(snapshot.reservations()).isEqualTo(8);
+            assertThat(snapshot.remainingSeats()).isEqualTo(TOTAL_SEATS - 8);
+            assertThat(snapshot.inventoryEquationHolds()).isTrue();
+
+            totalAttempts += results.size();
+            totalSuccesses += Math.toIntExact(successes);
+            totalConflicts += Math.toIntExact(conflicts);
+            totalSqlDeadlocks += Math.toIntExact(sqlDeadlocks);
+            totalUnexpectedFailures += Math.toIntExact(unexpectedFailures);
+            totalInvariantViolations += snapshot.inventoryEquationHolds() ? 0 : 1;
+
+            if (round < OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS) {
+                deleteFixture();
+                concertTimeId = createFixture();
+            }
+        }
+
+        System.out.printf(
+                "REPEATED_OVERLAPPING_MULTI_SEAT rounds=%d attempts=%d successes=%d conflicts=%d sqlDeadlocks=%d unexpectedFailures=%d invariantViolations=%d%n",
+                OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS,
+                totalAttempts,
+                totalSuccesses,
+                totalConflicts,
+                totalSqlDeadlocks,
+                totalUnexpectedFailures,
+                totalInvariantViolations
+        );
+
+        assertThat(totalAttempts).isEqualTo(OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS * 8);
+        assertThat(totalSuccesses).isEqualTo(OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS * 2);
+        assertThat(totalConflicts).isEqualTo(OVERLAPPING_MULTI_SEAT_CONTENTION_ROUNDS * 6);
+        assertThat(totalSqlDeadlocks).isZero();
+        assertThat(totalUnexpectedFailures).isZero();
+        assertThat(totalInvariantViolations).isZero();
+    }
+
+    private boolean isSqlDeadlock(LockAttemptResult result) {
+        return "40001".equals(result.sqlState()) || Integer.valueOf(1213).equals(result.errorCode());
+    }
+
+    private List<List<String>> overlappingMultiSeatBundles() {
+        return List.of(
+                List.of("A1", "A2", "A3", "A4"),
+                List.of("A4", "A3", "A2", "A1"),
+                List.of("A5", "A6", "A7", "A8"),
+                List.of("A8", "A7", "A6", "A5"),
+                List.of("A3", "A4", "A5", "A6"),
+                List.of("A6", "A5", "A4", "A3"),
+                List.of("A7", "A8", "B1", "B2"),
+                List.of("B2", "B1", "A8", "A7")
+        );
     }
 
     @Test
