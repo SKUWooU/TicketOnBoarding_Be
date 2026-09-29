@@ -4,7 +4,7 @@
 
 - Same user, same reservation payload, and same idempotency key per round
 - Eight requests released concurrently with a lookup barrier
-- Fifty isolated rounds with the MariaDB Testcontainers fixture recreated between rounds
+- Fifty isolated rounds; the MariaDB Testcontainers container remains running while only the test data fixture is deleted and recreated between rounds
 
 ## Observed aggregate
 
