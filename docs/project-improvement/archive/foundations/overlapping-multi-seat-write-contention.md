@@ -77,7 +77,7 @@ Observed Testcontainers aggregate:
 rounds=50
 attempts=400
 successes=100
-expectedSeatConflicts=300
+conflicts=300
 sqlDeadlocks=0
 unexpectedFailures=0
 inventoryInvariantViolations=0

@@ -578,9 +578,12 @@ class SeatReservationConcurrencyIntegrationTest {
                     .filter(result -> "SeatReservationConflictException".equals(result.exceptionType()))
                     .count();
             long sqlDeadlocks = failures.stream()
-                    .filter(result -> "40001".equals(result.sqlState()) || Integer.valueOf(1213).equals(result.errorCode()))
+                    .filter(this::isSqlDeadlock)
                     .count();
-            long unexpectedFailures = failures.size() - conflicts;
+            long unexpectedFailures = failures.stream()
+                    .filter(result -> !"SeatReservationConflictException".equals(result.exceptionType()))
+                    .filter(result -> !isSqlDeadlock(result))
+                    .count();
             List<List<String>> lockQueryOrders = SEAT_LOCK_QUERY_ORDER.values().stream()
                     .map(List::copyOf)
                     .toList();
@@ -627,6 +630,10 @@ class SeatReservationConcurrencyIntegrationTest {
         assertThat(totalSqlDeadlocks).isZero();
         assertThat(totalUnexpectedFailures).isZero();
         assertThat(totalInvariantViolations).isZero();
+    }
+
+    private boolean isSqlDeadlock(LockAttemptResult result) {
+        return "40001".equals(result.sqlState()) || Integer.valueOf(1213).equals(result.errorCode());
     }
 
     private List<List<String>> overlappingMultiSeatBundles() {
