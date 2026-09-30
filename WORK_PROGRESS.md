@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음
+- Backend [#162](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/162): 2,000석 fixture의 인기 좌석 집중도별 예약 경합 재현. 시드·집중 비율·인기 좌석 수를 입력으로 받고 실제 선택 분포를 측정 요약에 기록하는 범위.
 
 ## 완료
 

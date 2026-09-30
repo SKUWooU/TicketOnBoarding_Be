@@ -601,6 +601,44 @@ function Assert-K6ContentionRunIdentity {
     $true
 }
 
+function New-K6WeightedHotspotSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][object]$Result,
+        [Parameter(Mandatory = $true)][int]$HotSeatCount,
+        [Parameter(Mandatory = $true)][int]$HotRequestPercent,
+        [Parameter(Mandatory = $true)][long]$SelectionSeed,
+        [Parameter(Mandatory = $true)][long]$CompletedIterations
+    )
+
+    if ('weightedHotspot' -notin $Result.PSObject.Properties.Name) {
+        throw 'Structured k6 result is missing weightedHotspot.'
+    }
+    $distribution = $Result.weightedHotspot
+    foreach ($field in @('hotSeatCount', 'hotRequestPercent', 'seed', 'hotSelections', 'coldSelections')) {
+        if ($null -eq $distribution -or $field -notin $distribution.PSObject.Properties.Name) {
+            throw "Structured weighted hotspot result is missing $field."
+        }
+    }
+    if (([int]$distribution.hotSeatCount -ne $HotSeatCount) -or ([int]$distribution.hotRequestPercent -ne $HotRequestPercent) -or ([long]$distribution.seed -ne $SelectionSeed)) {
+        throw 'Weighted hotspot result does not match the requested configuration.'
+    }
+    $hotSelections = [long]$distribution.hotSelections
+    $coldSelections = [long]$distribution.coldSelections
+    if (($CompletedIterations -le 0) -or ($hotSelections -lt 0) -or ($coldSelections -lt 0) -or (($hotSelections + $coldSelections) -ne $CompletedIterations)) {
+        throw 'Weighted seat selection counters do not match completed iterations.'
+    }
+
+    [pscustomobject]@{
+        HotSeatCount = $HotSeatCount
+        HotRequestPercent = $HotRequestPercent
+        Seed = $SelectionSeed
+        HotSelections = $hotSelections
+        ColdSelections = $coldSelections
+        ActualHotSelectionPercent = 100.0 * $hotSelections / $CompletedIterations
+    }
+}
+
 Export-ModuleMember -Function @(
     'ConvertFrom-PrometheusHikari',
     'ConvertFrom-PrometheusHikariAcquireTiming',
@@ -621,5 +659,6 @@ Export-ModuleMember -Function @(
     'ConvertFrom-K6ContentionResult',
     'ConvertFrom-K6FinalSnapshot',
     'New-K6ContentionRunSummary',
-    'Assert-K6ContentionRunIdentity'
+    'Assert-K6ContentionRunIdentity',
+    'New-K6WeightedHotspotSummary'
 )

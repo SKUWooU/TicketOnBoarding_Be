@@ -45,6 +45,15 @@ jobs:
           ./load-test/scripts/Test-SeatIndexContentionComparison.ps1
           ./load-test/scripts/Test-SeatHoldContention.ps1
 
+      - name: Set up Node.js for workload contract
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate weighted seat selection
+        working-directory: ${{ github.workspace }}
+        run: node --test load-test/k6/test/weighted-seat-selection.test.mjs
+
       - name: Run Backend tests
         run: |
           chmod +x gradlew
