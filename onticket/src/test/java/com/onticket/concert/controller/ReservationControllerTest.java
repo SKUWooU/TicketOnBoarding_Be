@@ -18,6 +18,7 @@ import com.onticket.concert.service.InvalidIdempotencyKeyException;
 import com.onticket.concert.service.InvalidPaymentException;
 import com.onticket.concert.service.InvalidSeatHoldRequestException;
 import com.onticket.concert.service.PaymentVerificationUnavailableException;
+import com.onticket.concert.service.PaymentAlreadyUsedException;
 import com.onticket.concert.service.PaymentVerificationUnknownException;
 import com.onticket.concert.service.ReservationIdempotencyService;
 import com.onticket.concert.service.SeatHoldConflictException;
@@ -58,6 +59,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
@@ -159,7 +161,8 @@ class ReservationControllerTest {
                         .header("Idempotency-Key", "reused-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(REQUEST_BODY))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(header().doesNotExist(ReservationController.SEAT_CONFLICT_HEADER));
     }
 
     @Test
@@ -193,7 +196,9 @@ class ReservationControllerTest {
                         .header("Idempotency-Key", "contention-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(REQUEST_BODY))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(header().string(ReservationController.SEAT_CONFLICT_HEADER,
+                        ReservationController.SEAT_UNAVAILABLE));
     }
 
     @Test
@@ -269,7 +274,33 @@ class ReservationControllerTest {
                                   "paymentId": "payment-1"
                                 }
                                 """))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(header().string(ReservationController.SEAT_CONFLICT_HEADER,
+                        ReservationController.SEAT_UNAVAILABLE));
+    }
+
+    @Test
+    void paymentIdConflictDoesNotLookLikeSeatContention() throws Exception {
+        when(verifiedReservationService.reserve(
+                eq(USERNAME),
+                eq(CONCERT_ID),
+                any(VerifiedReservRequest.class),
+                eq("payment-conflict-key")
+        )).thenThrow(new PaymentAlreadyUsedException());
+
+        mockMvc.perform(post("/main/detail/{concertId}/verified-reservation", CONCERT_ID)
+                        .cookie(new Cookie("accessToken", TOKEN))
+                        .header("Idempotency-Key", "payment-conflict-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "concertTimeId": 1,
+                                  "seatNumberList": ["A1"],
+                                  "paymentId": "payment-1"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(header().doesNotExist(ReservationController.SEAT_CONFLICT_HEADER));
     }
 
     @Test

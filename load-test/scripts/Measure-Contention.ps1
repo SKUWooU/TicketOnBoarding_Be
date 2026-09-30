@@ -1,7 +1,16 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('distributed', 'hot-section', 'hot-seat', 'idempotent-retry')]
+    [ValidateSet('distributed', 'hot-section', 'hot-seat', 'idempotent-retry', 'weighted-hotspot')]
     [string]$Scenario = 'distributed',
+
+    [ValidateRange(1, 2000)]
+    [int]$HotSeatCount = 40,
+
+    [ValidateRange(0, 100)]
+    [int]$HotRequestPercent = 70,
+
+    [ValidateRange(0, 4294967295)]
+    [long]$SelectionSeed = 1,
 
     [ValidateRange(1, 10000)]
     [int]$Rate = 5,
@@ -50,6 +59,9 @@ Import-Module $issue57SeatIndexModulePath -Force
 
 if ($PreAllocatedVus -gt $MaxVus) {
     throw 'PreAllocatedVus must not exceed MaxVus.'
+}
+if ($Scenario -eq 'weighted-hotspot' -and $HotSeatCount -eq 2000 -and $HotRequestPercent -ne 100) {
+    throw 'A 2,000-seat hot set requires 100% hot requests.'
 }
 
 if ([string]::IsNullOrWhiteSpace($RunId)) {
@@ -217,6 +229,9 @@ try {
     $issue51K6Arguments = @(
         'run',
         '-e', "TEST_SCENARIO=$Scenario",
+        '-e', "HOT_SEAT_COUNT=$HotSeatCount",
+        '-e', "HOT_REQUEST_PERCENT=$HotRequestPercent",
+        '-e', "SELECTION_SEED=$SelectionSeed",
         '-e', "RATE=$Rate",
         '-e', "DURATION=$($DurationSeconds)s",
         '-e', "RUN_ID=$RunId",
@@ -283,6 +298,15 @@ try {
         -DurationSeconds $DurationSeconds `
         -ThresholdsEnforced $issue53ExpectedThresholdsEnforced | Out-Null
     $issue53K6Summary = New-K6ContentionRunSummary -Result $issue53K6Result -DurationSeconds $DurationSeconds
+    if ($Scenario -eq 'weighted-hotspot') {
+        $issue162WeightedSummary = New-K6WeightedHotspotSummary `
+            -Result $issue53K6Result `
+            -HotSeatCount $HotSeatCount `
+            -HotRequestPercent $HotRequestPercent `
+            -SelectionSeed $SelectionSeed `
+            -CompletedIterations ([long]$issue53K6Summary.Iterations)
+        $issue53K6Summary | Add-Member -NotePropertyName WeightedHotspot -NotePropertyValue $issue162WeightedSummary
+    }
     $issue53FinalSnapshot = ConvertFrom-K6FinalSnapshot -Text $issue51NormalizedK6Output
     $issue51InvariantSatisfied = [bool]$issue53FinalSnapshot.invariantSatisfied
     if (-not $issue51InvariantSatisfied) {

@@ -249,4 +249,20 @@ $issue138ObserverOnly = New-MariaDbStatementDigestDelta -Before $issue138Observe
 Assert-Issue51Equal $issue138ObserverOnly.StatementCount 0 'Observer-only digest deltas must produce zero business statement totals.'
 Assert-Issue51Throws { New-MariaDbStatementDigestDelta -Before $issue136Before -After @() } 'Disappeared statement digests must invalidate a timing measurement.'
 
+$issue162Result = [pscustomobject]@{
+    weightedHotspot = [pscustomobject]@{
+        hotSeatCount = 40
+        hotRequestPercent = 70
+        seed = 17
+        hotSelections = 69
+        coldSelections = 31
+    }
+}
+$issue162Summary = New-K6WeightedHotspotSummary -Result $issue162Result -HotSeatCount 40 -HotRequestPercent 70 -SelectionSeed 17 -CompletedIterations 100
+Assert-Issue51Equal $issue162Summary.ActualHotSelectionPercent 69 'Actual hot selection share must come from completed selections.'
+Assert-Issue51Equal $issue162Summary.ColdSelections 31 'Cold selections must remain visible.'
+Assert-Issue51Throws { New-K6WeightedHotspotSummary -Result $issue162Result -HotSeatCount 20 -HotRequestPercent 70 -SelectionSeed 17 -CompletedIterations 100 } 'A mismatched hot seat count must invalidate the measurement.'
+Assert-Issue51Throws { New-K6WeightedHotspotSummary -Result $issue162Result -HotSeatCount 40 -HotRequestPercent 70 -SelectionSeed 17 -CompletedIterations 101 } 'Selection counts must match completed iterations.'
+Assert-Issue51Throws { New-K6WeightedHotspotSummary -Result ([pscustomobject]@{}) -HotSeatCount 40 -HotRequestPercent 70 -SelectionSeed 17 -CompletedIterations 100 } 'A missing distribution must invalidate the measurement.'
+
 Write-Output "ContentionMetrics checks passed: $issue51Assertions assertions."

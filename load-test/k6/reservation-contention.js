@@ -2,6 +2,8 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { check } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
+import { createWeightedSeatPlan, selectWeightedSeat } from './weighted-seat-selection.mjs';
+import { isExpectedSeatContention } from './reservation-response.mjs';
 
 const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const TEST_SCENARIO = __ENV.TEST_SCENARIO || 'distributed';
@@ -13,6 +15,14 @@ const TOKEN_COUNT = Number(__ENV.TOKEN_COUNT || Math.min(MAX_VUS, 100));
 const FIXTURE_PREPARED = (__ENV.FIXTURE_PREPARED || 'false').toLowerCase() === 'true';
 const ENFORCE_THRESHOLDS = (__ENV.ENFORCE_THRESHOLDS || 'true').toLowerCase() === 'true';
 const UNIT_PRICE = 30000;
+const weightedPlan = TEST_SCENARIO === 'weighted-hotspot'
+  ? createWeightedSeatPlan(
+      2000,
+      integerSetting('HOT_SEAT_COUNT', 40),
+      integerSetting('HOT_REQUEST_PERCENT', 70),
+      integerSetting('SELECTION_SEED', 1),
+    )
+  : null;
 
 const reservationSuccess = new Counter('reservation_success');
 const nonSuccessfulReservation = new Counter('reservation_non_2xx');
@@ -20,15 +30,14 @@ const expectedContention = new Counter('reservation_expected_contention');
 const unexpectedNonSuccessfulReservation = new Counter('reservation_unexpected_non_2xx');
 const unexpectedFailure = new Rate('reservation_unexpected_failure');
 const reservationDuration = new Trend('reservation_duration', true);
+const weightedHotSelections = new Counter('weighted_hot_selections');
+const weightedColdSelections = new Counter('weighted_cold_selections');
 
 const expectedContentionScenario = TEST_SCENARIO === 'hot-seat'
-  || TEST_SCENARIO === 'hot-section';
+  || TEST_SCENARIO === 'hot-section'
+  || TEST_SCENARIO === 'weighted-hotspot';
 
-http.setResponseCallback(
-  expectedContentionScenario
-    ? http.expectedStatuses(200, 409)
-    : http.expectedStatuses(200),
-);
+http.setResponseCallback(http.expectedStatuses(200));
 
 export const options = {
   scenarios: {
@@ -81,6 +90,9 @@ export function setup() {
   if (fixture.totalSeats !== 2000 || tokens.length === 0) {
     throw new Error('Expected the default 2,000-seat fixture and at least one loadtest token.');
   }
+  if (weightedPlan && fixture.totalSeats !== weightedPlan.totalSeats) {
+    throw new Error('Weighted seat plan does not match the fixture seat count.');
+  }
   if (TEST_SCENARIO === 'idempotent-retry' && MAX_VUS > fixture.totalSeats) {
     throw new Error('idempotent-retry requires max VUs not to exceed total seats.');
   }
@@ -90,7 +102,13 @@ export function setup() {
 export default function (data) {
   const token = data.tokens[(__VU - 1) % data.tokens.length];
   const iteration = exec.scenario.iterationInTest;
-  const seatNumber = selectSeat(data.fixture, iteration);
+  const selection = weightedPlan ? selectWeightedSeat(iteration, weightedPlan) : null;
+  if (selection) {
+    (selection.isHot ? weightedHotSelections : weightedColdSelections).add(1);
+  }
+  const seatNumber = selection
+    ? seatNumberFromIndex(data.fixture, selection.seatIndex)
+    : selectSeat(data.fixture, iteration);
   const stableRetry = TEST_SCENARIO === 'idempotent-retry';
   const requestIdentity = stableRetry ? `vu-${__VU}` : `${__VU}-${iteration}`;
   const idempotencyKey = `lt-${data.runId}.${TEST_SCENARIO}-${requestIdentity}`;
@@ -121,7 +139,7 @@ export default function (data) {
   }
 
   nonSuccessfulReservation.add(1);
-  if (response.status === 409 && expectedContentionScenario) {
+  if (isExpectedSeatContention(response, expectedContentionScenario)) {
     expectedContention.add(1);
     unexpectedFailure.add(false);
     return;
@@ -159,6 +177,15 @@ export function handleSummary(data) {
     maxAllocatedVus: gaugeMaximum(data, 'vus_max'),
     preAllocatedVus: PRE_ALLOCATED_VUS,
     configuredMaxVus: MAX_VUS,
+    ...(weightedPlan ? {
+      weightedHotspot: {
+        hotSeatCount: weightedPlan.hotSeatCount,
+        hotRequestPercent: weightedPlan.hotRequestPercent,
+        seed: weightedPlan.seed,
+        hotSelections: counterValue(data, 'weighted_hot_selections'),
+        coldSelections: counterValue(data, 'weighted_cold_selections'),
+      },
+    } : {}),
   };
 
   return {
@@ -188,6 +215,21 @@ function selectSeat(fixture, iteration) {
 
 function seatNumber(row, number) {
   return `R${String(row).padStart(3, '0')}-S${String(number).padStart(3, '0')}`;
+}
+
+function seatNumberFromIndex(fixture, seatIndex) {
+  const row = Math.floor(seatIndex / fixture.seatsPerRow) + 1;
+  const number = (seatIndex % fixture.seatsPerRow) + 1;
+  return seatNumber(row, number);
+}
+
+function integerSetting(name, fallback) {
+  const value = __ENV[name];
+  if (value === undefined) return fallback;
+  if (!/^(0|[1-9][0-9]*)$/.test(value)) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  return Number(value);
 }
 
 function metricValues(data, name) {
