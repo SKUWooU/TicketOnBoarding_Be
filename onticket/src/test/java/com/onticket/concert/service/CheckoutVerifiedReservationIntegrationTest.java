@@ -1592,6 +1592,41 @@ class CheckoutVerifiedReservationIntegrationTest {
     }
 
     @Test
+    void delayedProviderVerificationDoesNotKeepCheckoutTransactionLocked() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("checkout-delayed-provider", "A1");
+        VerifiedReservRequest request = verifiedRequest(checkout.getMerchantUid(), "payment-delayed", "A1");
+        CountDownLatch providerEntered = new CountDownLatch(1);
+        CountDownLatch allowProviderResponse = new CountDownLatch(1);
+
+        when(paymentVerificationPort.verify("payment-delayed")).thenAnswer(invocation -> {
+            providerEntered.countDown();
+            assertThat(allowProviderResponse.await(5, TimeUnit.SECONDS)).isTrue();
+            return approved("payment-delayed", checkout.getMerchantUid(), 30_000);
+        });
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<AttemptResult> first = executor.submit(() -> attempt(
+                    request, "reservation-delayed-1", new CountDownLatch(0)
+            ));
+            assertThat(providerEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<AttemptResult> duplicate = executor.submit(() -> attempt(
+                    request, "reservation-delayed-2", new CountDownLatch(0)
+            ));
+            AttemptResult duplicateResult = duplicate.get(1, TimeUnit.SECONDS);
+
+            assertThat(duplicateResult.success()).isFalse();
+            assertThat(duplicateResult.exceptionType()).isEqualTo(CheckoutConflictException.class.getSimpleName());
+            allowProviderResponse.countDown();
+
+            assertThat(first.get(10, TimeUnit.SECONDS).success()).isTrue();
+        }
+
+        verify(paymentVerificationPort, times(1)).verify("payment-delayed");
+        assertConfirmedSnapshot(checkout.getMerchantUid(), 1, 1);
+    }
+
+    @Test
     void partiallyOverlappingCheckoutIsRejectedBeforePaymentVerification() {
         SeatHoldRequest holdRequest = new SeatHoldRequest();
         holdRequest.setConcertTimeId(concertTimeId);
