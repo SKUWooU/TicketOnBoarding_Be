@@ -13,9 +13,16 @@
 
 ## 진행 중
 
-- Backend [#162](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/162): 2,000석 fixture의 인기 좌석 집중도별 예약 경합 재현. 시드·집중 비율·인기 좌석 수를 입력으로 받고 실제 선택 분포를 측정 요약에 기록하는 범위.
+- 없음.
 
 ## 완료
+
+### Backend Issue #162 — 인기 좌석 집중도별 예약 경합 시나리오
+
+- PR: [#163](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/163) / squash `d86f184`
+- 결과: 2,000석 fixture의 인기 좌석 수·요청 집중도·시드를 바꿀 수 있는 k6 시나리오와 선택 분포 기록을 추가했다. 좌석 충돌 409만 별도 식별해 결제·멱등성 충돌의 오분류를 막았다.
+- 검증: Node 계약 5건, 측정 요약 계약 107 assertions, 컨트롤러 테스트, Backend CI, Reviewer `MERGE_READY: YES`. Docker 미실행으로 실제 DB 고경합·p95 수치는 아직 측정하지 않았다.
+- 근거: [인기 좌석 집중도 실험](docs/project-improvement/weighted-seat-contention-experiment.md)
 
 ### Backend Issue #152 — 예약·결제 스키마 Flyway baseline 및 migration contract
 
