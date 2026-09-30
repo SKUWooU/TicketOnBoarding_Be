@@ -11,6 +11,7 @@ import com.onticket.concert.service.CheckoutService;
 import com.onticket.concert.service.CheckoutCancellationService;
 import com.onticket.concert.service.CheckoutVerifiedReservationService;
 import com.onticket.concert.service.SeatHoldService;
+import com.onticket.concert.service.SeatReservationConflictException;
 import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.user.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,16 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 @RestController
 public class ReservationController {
+    public static final String SEAT_CONFLICT_HEADER = "X-Reservation-Conflict";
+    public static final String SEAT_UNAVAILABLE = "SEAT_UNAVAILABLE";
+
+    @ExceptionHandler(SeatReservationConflictException.class)
+    public ResponseEntity<Void> seatReservationConflict() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(SEAT_CONFLICT_HEADER, SEAT_UNAVAILABLE)
+                .build();
+    }
+
     private final ReservationIdempotencyService reservationIdempotencyService;
 
     private final VerifiedReservationService verifiedReservationService;

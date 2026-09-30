@@ -12,7 +12,7 @@
 - 각 k6 iteration의 고유 번호와 `SelectionSeed`를 해시해 인기 좌석 선택 여부와 좌석 인덱스를 결정한다. 동일 fixture·설정·시드·iteration은 동일 좌석을 선택한다.
 - `HotRequestPercent`는 목표 비율이다. 실제 선택 건수와 비율은 k6 Counter로 별도 기록하며, 목표치와 정확히 같다고 가정하지 않는다.
 - `HOT_SEAT_COUNT`는 1~2,000, `HOT_REQUEST_PERCENT`는 0~100, `SELECTION_SEED`는 부호 없는 32비트 정수다. 인기 좌석 집합이 전체 2,000석이면 비율은 100이어야 한다.
-- 이 시나리오의 HTTP 409는 예상 가능한 좌석 충돌로 분리한다. 예상 밖 오류와 dropped iteration, 최종 재고 불변식은 별도로 확인한다.
+- HTTP 409 중 `X-Reservation-Conflict: SEAT_UNAVAILABLE` 응답만 별도 Counter에서 예상 가능한 좌석 충돌로 분리한다. 결제 ID·멱등성 충돌 등 코드가 없는 409는 예상 밖 오류로 집계한다. k6 기본 `http_req_failed`는 모든 409를 실패로 유지하므로 도메인 경합 판단에는 별도 Counter를 사용한다. dropped iteration과 최종 재고 불변식도 별도로 확인한다.
 
 ## 실행 경로
 

@@ -52,7 +52,7 @@ jobs:
 
       - name: Validate weighted seat selection
         working-directory: ${{ github.workspace }}
-        run: node --test load-test/k6/test/weighted-seat-selection.test.mjs
+        run: node --test load-test/k6/test/*.test.mjs
 
       - name: Run Backend tests
         run: |

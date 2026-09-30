@@ -3,6 +3,7 @@ import exec from 'k6/execution';
 import { check } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { createWeightedSeatPlan, selectWeightedSeat } from './weighted-seat-selection.mjs';
+import { isExpectedSeatContention } from './reservation-response.mjs';
 
 const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const TEST_SCENARIO = __ENV.TEST_SCENARIO || 'distributed';
@@ -36,11 +37,7 @@ const expectedContentionScenario = TEST_SCENARIO === 'hot-seat'
   || TEST_SCENARIO === 'hot-section'
   || TEST_SCENARIO === 'weighted-hotspot';
 
-http.setResponseCallback(
-  expectedContentionScenario
-    ? http.expectedStatuses(200, 409)
-    : http.expectedStatuses(200),
-);
+http.setResponseCallback(http.expectedStatuses(200));
 
 export const options = {
   scenarios: {
@@ -142,7 +139,7 @@ export default function (data) {
   }
 
   nonSuccessfulReservation.add(1);
-  if (response.status === 409 && expectedContentionScenario) {
+  if (isExpectedSeatContention(response, expectedContentionScenario)) {
     expectedContention.add(1);
     unexpectedFailure.add(false);
     return;
