@@ -40,6 +40,7 @@ param(
     [ValidateSet('none', 'current', 'composite')]
     [string]$SeatIndexVariant = 'none',
     [switch]$CollectStatementDigests,
+    [switch]$CollectMariaDbContainerStats,
     [switch]$DisablePerformanceThresholds
 )
 
@@ -110,6 +111,18 @@ function Get-Issue51MariaDbStatus {
     ConvertFrom-MariaDbStatus -Lines $issue51DbOutput
 }
 
+function Get-Issue164MariaDbContainerStats {
+    $issue164Output = & docker compose -f $issue51ComposeFile stats --no-stream --format json mariadb 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "MariaDB container stats failed with exit code $LASTEXITCODE."
+    }
+    $issue164Json = @($issue164Output | Where-Object { $_.Trim().StartsWith('{') })
+    if ($issue164Json.Count -ne 1) {
+        throw 'Expected exactly one MariaDB container stats JSON record.'
+    }
+    ConvertFrom-DockerContainerStats -Json $issue164Json[0]
+}
+
 function Invoke-Issue55MariaDbRootQuery {
     param(
         [Parameter(Mandatory = $true)]
@@ -137,22 +150,18 @@ function Get-Issue51MetricSample {
 
     $issue51PrometheusResponse = Invoke-WebRequest -UseBasicParsing -Uri "$ManagementBaseUrl/actuator/prometheus" -Method Get
     $issue51Hikari = ConvertFrom-PrometheusHikari -Text $issue51PrometheusResponse.Content
+    $issue164Runtime = ConvertFrom-PrometheusRuntimeMetrics -Text $issue51PrometheusResponse.Content
+    $issue164Jvm = ConvertFrom-PrometheusJvmContentionMetrics -Text $issue51PrometheusResponse.Content
     $issue51Db = Get-Issue51MariaDbStatus
+    $issue164Container = if ($CollectMariaDbContainerStats.IsPresent) { Get-Issue164MariaDbContainerStats } else { $null }
 
-    [pscustomobject]@{
-        TimestampUtc             = (Get-Date).ToUniversalTime().ToString('o')
-        ElapsedMilliseconds      = $Stopwatch.ElapsedMilliseconds
-        HikariActive             = $issue51Hikari.Active
-        HikariPending            = $issue51Hikari.Pending
-        HikariIdle               = $issue51Hikari.Idle
-        HikariMax                = $issue51Hikari.Max
-        DbRowLockCurrentWaits    = $issue51Db.RowLockCurrentWaits
-        DbRowLockWaits           = $issue51Db.RowLockWaits
-        DbRowLockTimeMs          = $issue51Db.RowLockTimeMs
-        DbDeadlocks              = $issue51Db.Deadlocks
-        DbThreadsConnected       = $issue51Db.ThreadsConnected
-        DbThreadsRunning         = $issue51Db.ThreadsRunning
-    }
+    New-ContentionMetricSample `
+        -ElapsedMilliseconds $Stopwatch.ElapsedMilliseconds `
+        -Hikari $issue51Hikari `
+        -Runtime $issue164Runtime `
+        -Jvm $issue164Jvm `
+        -Database $issue51Db `
+        -Container $issue164Container
 }
 
 $issue55StatementDigestSummary = $null

@@ -30,6 +30,8 @@ const expectedContention = new Counter('reservation_expected_contention');
 const unexpectedNonSuccessfulReservation = new Counter('reservation_unexpected_non_2xx');
 const unexpectedFailure = new Rate('reservation_unexpected_failure');
 const reservationDuration = new Trend('reservation_duration', true);
+const reservationSuccessDuration = new Trend('reservation_success_duration', true);
+const reservationSeatContentionDuration = new Trend('reservation_seat_contention_duration', true);
 const weightedHotSelections = new Counter('weighted_hot_selections');
 const weightedColdSelections = new Counter('weighted_cold_selections');
 
@@ -134,6 +136,7 @@ export default function (data) {
 
   if (response.status === 200) {
     reservationSuccess.add(1);
+    reservationSuccessDuration.add(response.timings.duration);
     unexpectedFailure.add(false);
     return;
   }
@@ -141,6 +144,7 @@ export default function (data) {
   nonSuccessfulReservation.add(1);
   if (isExpectedSeatContention(response, expectedContentionScenario)) {
     expectedContention.add(1);
+    reservationSeatContentionDuration.add(response.timings.duration);
     unexpectedFailure.add(false);
     return;
   }
@@ -173,6 +177,10 @@ export function handleSummary(data) {
     unexpectedNonSuccessful: counterValue(data, 'reservation_unexpected_non_2xx'),
     unexpectedFailureRate: rateValue(data, 'reservation_unexpected_failure'),
     reservationDurationMs: trendValues(data, 'reservation_duration'),
+    reservationSuccessDurationMs: counterValue(data, 'reservation_success') > 0
+      ? trendValues(data, 'reservation_success_duration') : null,
+    reservationSeatContentionDurationMs: counterValue(data, 'reservation_expected_contention') > 0
+      ? trendValues(data, 'reservation_seat_contention_duration') : null,
     maxObservedVus: gaugeMaximum(data, 'vus'),
     maxAllocatedVus: gaugeMaximum(data, 'vus_max'),
     preAllocatedVus: PRE_ALLOCATED_VUS,
