@@ -1,0 +1,105 @@
+﻿{
+    "SchemaVersion":  1,
+    "ValidMeasurement":  true,
+    "Run":  {
+                "Id":  "w164-r100-h200-b",
+                "Scenario":  "weighted-hotspot",
+                "RatePerSecond":  100,
+                "DurationSeconds":  20,
+                "SampleIntervalMilliseconds":  1000,
+                "StartedAtUtc":  "2026-10-01T13:07:44.9020960Z",
+                "EndedAtUtc":  "2026-10-01T13:08:08.1981204Z"
+            },
+    "FixturePreparation":  {
+                               "StartedAtUtc":  "2026-10-01T13:07:41.3441422Z",
+                               "DurationMilliseconds":  3539,
+                               "ExcludedFromMetricSamples":  true,
+                               "TotalSeats":  2000
+                           },
+    "K6":  {
+               "ExitCode":  0,
+               "InventoryInvariantSatisfied":  true,
+               "Result":  {
+                              "Scenario":  "weighted-hotspot",
+                              "TargetRatePerSecond":  100,
+                              "DurationSeconds":  20,
+                              "ThresholdsEnforced":  false,
+                              "Iterations":  1995,
+                              "DroppedIterations":  6,
+                              "ScheduledIterationAttainmentRate":  0.99700149925037485,
+                              "CompletedIterationsPerScheduledSecond":  99.75,
+                              "ReservationSuccess":  690,
+                              "ExpectedContention":  1305,
+                              "UnexpectedNonSuccessful":  0,
+                              "UnexpectedFailureRate":  0,
+                              "ReservationDurationMs":  {
+                                                            "Average":  64.382448320801871,
+                                                            "Median":  50.4754,
+                                                            "P95":  177.29857999999996,
+                                                            "Maximum":  311.1198
+                                                        },
+                              "MaxObservedVus":  20,
+                              "MaxAllocatedVus":  26,
+                              "PreAllocatedVus":  20,
+                              "ConfiguredMaxVus":  100,
+                              "WeightedHotspot":  {
+                                                      "HotSeatCount":  200,
+                                                      "HotRequestPercent":  70,
+                                                      "Seed":  17,
+                                                      "HotSelections":  1412,
+                                                      "ColdSelections":  583,
+                                                      "ActualHotSelectionPercent":  70.77694235588973
+                                                  }
+                          },
+               "FinalSnapshot":  {
+                                     "expectedTotalSeats":  2000,
+                                     "actualSeatCount":  2000,
+                                     "remainingSeats":  1310,
+                                     "reservedSeats":  690,
+                                     "reservations":  690,
+                                     "bookings":  690,
+                                     "payments":  690,
+                                     "invariantSatisfied":  true
+                                 },
+               "StdoutFile":  "w164-r100-h200-b-k6.stdout.log",
+               "StderrFile":  "w164-r100-h200-b-k6.stderr.log"
+           },
+    "DatabaseStatementDigests":  null,
+    "SeatIndexExperiment":  null,
+    "Metrics":  {
+                    "SampleCount":  11,
+                    "Sampling":  {
+                                     "MinimumIntervalMs":  914,
+                                     "AverageIntervalMs":  2212.3,
+                                     "MaximumIntervalMs":  3405
+                                 },
+                    "Peaks":  {
+                                  "HikariActive":  6,
+                                  "HikariPending":  0,
+                                  "HikariIdle":  24,
+                                  "HikariMax":  24,
+                                  "ProcessCpuUsage":  0.22223586798981029,
+                                  "SystemCpuUsage":  0.9980838049667039,
+                                  "HeapUsedBytes":  182918120,
+                                  "JvmThreadsLive":  53,
+                                  "DbRowLockCurrentWaits":  0,
+                                  "DbThreadsConnected":  25,
+                                  "DbThreadsRunning":  7
+                              },
+                    "Deltas":  {
+                                   "DbRowLockWaits":  153,
+                                   "DbRowLockTimeMs":  5537,
+                                   "DbDeadlocks":  0,
+                                   "JvmGcPauseSeconds":  0.018999999999999989,
+                                   "JvmGcPauseCount":  7
+                               },
+                    "MariaDbContainer":  null,
+                    "ObserverEffects":  {
+                                            "DbCliConnectionIncludedInThreadGauges":  true,
+                                            "ConnectionsCounterExcluded":  true,
+                                            "ComposeHealthcheckMayOpenConnections":  true,
+                                            "DockerStatsCollected":  false
+                                        }
+                },
+    "SamplesFile":  "w164-r100-h200-b-metrics.csv"
+}

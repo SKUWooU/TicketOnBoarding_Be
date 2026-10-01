@@ -96,6 +96,25 @@ Assert-Issue51Equal $issue51BeforeDb.RowLockWaits 4 'MariaDB row lock waits must
 Assert-Issue51Equal $issue51AfterDb.RowLockTimeMs 370 'MariaDB row lock time must be parsed.'
 Assert-Issue51Throws { ConvertFrom-MariaDbStatus -Lines 'Threads_running 1' } 'Missing MariaDB status must fail parsing.'
 
+$issue164Sample = New-ContentionMetricSample `
+    -ElapsedMilliseconds 1000 `
+    -Hikari $issue51Hikari `
+    -Runtime $issue112Runtime `
+    -Jvm $issue116Jvm `
+    -Database $issue51AfterDb `
+    -Container $issue116Container
+Assert-Issue51Equal $issue164Sample.MariaDbContainerCpuPercent 12.5 'Collector sample must include MariaDB CPU.'
+Assert-Issue51Equal $issue164Sample.MariaDbContainerMemoryBytes 268435456 'Collector sample must include MariaDB memory.'
+Assert-Issue51Equal $issue164Sample.JvmGcPauseCount 2.0 'Collector sample must include JVM GC counters.'
+Assert-Issue51Equal $issue164Sample.DbRowLockWaits 9 'Collector sample must include DB lock counters.'
+$issue164WithoutContainer = New-ContentionMetricSample `
+    -ElapsedMilliseconds 2000 `
+    -Hikari $issue51Hikari `
+    -Runtime $issue112Runtime `
+    -Jvm $issue116Jvm `
+    -Database $issue51AfterDb
+Assert-Issue51Equal ($null -eq $issue164WithoutContainer.MariaDbContainerCpuPercent) $true 'Optional Docker stats must remain null when disabled.'
+
 $issue51Samples = @(
     [pscustomobject]@{
         ElapsedMilliseconds = 0
@@ -183,6 +202,20 @@ Assert-Issue51Equal $issue53K6Summary.DroppedIterations 9 'Dropped k6 iterations
 Assert-Issue51Equal $issue53K6Summary.CompletedIterationsPerScheduledSecond 99.1 'Completed iterations per scheduled second must exclude setup time.'
 Assert-Issue51Equal $issue53K6Summary.ScheduledIterationAttainmentRate 0.991 'Scheduled iteration attainment must include dropped iterations.'
 Assert-Issue51Equal $issue53K6Summary.ReservationDurationMs.P95 45.6 'Reservation p95 must be parsed from the custom trend.'
+Assert-Issue51Equal ($null -eq $issue53K6Summary.ReservationSuccessDurationMs) $true 'Legacy summaries may omit outcome trends.'
+$issue164OutcomeResult = $issue53K6Result.PSObject.Copy()
+$issue164OutcomeResult | Add-Member -NotePropertyName reservationSuccessDurationMs -NotePropertyValue ([pscustomobject]@{
+        average = 50.0; median = 45.0; p95 = 90.0; maximum = 120.0
+    })
+$issue164OutcomeResult | Add-Member -NotePropertyName reservationSeatContentionDurationMs -NotePropertyValue $null
+$issue164OutcomeSummary = New-K6ContentionRunSummary -Result $issue164OutcomeResult -DurationSeconds 10
+Assert-Issue51Equal $issue164OutcomeSummary.ReservationSuccessDurationMs.P95 90.0 'Successful-write p95 must remain separate.'
+Assert-Issue51Equal ($null -eq $issue164OutcomeSummary.ReservationSeatContentionDurationMs) $true 'Empty seat-conflict trend must remain null.'
+$issue164OutcomeResult.reservationSeatContentionDurationMs = [pscustomobject]@{
+    average = 12.0; median = 11.0; p95 = 18.0; maximum = 25.0
+}
+$issue164OutcomeSummary = New-K6ContentionRunSummary -Result $issue164OutcomeResult -DurationSeconds 10
+Assert-Issue51Equal $issue164OutcomeSummary.ReservationSeatContentionDurationMs.P95 18.0 'Seat-conflict p95 must remain separate.'
 Assert-Issue51Equal $issue53K6Summary.ThresholdsEnforced $false 'Baseline runs must record disabled performance thresholds.'
 Assert-Issue51Equal $issue53K6Summary.MaxAllocatedVus 20 'The allocated VU gauge must remain distinct from the configured cap.'
 Assert-Issue51Equal $issue53K6Summary.ConfiguredMaxVus 100 'The configured VU cap must come from the scenario option.'

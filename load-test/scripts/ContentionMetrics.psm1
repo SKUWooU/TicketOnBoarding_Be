@@ -333,6 +333,41 @@ function Assert-ContentionRunId {
     $RunId
 }
 
+function New-ContentionMetricSample {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][long]$ElapsedMilliseconds,
+        [Parameter(Mandatory = $true)][object]$Hikari,
+        [Parameter(Mandatory = $true)][object]$Runtime,
+        [Parameter(Mandatory = $true)][object]$Jvm,
+        [Parameter(Mandatory = $true)][object]$Database,
+        [AllowNull()][object]$Container = $null
+    )
+
+    [pscustomobject]@{
+        TimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
+        ElapsedMilliseconds = $ElapsedMilliseconds
+        HikariActive = $Hikari.Active
+        HikariPending = $Hikari.Pending
+        HikariIdle = $Hikari.Idle
+        HikariMax = $Hikari.Max
+        ProcessCpuUsage = $Runtime.ProcessCpuUsage
+        SystemCpuUsage = $Runtime.SystemCpuUsage
+        HeapUsedBytes = $Runtime.HeapUsedBytes
+        JvmThreadsLive = $Jvm.JvmThreadsLive
+        JvmGcPauseSeconds = $Jvm.JvmGcPauseSeconds
+        JvmGcPauseCount = $Jvm.JvmGcPauseCount
+        MariaDbContainerCpuPercent = if ($null -eq $Container) { $null } else { $Container.ContainerCpuPercent }
+        MariaDbContainerMemoryBytes = if ($null -eq $Container) { $null } else { $Container.ContainerMemoryBytes }
+        DbRowLockCurrentWaits = $Database.RowLockCurrentWaits
+        DbRowLockWaits = $Database.RowLockWaits
+        DbRowLockTimeMs = $Database.RowLockTimeMs
+        DbDeadlocks = $Database.Deadlocks
+        DbThreadsConnected = $Database.ThreadsConnected
+        DbThreadsRunning = $Database.ThreadsRunning
+    }
+}
+
 function New-ContentionMetricsSummary {
     [CmdletBinding()]
     param(
@@ -558,6 +593,18 @@ function New-K6ContentionRunSummary {
             P95 = [double]$Result.reservationDurationMs.p95
             Maximum = [double]$Result.reservationDurationMs.maximum
         }
+        ReservationSuccessDurationMs = if ('reservationSuccessDurationMs' -notin $Result.PSObject.Properties.Name -or $null -eq $Result.reservationSuccessDurationMs) { $null } else { [pscustomobject]@{
+                Average = [double]$Result.reservationSuccessDurationMs.average
+                Median = [double]$Result.reservationSuccessDurationMs.median
+                P95 = [double]$Result.reservationSuccessDurationMs.p95
+                Maximum = [double]$Result.reservationSuccessDurationMs.maximum
+            } }
+        ReservationSeatContentionDurationMs = if ('reservationSeatContentionDurationMs' -notin $Result.PSObject.Properties.Name -or $null -eq $Result.reservationSeatContentionDurationMs) { $null } else { [pscustomobject]@{
+                Average = [double]$Result.reservationSeatContentionDurationMs.average
+                Median = [double]$Result.reservationSeatContentionDurationMs.median
+                P95 = [double]$Result.reservationSeatContentionDurationMs.p95
+                Maximum = [double]$Result.reservationSeatContentionDurationMs.maximum
+            } }
         MaxObservedVus = [int]$Result.maxObservedVus
         MaxAllocatedVus = [int]$Result.maxAllocatedVus
         PreAllocatedVus = [int]$Result.preAllocatedVus
@@ -655,6 +702,7 @@ Export-ModuleMember -Function @(
     'ConvertFrom-DockerContainerStats',
     'ConvertFrom-MariaDbStatus',
     'Assert-ContentionRunId',
+    'New-ContentionMetricSample',
     'New-ContentionMetricsSummary',
     'ConvertFrom-K6ContentionResult',
     'ConvertFrom-K6FinalSnapshot',

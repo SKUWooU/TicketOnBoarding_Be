@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend [#164](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/164): 인기 좌석 집중도 20/40/200석의 로컬 fixture 경합 기준선 측정. Docker·Mock PG 격리 환경에서 유효 run과 한계를 기록한다.
 
 ## 완료
 
