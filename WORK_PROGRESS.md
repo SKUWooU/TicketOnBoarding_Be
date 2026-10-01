@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue #166: 인기 좌석 집중도별 fixture 상태 통제·SQL digest 반복 측정. 격리 Compose 프로젝트의 2,000석·Mock PG 기준선과 교차 순서 6회 결과를 검증 중.
 
 ## 완료
 

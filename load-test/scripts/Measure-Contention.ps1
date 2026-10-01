@@ -41,6 +41,7 @@ param(
     [string]$SeatIndexVariant = 'none',
     [switch]$CollectStatementDigests,
     [switch]$CollectMariaDbContainerStats,
+    [switch]$RequireFreshFixture,
     [switch]$DisablePerformanceThresholds
 )
 
@@ -185,6 +186,35 @@ $issue53Fixture = Invoke-RestMethod -Uri "$BaseUrl/loadtest/runs?runId=$RunId" -
 $issue53FixturePreparationStopwatch.Stop()
 if ([int]$issue53Fixture.totalSeats -le 0) {
     throw 'Prepared load-test fixture must contain at least one seat.'
+}
+$issue166FreshFixture = $null
+if ($RequireFreshFixture.IsPresent) {
+    $issue166RootQueryExecutor = {
+        param([string]$Query)
+        Invoke-Issue55MariaDbRootQuery -Query $Query
+    }
+    $issue166SeatRows = Get-Issue57PhysicalSeatRowCount -QueryExecutor $issue166RootQueryExecutor
+    $issue166Inventory = Invoke-RestMethod -Uri "$BaseUrl/loadtest/snapshot?runId=$RunId" -Method Get
+    if ($issue166SeatRows -ne [long]$issue53Fixture.totalSeats -or
+        [long]$issue166Inventory.actualSeatCount -ne [long]$issue53Fixture.totalSeats -or
+        [long]$issue166Inventory.remainingSeats -ne [long]$issue53Fixture.totalSeats -or
+        [long]$issue166Inventory.reservedSeats -ne 0 -or
+        [long]$issue166Inventory.reservations -ne 0 -or
+        [long]$issue166Inventory.bookings -ne 0 -or
+        [long]$issue166Inventory.payments -ne 0 -or
+        -not [bool]$issue166Inventory.invariantSatisfied) {
+        throw "Fresh fixture precondition failed: physicalSeatRows=$issue166SeatRows totalSeats=$($issue53Fixture.totalSeats) inventory=$($issue166Inventory | ConvertTo-Json -Compress)"
+    }
+    $issue166FreshFixture = [ordered]@{
+        PhysicalSeatRows = $issue166SeatRows
+        RemainingSeats = [long]$issue166Inventory.remainingSeats
+        ReservedSeats = [long]$issue166Inventory.reservedSeats
+        Reservations = [long]$issue166Inventory.reservations
+        Bookings = [long]$issue166Inventory.bookings
+        Payments = [long]$issue166Inventory.payments
+        InvariantSatisfied = [bool]$issue166Inventory.invariantSatisfied
+        ExcludedFromMetricSamples = $true
+    }
 }
 if ($SeatIndexVariant -ne 'none') {
     $issue57IndexSetupStopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -365,11 +395,13 @@ WHERE SCHEMA_NAME = '$DatabaseName'
         }
         $issue55Coverage = New-ContentionStatementDigestCoverage `
             -Summary $issue55StatementDigestSummary `
-            -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess
-        $issue55MinimumCoverage = if ($SeatIndexVariant -eq 'none') { 1.0 } else { 0.95 }
+            -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess `
+            -ExpectedSeatLockSelects $(if ($Scenario -eq 'weighted-hotspot') { $issue53K6Summary.Iterations } else { $issue53K6Summary.ReservationSuccess })
+        $issue55MinimumCoverage = if ($SeatIndexVariant -ne 'none' -or $Scenario -eq 'weighted-hotspot') { 0.95 } else { 1.0 }
         Assert-ContentionStatementDigestCounts `
             -Summary $issue55StatementDigestSummary `
             -ExpectedSuccessfulReservations $issue53K6Summary.ReservationSuccess `
+            -ExpectedSeatLockSelects $(if ($Scenario -eq 'weighted-hotspot') { $issue53K6Summary.Iterations } else { $issue53K6Summary.ReservationSuccess }) `
             -MinimumCoverageRate $issue55MinimumCoverage | Out-Null
         $issue55StatementDigestSummary | Add-Member -NotePropertyName Coverage -NotePropertyValue $issue55Coverage
         $issue55StatementDigestSummary | Add-Member -NotePropertyName InstrumentationHealth -NotePropertyValue ([pscustomobject]@{
@@ -404,6 +436,7 @@ WHERE SCHEMA_NAME = '$DatabaseName'
             DurationMilliseconds = $issue53FixturePreparationStopwatch.ElapsedMilliseconds
             ExcludedFromMetricSamples = $true
             TotalSeats = [int]$issue53Fixture.totalSeats
+            FreshFixture = $issue166FreshFixture
         }
         K6 = [ordered]@{
             ExitCode = $issue51K6ExitCode
