@@ -132,15 +132,19 @@ function Assert-ContentionStatementDigestCounts {
         [ValidateRange(1, 9223372036854775807)]
         [long]$ExpectedSuccessfulReservations,
 
+        [ValidateRange(1, 9223372036854775807)]
+        [long]$ExpectedSeatLockSelects = $ExpectedSuccessfulReservations,
+
         [ValidateRange(0.01, 1.0)]
         [double]$MinimumCoverageRate = 1.0
     )
 
     $issue55Coverage = New-ContentionStatementDigestCoverage `
         -Summary $Summary `
-        -ExpectedSuccessfulReservations $ExpectedSuccessfulReservations
-    if ([long]$Summary.SeatLockSelect.Count -gt $ExpectedSuccessfulReservations) {
-        throw "Seat lock statement count exceeds successful reservations: expected=$ExpectedSuccessfulReservations actual=$($Summary.SeatLockSelect.Count)"
+        -ExpectedSuccessfulReservations $ExpectedSuccessfulReservations `
+        -ExpectedSeatLockSelects $ExpectedSeatLockSelects
+    if ([long]$Summary.SeatLockSelect.Count -gt $ExpectedSeatLockSelects) {
+        throw "Seat lock statement count exceeds expected executions: expected=$ExpectedSeatLockSelects actual=$($Summary.SeatLockSelect.Count)"
     }
     if ([long]$Summary.ConcertTimeDecrement.Count -gt $ExpectedSuccessfulReservations) {
         throw "Concert time decrement count exceeds successful reservations: expected=$ExpectedSuccessfulReservations actual=$($Summary.ConcertTimeDecrement.Count)"
@@ -165,13 +169,17 @@ function New-ContentionStatementDigestCoverage {
 
         [Parameter(Mandatory = $true)]
         [ValidateRange(1, 9223372036854775807)]
-        [long]$ExpectedSuccessfulReservations
+        [long]$ExpectedSuccessfulReservations,
+
+        [ValidateRange(1, 9223372036854775807)]
+        [long]$ExpectedSeatLockSelects = $ExpectedSuccessfulReservations
     )
 
-    $issue55SeatRate = [double]$Summary.SeatLockSelect.Count / $ExpectedSuccessfulReservations
+    $issue55SeatRate = [double]$Summary.SeatLockSelect.Count / $ExpectedSeatLockSelects
     $issue55CounterRate = [double]$Summary.ConcertTimeDecrement.Count / $ExpectedSuccessfulReservations
     [pscustomobject]@{
         ExpectedSuccessfulReservations = $ExpectedSuccessfulReservations
+        ExpectedSeatLockSelects = $ExpectedSeatLockSelects
         SeatLockSelectCount = [long]$Summary.SeatLockSelect.Count
         SeatLockSelectRate = $issue55SeatRate
         ConcertTimeDecrementCount = [long]$Summary.ConcertTimeDecrement.Count

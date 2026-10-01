@@ -68,6 +68,12 @@ Assert-Issue55Equal $issue55Summary.ConcertTimeDecrement.AverageMilliseconds 14 
 Assert-Issue55Equal $issue55Summary.ConcertTimeDecrement.MaximumMilliseconds 50 'Counter update maximum must use the largest digest maximum.'
 Assert-Issue55Equal $issue55Summary.ConcertTimeDecrement.RowsAffected 100 'Affected rows must be aggregated.'
 Assert-Issue55Equal (Assert-ContentionStatementDigestCounts -Summary $issue55Summary -ExpectedSuccessfulReservations 100) $true 'Matching statement and success counts must pass.'
+$issue166ConflictSummary = New-ContentionStatementDigestSummary -Lines @(
+    (New-Issue55DigestLine -Digest 'SELECT s.id FROM seat s WHERE s.concert_time_id = ? AND s.seat_number = ? FOR UPDATE' -Count 198 -TotalPicoseconds 198000000000 -AveragePicoseconds 1000000000 -MaximumPicoseconds 3000000000)
+    (New-Issue55DigestLine -Digest 'UPDATE concert_time SET seat_amount = seat_amount - ? WHERE id = ? AND seat_amount >= ?' -Count 60 -TotalPicoseconds 60000000000 -AveragePicoseconds 1000000000 -MaximumPicoseconds 3000000000 -RowsAffected 60)
+)
+Assert-Issue55Equal (Assert-ContentionStatementDigestCounts -Summary $issue166ConflictSummary -ExpectedSuccessfulReservations 60 -ExpectedSeatLockSelects 200 -MinimumCoverageRate 0.95) $true 'Contention may stop before seat lock and must retain measured coverage.'
+Assert-Issue55Equal (New-ContentionStatementDigestCoverage -Summary $issue166ConflictSummary -ExpectedSuccessfulReservations 60 -ExpectedSeatLockSelects 200).SeatLockSelectRate 0.99 'Seat lock coverage uses completed iterations, not successes.'
 Assert-Issue55Throws { Assert-ContentionStatementDigestCounts -Summary $issue55Summary -ExpectedSuccessfulReservations 99 } 'A statement count mismatch must fail.'
 $issue55PartialSummary = New-ContentionStatementDigestSummary -Lines @(
     (New-Issue55DigestLine -Digest 'SELECT s.id FROM seat s WHERE s.concert_time_id = ? AND s.seat_number = ? FOR UPDATE' -Count 98 -TotalPicoseconds 98000000000 -AveragePicoseconds 1000000000 -MaximumPicoseconds 3000000000)

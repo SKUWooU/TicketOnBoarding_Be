@@ -1,0 +1,168 @@
+﻿{
+    "SchemaVersion":  1,
+    "ValidMeasurement":  true,
+    "Run":  {
+                "Id":  "c166-repeat-r1-h40",
+                "Scenario":  "weighted-hotspot",
+                "RatePerSecond":  50,
+                "DurationSeconds":  10,
+                "SampleIntervalMilliseconds":  1000,
+                "StartedAtUtc":  "2026-10-01T13:51:58.5044920Z",
+                "EndedAtUtc":  "2026-10-01T13:52:13.4615084Z"
+            },
+    "FixturePreparation":  {
+                               "StartedAtUtc":  "2026-10-01T13:51:53.4820409Z",
+                               "DurationMilliseconds":  3552,
+                               "ExcludedFromMetricSamples":  true,
+                               "TotalSeats":  2000,
+                               "FreshFixture":  {
+                                                    "PhysicalSeatRows":  2000,
+                                                    "RemainingSeats":  2000,
+                                                    "ReservedSeats":  0,
+                                                    "Reservations":  0,
+                                                    "Bookings":  0,
+                                                    "Payments":  0,
+                                                    "InvariantSatisfied":  true,
+                                                    "ExcludedFromMetricSamples":  true
+                                                }
+                           },
+    "K6":  {
+               "ExitCode":  0,
+               "InventoryInvariantSatisfied":  true,
+               "Result":  {
+                              "Scenario":  "weighted-hotspot",
+                              "TargetRatePerSecond":  50,
+                              "DurationSeconds":  10,
+                              "ThresholdsEnforced":  false,
+                              "Iterations":  501,
+                              "DroppedIterations":  0,
+                              "ScheduledIterationAttainmentRate":  1,
+                              "CompletedIterationsPerScheduledSecond":  50.1,
+                              "ReservationSuccess":  182,
+                              "ExpectedContention":  319,
+                              "UnexpectedNonSuccessful":  0,
+                              "UnexpectedFailureRate":  0,
+                              "ReservationDurationMs":  {
+                                                            "Average":  40.9027756487026,
+                                                            "Median":  36.8051,
+                                                            "P95":  64.2389,
+                                                            "Maximum":  153.8819
+                                                        },
+                              "ReservationSuccessDurationMs":  {
+                                                                   "Average":  50.459997802197805,
+                                                                   "Median":  45.80205,
+                                                                   "P95":  72.353235000000012,
+                                                                   "Maximum":  153.8819
+                                                               },
+                              "ReservationSeatContentionDurationMs":  {
+                                                                          "Average":  35.450065830720995,
+                                                                          "Median":  32.4305,
+                                                                          "P95":  54.901889999999987,
+                                                                          "Maximum":  122.7369
+                                                                      },
+                              "MaxObservedVus":  3,
+                              "MaxAllocatedVus":  200,
+                              "PreAllocatedVus":  200,
+                              "ConfiguredMaxVus":  200,
+                              "WeightedHotspot":  {
+                                                      "HotSeatCount":  40,
+                                                      "HotRequestPercent":  70,
+                                                      "Seed":  17,
+                                                      "HotSelections":  355,
+                                                      "ColdSelections":  146,
+                                                      "ActualHotSelectionPercent":  70.858283433133735
+                                                  }
+                          },
+               "FinalSnapshot":  {
+                                     "expectedTotalSeats":  2000,
+                                     "actualSeatCount":  2000,
+                                     "remainingSeats":  1818,
+                                     "reservedSeats":  182,
+                                     "reservations":  182,
+                                     "bookings":  182,
+                                     "payments":  182,
+                                     "invariantSatisfied":  true
+                                 },
+               "StdoutFile":  "c166-repeat-r1-h40-k6.stdout.log",
+               "StderrFile":  "c166-repeat-r1-h40-k6.stderr.log"
+           },
+    "DatabaseStatementDigests":  {
+                                     "Enabled":  true,
+                                     "Source":  "performance_schema.events_statements_summary_by_digest",
+                                     "SqlTextIncluded":  false,
+                                     "SeatLockSelect":  {
+                                                            "Operation":  "seat-lock-select",
+                                                            "DigestCount":  1,
+                                                            "Count":  500,
+                                                            "TotalMilliseconds":  233.288234,
+                                                            "AverageMilliseconds":  0.466576468,
+                                                            "MaximumMilliseconds":  3.093455,
+                                                            "Errors":  0,
+                                                            "Warnings":  0,
+                                                            "RowsAffected":  0
+                                                        },
+                                     "ConcertTimeDecrement":  {
+                                                                  "Operation":  "concert-time-decrement",
+                                                                  "DigestCount":  1,
+                                                                  "Count":  182,
+                                                                  "TotalMilliseconds":  80.16174,
+                                                                  "AverageMilliseconds":  0.44044912087912086,
+                                                                  "MaximumMilliseconds":  8.893477,
+                                                                  "Errors":  0,
+                                                                  "Warnings":  0,
+                                                                  "RowsAffected":  182
+                                                              },
+                                     "Coverage":  {
+                                                      "ExpectedSuccessfulReservations":  182,
+                                                      "ExpectedSeatLockSelects":  501,
+                                                      "SeatLockSelectCount":  500,
+                                                      "SeatLockSelectRate":  0.998003992015968,
+                                                      "ConcertTimeDecrementCount":  182,
+                                                      "ConcertTimeDecrementRate":  1,
+                                                      "MinimumObservedRate":  0.998003992015968,
+                                                      "ExactCountMatch":  false
+                                                  },
+                                     "InstrumentationHealth":  {
+                                                                   "RequiredMinimumCoverageRate":  0.95,
+                                                                   "PerformanceSchemaDigestLost":  0,
+                                                                   "NullDigestEvents":  0
+                                                               }
+                                 },
+    "SeatIndexExperiment":  null,
+    "Metrics":  {
+                    "SampleCount":  7,
+                    "Sampling":  {
+                                     "MinimumIntervalMs":  1808,
+                                     "AverageIntervalMs":  2012.6666666666667,
+                                     "MaximumIntervalMs":  2200
+                                 },
+                    "Peaks":  {
+                                  "HikariActive":  2,
+                                  "HikariPending":  0,
+                                  "HikariIdle":  24,
+                                  "HikariMax":  24,
+                                  "ProcessCpuUsage":  0.12072548295053355,
+                                  "SystemCpuUsage":  0.98339475431831058,
+                                  "HeapUsedBytes":  175761368,
+                                  "JvmThreadsLive":  53,
+                                  "DbRowLockCurrentWaits":  0,
+                                  "DbThreadsConnected":  25,
+                                  "DbThreadsRunning":  1
+                              },
+                    "Deltas":  {
+                                   "DbRowLockWaits":  3,
+                                   "DbRowLockTimeMs":  14,
+                                   "DbDeadlocks":  0,
+                                   "JvmGcPauseSeconds":  0.0060000000000000053,
+                                   "JvmGcPauseCount":  2
+                               },
+                    "MariaDbContainer":  null,
+                    "ObserverEffects":  {
+                                            "DbCliConnectionIncludedInThreadGauges":  true,
+                                            "ConnectionsCounterExcluded":  true,
+                                            "ComposeHealthcheckMayOpenConnections":  true,
+                                            "DockerStatsCollected":  false
+                                        }
+                },
+    "SamplesFile":  "c166-repeat-r1-h40-metrics.csv"
+}
