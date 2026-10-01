@@ -13,9 +13,16 @@
 
 ## 진행 중
 
-- Backend [#164](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/164): 인기 좌석 집중도 20/40/200석의 로컬 fixture 경합 기준선 측정. Docker·Mock PG 격리 환경에서 유효 run과 한계를 기록한다.
+- 없음.
 
 ## 완료
+
+### Backend Issue #164 — 인기 좌석 집중도별 로컬 경합 기준선
+
+- PR: [#165](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/165) / squash `bf63347`
+- 결과: 2,000석 fixture의 20/40/200석 집중도를 20·50·100 RPS에서 측정하고 12개 요약 JSON을 보존했다. 성공 쓰기와 좌석 충돌 p95를 분리하고 측정 샘플 누락을 수정했다.
+- 검증: 로컬 Mock PG·MariaDB 재고 불변식, PowerShell 90 assertions·Node 5건, Backend CI, Reviewer `MERGE_READY: YES`. fixture 누적·공유 호스트·100 RPS 일부 dropped iteration으로 인과적 성능 개선 주장은 제외한다.
+- 근거: [인기 좌석 집중도 실험](docs/project-improvement/weighted-seat-contention-experiment.md)
 
 ### Backend Issue #162 — 인기 좌석 집중도별 예약 경합 시나리오
 
