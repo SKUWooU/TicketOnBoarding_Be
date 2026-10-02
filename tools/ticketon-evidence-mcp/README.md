@@ -1,14 +1,17 @@
 # TicketOnBoarding Evidence MCP
 
-로컬 `load-test/results`의 **허용된 `*-summary.json` 측정 결과만 읽는** stdio MCP 서버입니다. 원시 k6 로그, CSV, JWT·쿠키·요청 본문 및 운영 데이터에는 접근하지 않습니다.
+로컬 `load-test/results`의 **허용된 `*-summary.json` 측정 결과만 읽는** stdio MCP 서버입니다. 비교 도구는 같은 배치의 고정된 `controlled-hotspot-manifest.json`을 멤버십·격리 조건 확인에만 사용합니다. 원시 k6 로그, CSV, JWT·쿠키·요청 본문 및 운영 데이터에는 접근하지 않습니다.
 
 ## 제공 도구
 
 - `list_evidence_runs`: 실행 ID와 조회 가능한 summary artifact 목록
 - `get_run_summary`: 민감 필드를 제거한 단일 측정 요약
 - `verify_domain_invariants`: 측정 유효성, k6 종료 상태, 좌석 수 및 최종 상태 불변식 확인
+- `compare_controlled_hotspot_runs`: 같은 통제 배치의 두 summary가 비교 가능한지 판정하고, 통과할 때만 성공·좌석 충돌의 관측 차이 제공
 
 `verify_domain_invariants`의 `PASS`는 선택한 로컬 fixture 요약의 불변식만 뜻합니다. 실제 공연장이나 운영 환경의 성능·정합성을 보장하지 않습니다.
+
+비교 예: `batchId=c166-repeat`, `firstArtifact=c166-repeat-r1-h20-summary.json`, `secondArtifact=c166-repeat-r2-h20-summary.json`. 조건이 같으면 `SAME_CONDITION_REPEAT`, 인기 좌석 수만 다르면 `HOT_SEAT_COUNT_ONLY`로 표시합니다. manifest·초기 재고·재고 불변식·dropped iteration·SQL digest 관측 조건이 빠지거나 맞지 않으면 비교 수치를 제공하지 않습니다. `COMPARABLE`은 인과적 성능 개선 판정이 아닙니다.
 
 ## 실행
 
@@ -31,4 +34,4 @@ codex mcp add ticketonEvidence -- node D:\project2\TicketOnBoarding_Be\tools\tic
 codex mcp list
 ```
 
-등록 후 새 Codex 로컬 세션에서 이 서버의 세 도구로 측정 결과를 근거로 조회할 수 있습니다. 실행·DB 변경·외부 API 호출 도구는 의도적으로 제공하지 않습니다. 전체 등록·해석 계약은 [고경합 측정 근거 MCP 로컬 연동](../../docs/project-improvement/mcp-local-integration.md)을 확인합니다.
+등록 후 새 Codex 로컬 세션에서 이 서버의 네 도구로 측정 결과를 근거로 조회할 수 있습니다. 실행·DB 변경·외부 API 호출 도구는 의도적으로 제공하지 않습니다. 전체 등록·해석 계약은 [고경합 측정 근거 MCP 로컬 연동](../../docs/project-improvement/mcp-local-integration.md)을 확인합니다.

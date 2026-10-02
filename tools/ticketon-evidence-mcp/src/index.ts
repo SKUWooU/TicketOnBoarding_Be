@@ -35,6 +35,14 @@ server.tool("verify_domain_invariants", "측정 종료 후 좌석 수와 예약 
   return success({ artifact: result.artifact, report: createInvariantReport(result.summary) });
 }));
 
+server.tool("compare_controlled_hotspot_runs", "같은 가상 좌석 배치의 두 summary가 비교 가능한지 검증하고, 통과할 때만 성공·좌석 충돌 관측 차이를 반환합니다. 부하 실행이나 성능 개선 판정은 하지 않습니다.", {
+  batchId: z.string(),
+  firstArtifact: z.string(),
+  secondArtifact: z.string()
+}, { readOnlyHint: true, openWorldHint: false }, async ({ batchId, firstArtifact, secondArtifact }) => withEvidenceError(async () => {
+  return success(await repository.compareControlledHotspot(batchId, firstArtifact, secondArtifact));
+}));
+
 await server.connect(new StdioServerTransport());
 
 function success(payload: unknown) {
