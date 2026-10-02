@@ -29,7 +29,7 @@ codex mcp list
 
 비교 예: `batchId=c166-repeat`, `firstArtifact=c166-repeat-r1-h20-summary.json`, `secondArtifact=c166-repeat-r2-h20-summary.json`. 두 run 모두 성공 159건, 성공 p95 76.165ms·77.687ms로 `SAME_CONDITION_REPEAT`다. 첫 run을 `c166-repeat-r1-h200-summary.json`과 비교하면 인기 좌석 수 20→200만 조건 차이로 허용하고 성공 159→307건, 예상 좌석 충돌 342→193건을 `HOT_SEAT_COUNT_ONLY` 관측값으로 제공한다. p95 차이를 개선이라고 판정하지 않는다.
 
-비교 도구는 고정된 `controlled-hotspot-manifest.json`의 완료·전용 프로젝트·fixture 격리·두 summary 멤버십을 확인한다. 각 run의 물리 좌석 2,000행·초기 재고 2,000·최종 불변식·예상 밖 응답/누락/deadlock 0·digest 관측률을 검사하고, 목표 RPS·지속 시간·집중 비율·시드·VU 설정이 맞아야 한다. 근거 누락은 `INSUFFICIENT_EVIDENCE`, 잘못된 측정 또는 조건 불일치는 `NOT_COMPARABLE`이며 양쪽 모두 비교 수치를 내지 않는다. 같은 배치여도 DB cache·호스트 부하 통제까지 증명하지 못한다.
+비교 도구는 고정된 `controlled-hotspot-manifest.json`의 완료·전용 프로젝트·fixture 격리·두 summary 멤버십을 확인한다. 각 run의 물리 좌석 2,000행·초기 재고 2,000·최종 불변식·예상 밖 응답/누락/deadlock 0·digest 관측률을 검사하고, 목표 RPS·지속 시간·집중 비율·시드·VU 설정이 맞아야 한다. 목표 도착 건수 대비 완료율 99% 미만이나 raw SQL 실행 건수·관측률·예약 성공 건수 불일치도 차단한다. 근거 누락은 `INSUFFICIENT_EVIDENCE`, 잘못된 측정 또는 조건 불일치는 `NOT_COMPARABLE`이며 양쪽 모두 비교 수치를 내지 않는다. 같은 배치여도 DB cache·호스트 부하 통제까지 증명하지 못한다.
 
 ## 해석 경계
 

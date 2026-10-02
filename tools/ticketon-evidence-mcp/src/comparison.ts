@@ -131,6 +131,8 @@ function parseRun(
   const digest = record(summary.DatabaseStatementDigests);
   const coverage = record(digest.Coverage);
   const health = record(digest.InstrumentationHealth);
+  const seatLock = record(digest.SeatLockSelect);
+  const decrement = record(digest.ConcertTimeDecrement);
   const successDuration = record(result.ReservationSuccessDurationMs);
   const conflictDuration = record(result.ReservationSeatContentionDurationMs);
 
@@ -146,6 +148,8 @@ function parseRun(
     preAllocatedVus: number(result.PreAllocatedVus),
     maxVus: number(result.ConfiguredMaxVus),
     iterations: number(result.Iterations),
+    scheduledAttainment: number(result.ScheduledIterationAttainmentRate),
+    completedPerSecond: number(result.CompletedIterationsPerScheduledSecond),
     dropped: number(result.DroppedIterations),
     unexpected: number(result.UnexpectedNonSuccessful),
     success: number(result.ReservationSuccess),
@@ -168,6 +172,13 @@ function parseRun(
     finalPayments: number(final.payments),
     seatCoverage: number(coverage.SeatLockSelectRate),
     updateCoverage: number(coverage.ConcertTimeDecrementRate),
+    expectedSeatSelects: number(coverage.ExpectedSeatLockSelects),
+    observedSeatSelects: number(coverage.SeatLockSelectCount),
+    seatSelectCount: number(seatLock.Count),
+    expectedSuccess: number(coverage.ExpectedSuccessfulReservations),
+    observedDecrements: number(coverage.ConcertTimeDecrementCount),
+    decrementCount: number(decrement.Count),
+    decrementRowsAffected: number(decrement.RowsAffected),
     lostDigests: number(health.PerformanceSchemaDigestLost),
     nullDigests: number(health.NullDigestEvents)
   };
@@ -200,8 +211,18 @@ function parseRun(
       values.finalReservations !== values.success || values.finalBookings !== values.success ||
       values.finalPayments !== values.success ||
       values.iterations !== values.success! + values.conflicts! || values.dropped !== 0 ||
+      values.iterations! < values.rate! * values.duration! * 0.99 ||
+      values.iterations! > values.rate! * values.duration! * 1.01 ||
+      values.scheduledAttainment! < 0.99 || values.scheduledAttainment! > 1 ||
+      Math.abs(values.completedPerSecond! - values.iterations! / values.duration!) > 0.001 ||
       values.unexpected !== 0 || values.deadlocks !== 0 ||
       values.seatCoverage! < 0.95 || values.seatCoverage! > 1 || values.updateCoverage !== 1 ||
+      values.expectedSeatSelects !== values.iterations ||
+      values.observedSeatSelects !== values.seatSelectCount ||
+      Math.abs(values.seatCoverage! - values.seatSelectCount! / values.iterations!) > 0.000001 ||
+      values.expectedSuccess !== values.success ||
+      values.observedDecrements !== values.decrementCount ||
+      values.decrementCount !== values.success || values.decrementRowsAffected !== values.success ||
       values.lostDigests !== 0 || values.nullDigests !== 0) {
     incompatible.push(`${artifact}: 완료율·초기/최종 재고·오류 또는 SQL 관측 품질 조건을 통과하지 못했습니다.`);
   }

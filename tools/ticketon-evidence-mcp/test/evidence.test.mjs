@@ -139,6 +139,31 @@ test("정리 전 초기 재고·digest 관측이 불완전하면 근거 부족�
   assert.equal(compareControlledHotspotEvidence(batchId, manifest, firstArtifact, first, repeatArtifact, lostDigest).status, "NOT_COMPARABLE");
 });
 
+test("raw SQL counts must agree with coverage and completed bookings", async () => {
+  const { manifest, first, second } = await controlledFixture();
+  for (const field of ["SeatLockSelect", "ConcertTimeDecrement"]) {
+    const altered = structuredClone(second);
+    altered.DatabaseStatementDigests[field].Count = 0;
+    const result = compareControlledHotspotEvidence(batchId, manifest, firstArtifact, first, repeatArtifact, altered);
+    assert.equal(result.status, "NOT_COMPARABLE");
+    assert.equal("observations" in result, false);
+  }
+});
+
+test("a run missing half its scheduled arrivals cannot be compared", async () => {
+  const { manifest, first, second } = await controlledFixture();
+  const altered = structuredClone(second);
+  const alteredManifest = structuredClone(manifest);
+  altered.K6.Result.Iterations = 250;
+  altered.K6.Result.ExpectedContention = 250 - altered.K6.Result.ReservationSuccess;
+  altered.K6.Result.ScheduledIterationAttainmentRate = 0.5;
+  altered.K6.Result.CompletedIterationsPerScheduledSecond = 25;
+  alteredManifest.Records.find((entry) => entry.SummaryFile === repeatArtifact).SeatConflicts = altered.K6.Result.ExpectedContention;
+  const result = compareControlledHotspotEvidence(batchId, alteredManifest, firstArtifact, first, repeatArtifact, altered);
+  assert.equal(result.status, "NOT_COMPARABLE");
+  assert.equal("observedDifferenceSecondMinusFirst" in result, false);
+});
+
 test("MCP 비교도 임의 경로와 허용 밖 artifact를 읽지 않는다", async () => {
   await assert.rejects(() => measuredRepository.compareControlledHotspot("../c166-repeat", firstArtifact, repeatArtifact),
     (error) => error instanceof EvidenceError && error.code === "INVALID_RUN_ID");
