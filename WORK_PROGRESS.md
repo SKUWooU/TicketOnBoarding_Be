@@ -13,9 +13,14 @@
 
 ## 진행 중
 
-- Backend Issue #168: read-only MCP의 `c166-repeat` 배치 비교 가능성 판정·근거 제한 구현 중.
+- 없음.
 
 ## 완료
+
+### Backend Issue #168 — MCP 통제 배치 비교 판정
+
+- PR [#169](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/169) / squash `c44ae5d`: `c166-repeat`의 같은 조건 반복·인기 좌석 수 차이만 비교하고, 초기 재고·목표 도착률·SQL 실행 건수·불변식 근거가 불충분하면 비교 수치를 차단.
+- MCP 테스트 17건·Backend CI·Reviewer Blocking 수정/재검토 통과. 관측 차이는 인과적 성능 개선이나 운영 처리량으로 해석하지 않음. [상세 근거](docs/project-improvement/mcp-local-integration.md)
 
 ### Backend Issue #166 — 인기 좌석 경합 fixture 상태 통제
 
