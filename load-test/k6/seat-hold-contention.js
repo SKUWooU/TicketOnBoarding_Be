@@ -2,6 +2,7 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { check } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
+import { createWeightedSeatPlan, selectWeightedSeat } from './weighted-seat-selection.mjs';
 
 const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const TEST_SCENARIO = __ENV.TEST_SCENARIO || 'distributed';
@@ -12,6 +13,14 @@ const MAX_VUS = Number(__ENV.MAX_VUS || 100);
 const TOKEN_COUNT = Number(__ENV.TOKEN_COUNT || 500);
 const FIXTURE_RUN_ID = (__ENV.FIXTURE_RUN_ID || '').trim();
 const ENFORCE_THRESHOLDS = (__ENV.ENFORCE_THRESHOLDS || 'true').toLowerCase() === 'true';
+const weightedPlan = TEST_SCENARIO === 'weighted-hotspot'
+  ? createWeightedSeatPlan(
+      2000,
+      integerSetting('HOT_SEAT_COUNT', 40),
+      integerSetting('HOT_REQUEST_PERCENT', 70),
+      integerSetting('SELECTION_SEED', 1),
+    )
+  : null;
 
 const holdSuccess = new Counter('seat_hold_success');
 const nonSuccessfulHold = new Counter('seat_hold_non_2xx');
@@ -22,12 +31,15 @@ const holdDuration = new Trend('seat_hold_duration', true);
 const releaseSuccess = new Counter('seat_hold_release_success');
 const unexpectedNonSuccessfulRelease = new Counter('seat_hold_release_unexpected_non_2xx');
 const cycleDuration = new Trend('seat_hold_cycle_duration', true);
+const weightedHotSelections = new Counter('seat_hold_weighted_hot_selections');
+const weightedColdSelections = new Counter('seat_hold_weighted_cold_selections');
 
 const churnScenario = TEST_SCENARIO === 'distributed-churn'
   || TEST_SCENARIO === 'hot-seat-churn';
 const expectedContentionScenario = TEST_SCENARIO === 'hot-seat'
   || TEST_SCENARIO === 'hot-section'
-  || TEST_SCENARIO === 'hot-seat-churn';
+  || TEST_SCENARIO === 'hot-seat-churn'
+  || TEST_SCENARIO === 'weighted-hotspot';
 
 http.setResponseCallback(
   churnScenario
@@ -87,6 +99,9 @@ export function setup() {
   if (fixture.totalSeats !== 2000 || tokens.length === 0) {
     throw new Error('Expected the default 2,000-seat fixture and at least one loadtest token.');
   }
+  if (weightedPlan && fixture.totalSeats !== weightedPlan.totalSeats) {
+    throw new Error('Weighted seat plan does not match the fixture seat count.');
+  }
   return { fixture, tokens };
 }
 
@@ -97,7 +112,13 @@ export default function (data) {
     ? iteration % data.tokens.length
     : (__VU - 1) % data.tokens.length;
   const token = data.tokens[tokenIndex];
-  const seatNumber = selectSeat(data.fixture, iteration, tokenIndex);
+  const selection = weightedPlan ? selectWeightedSeat(iteration, weightedPlan) : null;
+  if (selection) {
+    (selection.isHot ? weightedHotSelections : weightedColdSelections).add(1);
+  }
+  const seatNumber = selection
+    ? seatNumberFromIndex(data.fixture, selection.seatIndex)
+    : selectSeat(data.fixture, iteration, tokenIndex);
   const response = http.post(
     `${BASE_URL}/main/detail/${data.fixture.concertId}/seat-holds`,
     JSON.stringify({
@@ -192,6 +213,15 @@ export function handleSummary(data) {
     maxAllocatedVus: gaugeMaximum(data, 'vus_max'),
     preAllocatedVus: PRE_ALLOCATED_VUS,
     configuredMaxVus: MAX_VUS,
+    ...(weightedPlan ? {
+      weightedHotspot: {
+        hotSeatCount: weightedPlan.hotSeatCount,
+        hotRequestPercent: weightedPlan.hotRequestPercent,
+        seed: weightedPlan.seed,
+        hotSelections: counterValue(data, 'seat_hold_weighted_hot_selections'),
+        coldSelections: counterValue(data, 'seat_hold_weighted_cold_selections'),
+      },
+    } : {}),
   };
 
   return {
@@ -217,6 +247,20 @@ function selectSeat(fixture, iteration, tokenIndex) {
 
 function seatNumber(row, number) {
   return `R${String(row).padStart(3, '0')}-S${String(number).padStart(3, '0')}`;
+}
+
+function seatNumberFromIndex(fixture, seatIndex) {
+  const row = Math.floor(seatIndex / fixture.seatsPerRow) + 1;
+  const number = (seatIndex % fixture.seatsPerRow) + 1;
+  return seatNumber(row, number);
+}
+
+function integerSetting(name, fallback) {
+  const raw = __ENV[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) throw new Error(`${name} must be a safe integer.`);
+  return value;
 }
 
 function metricValues(data, name) {

@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue #170: 인기 좌석 집중도별 Hold 경합 시나리오·계약 테스트 구현. 전용 로컬 DB 실측·근거 문서·PR 검증 대기. [Issue #170](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/170)
 
 ## 완료
 

@@ -119,6 +119,17 @@ function New-SeatHoldRunSummary {
     if ($issue65Iterations -ne ($issue65Success + $issue65Contention + $issue65Unexpected)) {
         throw 'Structured seat-hold counters do not match completed iterations.'
     }
+    $issue170Weighted = $null
+    if ([string]$Result.scenario -eq 'weighted-hotspot') {
+        $issue170Weighted = $Result.weightedHotspot
+        if ($null -eq $issue170Weighted -or
+            [int]$issue170Weighted.hotSeatCount -lt 1 -or [int]$issue170Weighted.hotSeatCount -gt 2000 -or
+            [int]$issue170Weighted.hotRequestPercent -lt 0 -or [int]$issue170Weighted.hotRequestPercent -gt 100 -or
+            [long]$issue170Weighted.hotSelections -lt 0 -or [long]$issue170Weighted.coldSelections -lt 0 -or
+            ([long]$issue170Weighted.hotSelections + [long]$issue170Weighted.coldSelections) -ne $issue65Iterations) {
+            throw 'Weighted seat-hold selections must cover every completed iteration.'
+        }
+    }
     $issue65ChurnScenario = [string]$Result.scenario -in @('distributed-churn', 'hot-seat-churn')
     if ($issue65ChurnScenario -and $issue65Success -ne ($issue65ReleaseSuccess + $issue65UnexpectedRelease)) {
         throw 'Churn seat-hold successes must have exactly one release result.'
@@ -158,6 +169,13 @@ function New-SeatHoldRunSummary {
         MaxAllocatedVus = [int]$Result.maxAllocatedVus
         PreAllocatedVus = [int]$Result.preAllocatedVus
         ConfiguredMaxVus = [int]$Result.configuredMaxVus
+        WeightedHotspot = if ($null -ne $issue170Weighted) { [pscustomobject]@{
+            HotSeatCount = [int]$issue170Weighted.hotSeatCount
+            HotRequestPercent = [int]$issue170Weighted.hotRequestPercent
+            Seed = [long]$issue170Weighted.seed
+            HotSelections = [long]$issue170Weighted.hotSelections
+            ColdSelections = [long]$issue170Weighted.coldSelections
+        } } else { $null }
     }
 }
 
@@ -188,6 +206,13 @@ function Assert-SeatHoldFinalState {
         'distributed' { [long]$Summary.HoldSuccess }
         'hot-section' { [math]::Min(40, [long]$Summary.Iterations) }
         'hot-seat' { [math]::Min(1, [long]$Summary.Iterations) }
+        'weighted-hotspot' {
+            if ([long]$Snapshot.activeHeldSeats -le 0 -or
+                [long]$Snapshot.activeHeldSeats -gt ([long]$Summary.WeightedHotspot.HotSeatCount + [long]$Summary.WeightedHotspot.ColdSelections)) {
+                throw 'Weighted seat-hold active count exceeds the selected distinct-seat upper bound.'
+            }
+            [long]$Snapshot.activeHeldSeats
+        }
         'distributed-churn' { 0 }
         'hot-seat-churn' { 0 }
         default { throw "Unsupported seat-hold scenario: $($Summary.Scenario)" }
@@ -418,6 +443,12 @@ function Assert-SeatHoldDomainScenarioGate {
                 [long]$DomainMetricDelta.HoldAcquired -ne $issue106ExpectedDistinctSeats -or
                 [long]$DomainMetricDelta.HoldReclaimed -ne 0) {
                 throw 'Hot-seat scenario must retain exactly one initially acquired hold without reclaiming it.'
+            }
+        }
+        'weighted-hotspot' {
+            if ([long]$Snapshot.activeHeldSeats -ne [long]$DomainMetricDelta.HoldAcquired -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0) {
+                throw 'Weighted seat-hold final active count must match newly acquired holds without reclaiming.'
             }
         }
         'distributed-churn' {

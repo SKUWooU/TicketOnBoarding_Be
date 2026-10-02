@@ -1,7 +1,10 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('distributed', 'hot-section', 'hot-seat', 'distributed-churn', 'hot-seat-churn')]
+    [ValidateSet('distributed', 'hot-section', 'hot-seat', 'distributed-churn', 'hot-seat-churn', 'weighted-hotspot')]
     [string]$Scenario = 'distributed',
+    [ValidateRange(1, 2000)][int]$HotSeatCount = 40,
+    [ValidateRange(0, 100)][int]$HotRequestPercent = 70,
+    [ValidateRange(0, 2147483647)][int]$SelectionSeed = 17,
     [ValidateRange(1, 10000)][int]$Rate = 5,
     [ValidateRange(1, 3600)][int]$DurationSeconds = 10,
     [ValidateRange(250, 10000)][int]$SampleIntervalMilliseconds = 1000,
@@ -147,6 +150,9 @@ try {
     $issue65K6Arguments = @(
         'run',
         '-e', "TEST_SCENARIO=$Scenario",
+        '-e', "HOT_SEAT_COUNT=$HotSeatCount",
+        '-e', "HOT_REQUEST_PERCENT=$HotRequestPercent",
+        '-e', "SELECTION_SEED=$SelectionSeed",
         '-e', "RATE=$Rate",
         '-e', "DURATION=$($DurationSeconds)s",
         '-e', "FIXTURE_RUN_ID=$FixtureRunId",
@@ -194,6 +200,12 @@ try {
     $issue65RawResult = ConvertFrom-SeatHoldK6Result -Text $issue65CombinedOutput
     $issue65ThresholdsEnforced = -not $DisablePerformanceThresholds.IsPresent
     Assert-SeatHoldRunIdentity -Result $issue65RawResult -Scenario $Scenario -Rate $Rate -DurationSeconds $DurationSeconds -ThresholdsEnforced $issue65ThresholdsEnforced | Out-Null
+    if ($Scenario -eq 'weighted-hotspot' -and
+        ([int]$issue65RawResult.weightedHotspot.hotSeatCount -ne $HotSeatCount -or
+         [int]$issue65RawResult.weightedHotspot.hotRequestPercent -ne $HotRequestPercent -or
+         [int]$issue65RawResult.weightedHotspot.seed -ne $SelectionSeed)) {
+        throw 'Weighted seat-hold selection settings do not match the requested run.'
+    }
     $issue65K6Summary = New-SeatHoldRunSummary -Result $issue65RawResult -DurationSeconds $DurationSeconds
     $issue65Snapshot = ConvertFrom-SeatHoldFinalSnapshot -Text $issue65CombinedOutput
     Assert-SeatHoldFinalState -Summary $issue65K6Summary -Snapshot $issue65Snapshot | Out-Null
@@ -217,6 +229,7 @@ try {
             RatePerSecond = $Rate
             DurationSeconds = $DurationSeconds
             SampleIntervalMilliseconds = $SampleIntervalMilliseconds
+            WeightedHotspot = if ($Scenario -eq 'weighted-hotspot') { [ordered]@{ HotSeatCount = $HotSeatCount; HotRequestPercent = $HotRequestPercent; Seed = $SelectionSeed } } else { $null }
             StartedAtUtc = $issue65StartedAt.ToString('o')
             EndedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
         }
