@@ -164,6 +164,36 @@ test("a run missing half its scheduled arrivals cannot be compared", async () =>
   assert.equal("observedDifferenceSecondMinusFirst" in result, false);
 });
 
+test("a zero-rate run with internally matching zero counts cannot expose p95 differences", async () => {
+  const { manifest, first, second } = await controlledFixture();
+  const altered = structuredClone(second);
+  const alteredManifest = structuredClone(manifest);
+  const result = altered.K6.Result;
+  const digest = altered.DatabaseStatementDigests;
+  const final = altered.K6.FinalSnapshot;
+  const entry = alteredManifest.Records.find((record) => record.SummaryFile === repeatArtifact);
+  altered.Run.RatePerSecond = 0;
+  result.TargetRatePerSecond = 0;
+  result.Iterations = 0;
+  result.ScheduledIterationAttainmentRate = 1;
+  result.CompletedIterationsPerScheduledSecond = 0;
+  result.ReservationSuccess = 0;
+  result.ExpectedContention = 0;
+  result.ReservationSuccessDurationMs.P95 = 0;
+  result.ReservationSeatContentionDurationMs.P95 = 0;
+  Object.assign(final, { remainingSeats: 2000, reservedSeats: 0, reservations: 0, bookings: 0, payments: 0 });
+  Object.assign(digest.SeatLockSelect, { Count: 0 });
+  Object.assign(digest.ConcertTimeDecrement, { Count: 0, RowsAffected: 0 });
+  Object.assign(digest.Coverage, {
+    ExpectedSeatLockSelects: 0, SeatLockSelectCount: 0, SeatLockSelectRate: 1,
+    ExpectedSuccessfulReservations: 0, ConcertTimeDecrementCount: 0, ConcertTimeDecrementRate: 1
+  });
+  Object.assign(entry, { Success: 0, SeatConflicts: 0, SuccessP95Ms: 0, ConflictP95Ms: 0 });
+  const comparison = compareControlledHotspotEvidence(batchId, alteredManifest, firstArtifact, first, repeatArtifact, altered);
+  assert.equal(comparison.status, "NOT_COMPARABLE");
+  assert.equal("observedDifferenceSecondMinusFirst" in comparison, false);
+});
+
 test("MCP 비교도 임의 경로와 허용 밖 artifact를 읽지 않는다", async () => {
   await assert.rejects(() => measuredRepository.compareControlledHotspot("../c166-repeat", firstArtifact, repeatArtifact),
     (error) => error instanceof EvidenceError && error.code === "INVALID_RUN_ID");

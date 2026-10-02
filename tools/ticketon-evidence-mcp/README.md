@@ -11,7 +11,7 @@
 
 `verify_domain_invariants`의 `PASS`는 선택한 로컬 fixture 요약의 불변식만 뜻합니다. 실제 공연장이나 운영 환경의 성능·정합성을 보장하지 않습니다.
 
-비교 예: `batchId=c166-repeat`, `firstArtifact=c166-repeat-r1-h20-summary.json`, `secondArtifact=c166-repeat-r2-h20-summary.json`. 조건이 같으면 `SAME_CONDITION_REPEAT`, 인기 좌석 수만 다르면 `HOT_SEAT_COUNT_ONLY`로 표시합니다. manifest·초기 재고·재고 불변식·dropped iteration·SQL digest 관측 조건이 빠지거나 맞지 않으면 비교 수치를 제공하지 않습니다. 목표 RPS × 지속 시간 대비 완료 건수가 99% 미만이거나, raw SQL 실행 건수와 기록된 관측률·예약 성공 건수가 불일치해도 비교를 차단합니다. `COMPARABLE`은 인과적 성능 개선 판정이 아닙니다.
+비교 예: `batchId=c166-repeat`, `firstArtifact=c166-repeat-r1-h20-summary.json`, `secondArtifact=c166-repeat-r2-h20-summary.json`. 조건이 같으면 `SAME_CONDITION_REPEAT`, 인기 좌석 수만 다르면 `HOT_SEAT_COUNT_ONLY`로 표시합니다. manifest·초기 재고·재고 불변식·dropped iteration·SQL digest 관측 조건이 빠지거나 맞지 않으면 비교 수치를 제공하지 않습니다. 목표 RPS × 지속 시간 대비 완료 건수가 99% 미만이거나, raw SQL 실행 건수와 기록된 관측률·예약 성공 건수가 불일치해도 비교를 차단합니다. 0 RPS·0 완료 건수처럼 유효한 부하 측정이 아닌 요약에서도 p95 차이를 제공하지 않습니다. `COMPARABLE`은 인과적 성능 개선 판정이 아닙니다.
 
 ## 실행
 

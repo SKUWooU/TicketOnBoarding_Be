@@ -210,6 +210,8 @@ function parseRun(
       values.finalReserved !== values.success ||
       values.finalReservations !== values.success || values.finalBookings !== values.success ||
       values.finalPayments !== values.success ||
+      values.rate! <= 0 || values.duration! <= 0 || values.iterations! <= 0 ||
+      values.success! <= 0 || values.conflicts! <= 0 ||
       values.iterations !== values.success! + values.conflicts! || values.dropped !== 0 ||
       values.iterations! < values.rate! * values.duration! * 0.99 ||
       values.iterations! > values.rate! * values.duration! * 1.01 ||
