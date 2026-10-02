@@ -1,5 +1,6 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { compareControlledHotspotEvidence } from "./comparison.js";
 
 const RUN_ID = /^[A-Za-z0-9-]{1,64}$/;
 const SUMMARY_FILE = /^[A-Za-z0-9-]+-summary\.json$/;
@@ -89,6 +90,27 @@ export class EvidenceRepository {
       throw new EvidenceError("MALFORMED_ARTIFACT", `'${selected}' 요약 파일을 읽을 수 없습니다.`);
     }
     return { artifact: selected, summary: sanitize(parsed) };
+  }
+
+  async compareControlledHotspot(batchId: string, firstArtifact: string, secondArtifact: string) {
+    const canonicalRoot = await this.canonicalRootOrThrow();
+    const directory = await this.resolveCanonicalRunDirectory(batchId, canonicalRoot);
+    if (!directory) throw new EvidenceError("RUN_NOT_FOUND", `측정 배치 '${batchId}'를 찾을 수 없습니다.`);
+    const manifestName = "controlled-hotspot-manifest.json";
+    let manifest: unknown;
+    try {
+      const manifestPath = await realpath(path.join(directory, manifestName));
+      if (!isDescendant(directory, manifestPath)) {
+        throw new EvidenceError("UNSUPPORTED_ARTIFACT", "결과 디렉터리 밖의 manifest는 조회할 수 없습니다.");
+      }
+      manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, ""));
+    } catch (error) {
+      if (error instanceof EvidenceError) throw error;
+      throw new EvidenceError("ARTIFACT_NOT_FOUND", "허용된 controlled-hotspot manifest를 읽을 수 없습니다.");
+    }
+    const first = await this.readSummary(batchId, firstArtifact);
+    const second = await this.readSummary(batchId, secondArtifact);
+    return compareControlledHotspotEvidence(batchId, manifest, first.artifact, first.summary, second.artifact, second.summary);
   }
 
   private async canonicalRootOrUndefined() {

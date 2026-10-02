@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue #168: read-only MCP의 `c166-repeat` 배치 비교 가능성 판정·근거 제한 구현 중.
 
 ## 완료
 
