@@ -13,9 +13,14 @@
 
 ## 진행 중
 
-- Backend Issue #166: 인기 좌석 집중도별 fixture 상태 통제·SQL digest 반복 측정. 격리 Compose 프로젝트의 2,000석·Mock PG 기준선과 교차 순서 6회 결과를 검증 중.
+- 없음.
 
 ## 완료
+
+### Backend Issue #166 — 인기 좌석 경합 fixture 상태 통제
+
+- PR [#167](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/167) / squash `c73945d`: 전용 로컬 DB의 매 run 좌석 2,000행·초기 재고를 검증하고 집중도별 6회 교차 측정 완료.
+- Backend CI·Reviewer Blocking 수정/재검토 통과. SQL digest 시간은 전역 row-lock wait의 원인 귀속으로 해석하지 않음. [상세 근거](docs/project-improvement/controlled-hotspot-evidence.md)
 
 ### Backend Issue #164 — 인기 좌석 집중도별 로컬 경합 기준선
 
