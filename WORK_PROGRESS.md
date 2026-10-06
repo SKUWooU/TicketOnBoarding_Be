@@ -13,9 +13,14 @@
 
 ## 진행 중
 
-- Backend Issue #170: 인기 좌석 집중도별 Hold 경합 6회 실측·근거 문서 완료. PR·Backend CI·Reviewer 검토 대기. [Issue #170](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/170)
+- 없음.
 
 ## 완료
+
+### Backend Issue #170 — 인기 좌석 집중도별 Hold 경합 검증
+
+- PR [#171](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/171) / squash `0d69bed`: 전용 로컬 2,000석 fixture에서 인기 20·40·200석 집중도별 Hold 요청을 교차 순서로 2회씩 실측.
+- 50 RPS×10초 조건에서 신규 Hold 159/182/307건이 반복됐고 나머지는 예상 409였다. Node·PowerShell 계약 테스트, Backend CI, Reviewer `MERGE_READY: YES` 통과. 혼합 p95를 성능 개선으로 해석하지 않음. [상세 근거](docs/project-improvement/controlled-seat-hold-evidence.md)
 
 ### Backend Issue #168 — MCP 통제 배치 비교 판정
 
