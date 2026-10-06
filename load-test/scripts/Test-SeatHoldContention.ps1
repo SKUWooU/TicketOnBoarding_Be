@@ -168,6 +168,23 @@ $issue65HotSeatSummary = New-SeatHoldRunSummary -Result $issue65HotSeatRaw -Dura
 $issue65HotSeatSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 1)
 Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue65HotSeatSummary -Snapshot $issue65HotSeatSnapshot) 'hot-seat final state allows owner retry'
 
+$issue170WeightedRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario weighted-hotspot -Success 31 -Contention 69)
+$issue170WeightedRaw | Add-Member -NotePropertyName weightedHotspot -NotePropertyValue ([pscustomobject]@{ hotSeatCount = 20; hotRequestPercent = 70; seed = 17; hotSelections = 70; coldSelections = 30 })
+$issue170WeightedSummary = New-SeatHoldRunSummary -Result $issue170WeightedRaw -DurationSeconds 10
+$issue170WeightedSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 30)
+Assert-Issue65Equal $issue170WeightedSummary.WeightedHotspot.HotSelections 70 'weighted hot selection count'
+Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue170WeightedSummary -Snapshot $issue170WeightedSnapshot) 'weighted final state allows overlapping selections'
+$issue170WeightedDomain = [pscustomobject]@{ HoldSuccess = 31; HoldConflict = 69; HoldInvalid = 0; HoldError = 0; HoldAcquired = 30; HoldReused = 1; HoldReclaimed = 0 }
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue170WeightedSummary -Snapshot $issue170WeightedSnapshot -DomainMetricDelta $issue170WeightedDomain) 'weighted acquired and reused holds converge'
+Assert-Issue65Throws {
+    $issue170BadRaw = $issue170WeightedRaw.PSObject.Copy()
+    $issue170BadRaw.weightedHotspot = [pscustomobject]@{ hotSeatCount = 20; hotRequestPercent = 70; seed = 17; hotSelections = 70; coldSelections = 29 }
+    New-SeatHoldRunSummary -Result $issue170BadRaw -DurationSeconds 10
+} 'weighted selection count mismatch'
+Assert-Issue65Throws {
+    Assert-SeatHoldDomainScenarioGate -K6Summary $issue170WeightedSummary -Snapshot $issue170WeightedSnapshot -DomainMetricDelta ([pscustomobject]@{ HoldSuccess = 31; HoldConflict = 69; HoldInvalid = 0; HoldError = 0; HoldAcquired = 29; HoldReused = 2; HoldReclaimed = 0 })
+} 'weighted missing acquired hold must fail'
+
 $issue110ChurnRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario distributed-churn -Success 100 -ReleaseSuccess 100)
 $issue110ChurnSummary = New-SeatHoldRunSummary -Result $issue110ChurnRaw -DurationSeconds 10
 $issue110ChurnSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 0)

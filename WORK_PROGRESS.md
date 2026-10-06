@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue #170: 인기 좌석 집중도별 Hold 경합 6회 실측·근거 문서 완료. PR·Backend CI·Reviewer 검토 대기. [Issue #170](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/170)
 
 ## 완료
 

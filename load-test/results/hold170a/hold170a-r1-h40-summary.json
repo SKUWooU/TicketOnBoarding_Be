@@ -1,0 +1,135 @@
+﻿{
+    "SchemaVersion":  1,
+    "ValidMeasurement":  true,
+    "Run":  {
+                "Id":  "hold170a-r1-h40",
+                "FixtureRunId":  "hold170a-fixture",
+                "Scenario":  "weighted-hotspot",
+                "RatePerSecond":  50,
+                "DurationSeconds":  10,
+                "SampleIntervalMilliseconds":  1000,
+                "WeightedHotspot":  {
+                                        "HotSeatCount":  40,
+                                        "HotRequestPercent":  70,
+                                        "Seed":  17
+                                    },
+                "StartedAtUtc":  "2026-10-06T13:40:55.0397457Z",
+                "EndedAtUtc":  "2026-10-06T13:41:08.5563164Z"
+            },
+    "FixturePreparation":  {
+                               "StartedAtUtc":  "2026-10-06T13:40:54.9887706Z",
+                               "DurationMilliseconds":  50,
+                               "ExcludedFromMetricSamples":  true,
+                               "ReusedAndReset":  true,
+                               "TotalSeats":  2000
+                           },
+    "K6":  {
+               "ExitCode":  0,
+               "StateInvariantSatisfied":  true,
+               "Result":  {
+                              "Scenario":  "weighted-hotspot",
+                              "TargetRatePerSecond":  50,
+                              "DurationSeconds":  10,
+                              "ThresholdsEnforced":  false,
+                              "Iterations":  501,
+                              "DroppedIterations":  0,
+                              "ScheduledIterationAttainmentRate":  1,
+                              "CompletedIterationsPerScheduledSecond":  50.1,
+                              "HoldSuccess":  182,
+                              "ReleaseSuccess":  0,
+                              "ExpectedContention":  319,
+                              "UnexpectedNonSuccessful":  0,
+                              "UnexpectedRelease":  0,
+                              "UnexpectedFailureRate":  0,
+                              "HoldDurationMs":  {
+                                                     "Average":  16.85680578842317,
+                                                     "Median":  15.6431,
+                                                     "P95":  23.6825,
+                                                     "Maximum":  65.1298
+                                                 },
+                              "CycleDurationMs":  {
+                                                      "Average":  17.345309381237524,
+                                                      "Median":  16,
+                                                      "P95":  25,
+                                                      "Maximum":  68
+                                                  },
+                              "MaxObservedVus":  2,
+                              "MaxAllocatedVus":  200,
+                              "PreAllocatedVus":  200,
+                              "ConfiguredMaxVus":  200,
+                              "WeightedHotspot":  {
+                                                      "HotSeatCount":  40,
+                                                      "HotRequestPercent":  70,
+                                                      "Seed":  17,
+                                                      "HotSelections":  355,
+                                                      "ColdSelections":  146
+                                                  }
+                          },
+               "FinalSnapshot":  {
+                                     "expectedTotalSeats":  2000,
+                                     "actualSeatCount":  2000,
+                                     "remainingSeats":  2000,
+                                     "reservedSeats":  0,
+                                     "activeHeldSeats":  182,
+                                     "holdRows":  182,
+                                     "partialHoldStates":  0,
+                                     "reservations":  0,
+                                     "bookings":  0,
+                                     "payments":  0,
+                                     "invariantSatisfied":  true
+                                 },
+               "StdoutFile":  "hold170a-r1-h40-k6.stdout.log",
+               "StderrFile":  "hold170a-r1-h40-k6.stderr.log"
+           },
+    "Metrics":  {
+                    "SampleCount":  13,
+                    "Sampling":  {
+                                     "MinimumIntervalMs":  835,
+                                     "AverageIntervalMs":  1058.8333333333333,
+                                     "MaximumIntervalMs":  1778
+                                 },
+                    "Peaks":  {
+                                  "HikariActive":  2,
+                                  "HikariPending":  0,
+                                  "HikariIdle":  24,
+                                  "HikariMax":  24,
+                                  "ProcessCpuUsage":  0.11247896007358711,
+                                  "SystemCpuUsage":  0.71700928453195867,
+                                  "HeapUsedBytes":  198443496,
+                                  "JvmThreadsLive":  38,
+                                  "DbRowLockCurrentWaits":  0,
+                                  "DbThreadsConnected":  25,
+                                  "DbThreadsRunning":  2
+                              },
+                    "Deltas":  {
+                                   "DbRowLockWaits":  0,
+                                   "DbRowLockTimeMs":  0,
+                                   "DbDeadlocks":  0,
+                                   "JvmGcPauseSeconds":  0.010000000000000002,
+                                   "JvmGcPauseCount":  3
+                               },
+                    "MariaDbContainer":  null,
+                    "ObserverEffects":  {
+                                            "DbCliConnectionIncludedInThreadGauges":  true,
+                                            "ConnectionsCounterExcluded":  true,
+                                            "ComposeHealthcheckMayOpenConnections":  true,
+                                            "DockerStatsCollected":  false
+                                        }
+                },
+    "DomainMetrics":  {
+                          "HoldSuccess":  182,
+                          "HoldConflict":  319,
+                          "HoldInvalid":  0,
+                          "HoldError":  0,
+                          "HoldAcquired":  182,
+                          "HoldReused":  0,
+                          "HoldReclaimed":  0,
+                          "ReleaseSuccess":  0,
+                          "ReleaseConflict":  0,
+                          "ReleaseInvalid":  0,
+                          "ReleaseError":  0,
+                          "Released":  0,
+                          "ExpiredCleared":  0
+                      },
+    "SamplesFile":  "hold170a-r1-h40-metrics.csv"
+}

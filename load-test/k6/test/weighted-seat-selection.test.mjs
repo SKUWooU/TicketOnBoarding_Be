@@ -22,6 +22,15 @@ test('requested hot share is reflected in selections without treating it as an e
   assert.ok(hot >= 6800 && hot <= 7200, `hot selections=${hot}`);
 });
 
+test('the 50 RPS 10-second hold plan keeps selection distribution fixed across hot-set sizes', () => {
+  for (const [hotSeatCount, distinctSeats] of [[20, 159], [40, 182], [200, 307]]) {
+    const plan = createWeightedSeatPlan(2000, hotSeatCount, 70, 17);
+    const selections = Array.from({ length: 500 }, (_, iteration) => selectWeightedSeat(iteration, plan));
+    assert.equal(selections.filter(({ isHot }) => isHot).length, 354);
+    assert.equal(new Set(selections.map(({ seatIndex }) => seatIndex)).size, distinctSeats);
+  }
+});
+
 test('zero and full hot ratios stay within the requested seat sets', () => {
   const coldOnly = createWeightedSeatPlan(2000, 40, 0, 1);
   const hotOnly = createWeightedSeatPlan(2000, 40, 100, 1);
