@@ -4,6 +4,7 @@ param(
     [ValidateRange(1, 2)][int]$Repeats = 2,
     [ValidateRange(1, 10)][int]$DurationSeconds = 10,
     [ValidateRange(1, 50)][int]$Rate = 50,
+    [ValidatePattern('^ticketon-controlled170(-[a-z0-9]{1,12})?$')][string]$ComposeProject = 'ticketon-controlled170',
     [string]$BaseUrl = 'http://127.0.0.1:18080',
     [string]$ManagementBaseUrl = 'http://127.0.0.1:18081'
 )
@@ -14,7 +15,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $compose = Join-Path $root 'compose.yml'
 $measure = Join-Path $PSScriptRoot 'Measure-SeatHoldContention.ps1'
 Import-Module (Join-Path $PSScriptRoot 'ControlledHotspot.psm1') -Force
-$project = 'ticketon-controlled170'
+$project = $ComposeProject
 if ($BaseUrl -ne 'http://127.0.0.1:18080' -or $ManagementBaseUrl -ne 'http://127.0.0.1:18081') {
     throw 'Controlled load must target only the fixed local loopback endpoints.'
 }
@@ -23,7 +24,7 @@ if ($env:COMPOSE_PROJECT_NAME -ne $project) {
 }
 $containerId = @(& docker compose -p $project -f $compose ps -q mariadb 2>&1)
 if ($LASTEXITCODE -ne 0 -or $containerId.Count -ne 1 -or [string]::IsNullOrWhiteSpace($containerId[0])) {
-    throw 'The dedicated ticketon-controlled170 MariaDB container must already be running.'
+    throw "The dedicated $project MariaDB container must already be running."
 }
 $containerLabels = [string](& docker inspect -f '{{json .Config.Labels}}' $containerId[0] 2>&1)
 if ($LASTEXITCODE -ne 0 -or [string](($containerLabels | ConvertFrom-Json).'com.docker.compose.project') -ne $project) {
