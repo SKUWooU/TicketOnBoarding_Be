@@ -1,6 +1,7 @@
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { check } from 'k6';
+import { sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { createWeightedSeatPlan, selectWeightedSeat } from './weighted-seat-selection.mjs';
 
@@ -13,7 +14,12 @@ const MAX_VUS = Number(__ENV.MAX_VUS || 100);
 const TOKEN_COUNT = Number(__ENV.TOKEN_COUNT || 500);
 const FIXTURE_RUN_ID = (__ENV.FIXTURE_RUN_ID || '').trim();
 const ENFORCE_THRESHOLDS = (__ENV.ENFORCE_THRESHOLDS || 'true').toLowerCase() === 'true';
-const weightedPlan = TEST_SCENARIO === 'weighted-hotspot'
+const HOLD_DWELL_MS = TEST_SCENARIO === 'weighted-hotspot-churn'
+  ? integerSetting('HOLD_DWELL_MS', 100) : 0;
+if (HOLD_DWELL_MS < 0 || HOLD_DWELL_MS > 1000) {
+  throw new Error('HOLD_DWELL_MS must be between 0 and 1000.');
+}
+const weightedPlan = (TEST_SCENARIO === 'weighted-hotspot' || TEST_SCENARIO === 'weighted-hotspot-churn')
   ? createWeightedSeatPlan(
       2000,
       integerSetting('HOT_SEAT_COUNT', 40),
@@ -28,6 +34,8 @@ const expectedContention = new Counter('seat_hold_expected_contention');
 const unexpectedNonSuccessfulHold = new Counter('seat_hold_unexpected_non_2xx');
 const unexpectedFailure = new Rate('seat_hold_unexpected_failure');
 const holdDuration = new Trend('seat_hold_duration', true);
+const holdSuccessDuration = new Trend('seat_hold_success_duration', true);
+const holdSeatConflictDuration = new Trend('seat_hold_seat_conflict_duration', true);
 const releaseSuccess = new Counter('seat_hold_release_success');
 const unexpectedNonSuccessfulRelease = new Counter('seat_hold_release_unexpected_non_2xx');
 const cycleDuration = new Trend('seat_hold_cycle_duration', true);
@@ -35,11 +43,13 @@ const weightedHotSelections = new Counter('seat_hold_weighted_hot_selections');
 const weightedColdSelections = new Counter('seat_hold_weighted_cold_selections');
 
 const churnScenario = TEST_SCENARIO === 'distributed-churn'
-  || TEST_SCENARIO === 'hot-seat-churn';
+  || TEST_SCENARIO === 'hot-seat-churn'
+  || TEST_SCENARIO === 'weighted-hotspot-churn';
 const expectedContentionScenario = TEST_SCENARIO === 'hot-seat'
   || TEST_SCENARIO === 'hot-section'
   || TEST_SCENARIO === 'hot-seat-churn'
-  || TEST_SCENARIO === 'weighted-hotspot';
+  || TEST_SCENARIO === 'weighted-hotspot'
+  || TEST_SCENARIO === 'weighted-hotspot-churn';
 
 http.setResponseCallback(
   churnScenario
@@ -138,7 +148,9 @@ export default function (data) {
 
   if (response.status === 200) {
     holdSuccess.add(1);
+    holdSuccessDuration.add(response.timings.duration);
     if (churnScenario) {
+      if (HOLD_DWELL_MS > 0) sleep(HOLD_DWELL_MS / 1000);
       const releaseResponse = http.del(
         `${BASE_URL}/main/detail/${data.fixture.concertId}/seat-holds`,
         JSON.stringify({
@@ -172,6 +184,7 @@ export default function (data) {
   nonSuccessfulHold.add(1);
   if (response.status === 409 && expectedContentionScenario) {
     expectedContention.add(1);
+    holdSeatConflictDuration.add(response.timings.duration);
     cycleDuration.add(Date.now() - startedAt);
     unexpectedFailure.add(false);
     return;
@@ -208,11 +221,14 @@ export function handleSummary(data) {
     unexpectedRelease: counterValue(data, 'seat_hold_release_unexpected_non_2xx'),
     unexpectedFailureRate: rateValue(data, 'seat_hold_unexpected_failure'),
     holdDurationMs: trendValues(data, 'seat_hold_duration'),
+    holdSuccessDurationMs: trendValues(data, 'seat_hold_success_duration'),
+    holdSeatConflictDurationMs: trendValues(data, 'seat_hold_seat_conflict_duration'),
     cycleDurationMs: trendValues(data, 'seat_hold_cycle_duration'),
     maxObservedVus: gaugeMaximum(data, 'vus'),
     maxAllocatedVus: gaugeMaximum(data, 'vus_max'),
     preAllocatedVus: PRE_ALLOCATED_VUS,
     configuredMaxVus: MAX_VUS,
+    holdDwellMilliseconds: HOLD_DWELL_MS,
     ...(weightedPlan ? {
       weightedHotspot: {
         hotSeatCount: weightedPlan.hotSeatCount,

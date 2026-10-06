@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue #172: 인기 좌석 Hold→Release 50/100 RPS 각 6회 실측·결과별 지표·근거 문서 완료. PR·CI·Reviewer 검토 대기. [Issue #172](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/172)
 
 ## 완료
 
