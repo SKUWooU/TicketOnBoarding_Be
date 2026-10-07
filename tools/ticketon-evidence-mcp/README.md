@@ -9,6 +9,8 @@
 - `verify_domain_invariants`: 측정 유효성, k6 종료 상태, 좌석 수 및 최종 상태 불변식 확인
 - `compare_controlled_hotspot_runs`: 같은 통제 배치의 두 summary가 비교 가능한지 판정하고, 통과할 때만 성공·좌석 충돌의 관측 차이 제공
 - `assess_seat_hold_churn_batch`: Hold→Release 6-run 배치의 조건·상태 수렴을 검증하고 같은 RPS 내 관측값만 제공
+- `list_controlled_experiments`: 고정된 Hold→Release 50/100 RPS 실험 조건 목록
+- `preflight_controlled_experiment`: 새 배치 ID와 전용 Compose 프로젝트를 받아 기존 runner의 `-CheckOnly`로 로컬 준비 상태만 확인. 부하·fixture·결과 디렉터리를 생성하지 않음
 
 `verify_domain_invariants`의 `PASS`는 선택한 로컬 fixture 요약의 불변식만 뜻합니다. 실제 공연장이나 운영 환경의 성능·정합성을 보장하지 않습니다.
 
@@ -35,4 +37,4 @@ codex mcp add ticketonEvidence -- node D:\project2\TicketOnBoarding_Be\tools\tic
 codex mcp list
 ```
 
-등록 후 새 Codex 로컬 세션에서 이 서버의 다섯 도구로 측정 결과를 근거로 조회할 수 있습니다. 실행·DB 변경·외부 API 호출 도구는 의도적으로 제공하지 않습니다. 전체 등록·해석 계약은 [고경합 측정 근거 MCP 로컬 연동](../../docs/project-improvement/mcp-local-integration.md)을 확인합니다.
+등록 후 새 Codex 로컬 세션에서 측정 결과 조회와 고정 실험의 사전 점검을 사용할 수 있습니다. 사전 점검은 Windows PowerShell, 별도 빈 MariaDB, 그 DB를 바라보는 `loadtest` Backend와 18080 loopback 연결이 준비된 경우에만 `READY`를 반환합니다. 실패 원인의 원시 stderr·DB 연결 정보는 MCP에 반환하지 않습니다. `READY`는 **실행 승인이나 성능 보증이 아닙니다**. 부하 실행·DB 변경·외부 API 호출 도구는 제공하지 않습니다. 전체 등록·해석 계약은 [고경합 측정 근거 MCP 로컬 연동](../../docs/project-improvement/mcp-local-integration.md)을 확인합니다.

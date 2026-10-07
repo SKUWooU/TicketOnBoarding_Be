@@ -54,6 +54,12 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: node --test load-test/k6/test/*.test.mjs
 
+      - name: Validate evidence MCP and controlled preflight contracts
+        working-directory: tools/ticketon-evidence-mcp
+        run: |
+          npm ci
+          npm test
+
       - name: Run Backend tests
         run: |
           chmod +x gradlew

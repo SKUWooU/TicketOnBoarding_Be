@@ -209,6 +209,20 @@ test("stdio 초기화는 읽기 전용 분석 지침과 기존 도구를 광고�
   assert.match(output, /"name":"compare_controlled_hotspot_runs"/);
   assert.match(output, /"readOnlyHint":true/);
   assert.match(output, /"openWorldHint":false/);
+  assert.match(output, /"name":"list_controlled_experiments"/);
+  assert.match(output, /"name":"preflight_controlled_experiment"/);
+});
+
+test("stdio에서 고정 실험 카탈로그만 반환하고 임의 식별자는 차단한다", async () => {
+  const catalogOutput = await runServerCall("list_controlled_experiments", {});
+  const catalogResponse = catalogOutput.split("\n").filter(Boolean).map((line) => JSON.parse(line)).find((line) => line.id === 3);
+  const catalog = JSON.parse(catalogResponse.result.content[0].text);
+  assert.deepEqual(catalog.map((item) => item.rate), [50, 100]);
+  const invalidOutput = await runServerCall("preflight_controlled_experiment", {
+    scenarioId: "hold-churn-50", batchId: "../outside", composeProject: "ticketon-controlled172"
+  });
+  const invalidResponse = invalidOutput.split("\n").filter(Boolean).map((line) => JSON.parse(line)).find((line) => line.id === 3);
+  assert.equal(invalidResponse.result.isError, true);
 });
 
 test("stdio MCP 호출에서도 실제 통제 배치의 비교 판정을 반환한다", async () => {
