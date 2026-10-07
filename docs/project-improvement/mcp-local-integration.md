@@ -24,6 +24,7 @@ codex mcp list
 2. `get_run_summary`로 목표 RPS·k6 결과·Hikari·MariaDB 관측 요약을 읽는다.
 3. `verify_domain_invariants`로 `ValidMeasurement`, k6 종료, 최종 snapshot, 예상/실제 좌석 수를 확인한다.
 4. 통제된 인기 좌석 배치라면 `compare_controlled_hotspot_runs`로 두 summary의 조건·manifest 멤버십을 검사한 후 관측 차이를 읽는다.
+5. Hold→Release 지속 경합 배치라면 `assess_seat_hold_churn_batch`로 6개 summary의 조건·상태 수렴을 함께 검사한다. [판정 계약과 한계](mcp-seat-hold-churn-assessment.md)
 
 질문의 예: “`i132-repeat-01`의 각 summary를 비교하기 전에 실행 목록과 r1의 도메인 불변식 결과를 보여줘. 결과는 로컬 fixture 근거로만 해석해.”
 
