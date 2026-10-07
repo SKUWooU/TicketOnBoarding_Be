@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInvariantReport, EvidenceError, EvidenceRepository } from "../dist/evidence.js";
 import { compareControlledHotspotEvidence } from "../dist/comparison.js";
+import { assessSeatHoldChurnBatch } from "../dist/seatHoldChurn.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repository = new EvidenceRepository({ resultsRoot: path.join(here, "fixtures") });
@@ -201,7 +202,7 @@ test("MCP 비교도 임의 경로와 허용 밖 artifact를 읽지 않는다", a
     (error) => error instanceof EvidenceError && error.code === "UNSUPPORTED_ARTIFACT");
 });
 
-test("stdio 초기화는 읽기 전용 분석 지침과 네 도구를 광고한다", async () => {
+test("stdio 초기화는 읽기 전용 분석 지침과 기존 도구를 광고한다", async () => {
   const output = await runServerHandshake();
   assert.match(output, /가상 좌석 고경합 fixture/);
   assert.match(output, /"name":"list_evidence_runs"/);
@@ -223,6 +224,109 @@ test("stdio MCP 호출에서도 실제 통제 배치의 비교 판정을 반환�
   assert.equal(report.comparisonType, "SAME_CONDITION_REPEAT");
   assert.equal(report.observations.length, 2);
 });
+
+test("실측 Hold→Release 50/100 RPS 배치를 각각 검증하고 결과별 관측값만 반환한다", async () => {
+  for (const [id, rate] of [["churn172a", 50], ["churn172b", 100]]) {
+    const report = await measuredRepository.assessSeatHoldChurn(id);
+    assert.equal(report.status, "COMPARABLE");
+    assert.equal(report.controlledConditions.ratePerSecond, rate);
+    assert.deepEqual(report.observations.map((item) => item.hotSeatCount), [20, 40, 200, 200, 40, 20]);
+    assert.ok(report.observations.every((item) => item.holdSuccess === item.releaseSuccess));
+    assert.match(report.limitations.join(" "), /개선 효과로 판단하지/);
+  }
+});
+
+test("Hold 배치의 manifest·전이·최종 점유·dropped·RPS 혼합 위조는 fail-closed 처리한다", async () => {
+  const { manifest, summaries } = await seatHoldChurnFixture("churn172a");
+  const missing = structuredClone(manifest);
+  missing.Records[1].SummaryFile = "unlisted-summary.json";
+  assert.equal(assessSeatHoldChurnBatch("churn172a", missing, summaries).status, "INSUFFICIENT_EVIDENCE");
+  const reversed = structuredClone(manifest);
+  reversed.Records.reverse();
+  assert.equal(assessSeatHoldChurnBatch("churn172a", reversed, summaries).status, "INSUFFICIENT_EVIDENCE");
+  const badRelease = structuredClone(summaries);
+  badRelease[0].DomainMetrics.Released -= 1;
+  assert.equal(assessSeatHoldChurnBatch("churn172a", manifest, badRelease).status, "NOT_COMPARABLE");
+  const held = structuredClone(summaries);
+  held[0].K6.FinalSnapshot.activeHeldSeats = 1;
+  assert.equal(assessSeatHoldChurnBatch("churn172a", manifest, held).status, "NOT_COMPARABLE");
+  const dropped = structuredClone(summaries);
+  dropped[0].K6.Result.DroppedIterations = 1;
+  assert.equal(assessSeatHoldChurnBatch("churn172a", manifest, dropped).status, "NOT_COMPARABLE");
+  const mixed = structuredClone(summaries);
+  mixed[0].Run.RatePerSecond = 100;
+  mixed[0].K6.Result.TargetRatePerSecond = 100;
+  assert.equal(assessSeatHoldChurnBatch("churn172a", manifest, mixed).status, "NOT_COMPARABLE");
+});
+
+test("Hold 배치 MCP는 경로 이탈을 거부하고 stdio에서도 read-only 판정을 제공한다", async () => {
+  await assert.rejects(() => measuredRepository.assessSeatHoldChurn("../churn172a"),
+    (error) => error instanceof EvidenceError && error.code === "INVALID_RUN_ID");
+  const listing = await runServerHandshake();
+  const toolList = listing.split("\n").filter(Boolean).map((line) => JSON.parse(line)).find((line) => line.id === 2);
+  const tool = toolList.result.tools.find((item) => item.name === "assess_seat_hold_churn_batch");
+  assert.equal(tool.annotations.readOnlyHint, true);
+  assert.equal(tool.annotations.openWorldHint, false);
+  const output = await runServerCall("assess_seat_hold_churn_batch", { batchId: "churn172a" });
+  const response = output.split("\n").filter(Boolean).map((line) => JSON.parse(line)).find((line) => line.id === 3);
+  const report = JSON.parse(response.result.content[0].text);
+  assert.equal(report.status, "COMPARABLE");
+  assert.equal(report.observations.length, 6);
+});
+
+test("Hold 배치 summary가 없으면 비교 수치 없이 근거 부족을 반환한다", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketon-hold-mcp-"));
+  try {
+    const folder = path.join(root, "churn172a");
+    await mkdir(folder);
+    await writeFile(path.join(folder, "controlled-seat-hold-churn-manifest.json"),
+      await readFile(path.join(measuredRoot, "churn172a", "controlled-seat-hold-churn-manifest.json")));
+    const isolated = new EvidenceRepository({ resultsRoot: root });
+    const report = await isolated.assessSeatHoldChurn("churn172a");
+    assert.equal(report.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in report, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("손상된 Hold manifest·summary도 관측값을 반환하지 않는다", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketon-hold-mcp-malformed-"));
+  try {
+    const id = "churn172a";
+    const folder = path.join(root, id);
+    await mkdir(folder);
+    const manifestFile = "controlled-seat-hold-churn-manifest.json";
+    await writeFile(path.join(folder, manifestFile), "{invalid");
+    const isolated = new EvidenceRepository({ resultsRoot: root });
+    const invalidManifest = await isolated.assessSeatHoldChurn(id);
+    assert.equal(invalidManifest.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in invalidManifest, false);
+
+    await writeFile(path.join(folder, manifestFile), await readFile(path.join(measuredRoot, id, manifestFile)));
+    const filenames = [20, 40, 200, 200, 40, 20].map((hotSeatCount, index) =>
+      `${id}-r${index < 3 ? 1 : 2}-h${hotSeatCount}-summary.json`);
+    for (const filename of filenames) {
+      await writeFile(path.join(folder, filename), await readFile(path.join(measuredRoot, id, filename)));
+    }
+    await writeFile(path.join(folder, filenames[0]), "{invalid");
+    const invalidSummary = await isolated.assessSeatHoldChurn(id);
+    assert.equal(invalidSummary.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in invalidSummary, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function seatHoldChurnFixture(id) {
+  const folder = path.join(measuredRoot, id);
+  const filenames = [20, 40, 200, 200, 40, 20].map((hotSeatCount, index) =>
+    `${id}-r${index < 3 ? 1 : 2}-h${hotSeatCount}-summary.json`);
+  const [manifest, ...summaries] = await Promise.all([
+    "controlled-seat-hold-churn-manifest.json", ...filenames
+  ].map(async (name) => JSON.parse((await readFile(path.join(folder, name), "utf8")).replace(/^\uFEFF/, ""))));
+  return { manifest, summaries };
+}
 
 async function controlledFixture() {
   const folder = path.join(measuredRoot, batchId);

@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue #172: 인기 좌석 Hold→Release 50/100 RPS 각 6회 실측·결과별 지표·근거 문서 완료. PR·CI·Reviewer 검토 대기. [Issue #172](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/172)
+- Backend Issue #174: #172의 12개 Hold→Release 실측을 read-only MCP에서 배치 단위로 검증하고 동일 RPS 내 관측값만 제공. [Issue #174](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/174)
 
 ## 완료
+
+### Backend Issue #172 — 인기 좌석 Hold·Release 지속 경합 검증
+
+- PR [#173](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/173) / squash `02ddbe6`: 전용 로컬 2,000석 fixture에서 50/100 RPS·20/40/200석 조건 각 6회 실측. Hold=Release와 최종 HELD=0, dropped·예상 밖 오류·deadlock 0을 확인했다. Backend CI·Reviewer 통과; 운영 성능 주장은 제외한다. [상세 근거](docs/project-improvement/weighted-seat-hold-churn-evidence.md)
 
 ### Backend Issue #170 — 인기 좌석 집중도별 Hold 경합 검증
 

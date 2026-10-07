@@ -11,7 +11,7 @@ const repository = new EvidenceRepository({ resultsRoot: defaultResultsRoot });
 const server = new McpServer(
   { name: "ticketon-evidence-mcp", version: "0.1.0" },
   {
-    instructions: "로컬 가상 좌석 고경합 fixture의 summary만 조회합니다. 목록→요약→불변식 순서로 확인하고, PASS를 운영 성능이나 실제 공연장 보증으로 해석하지 마세요."
+    instructions: "로컬 가상 좌석 고경합 fixture의 허용된 summary·manifest만 조회합니다. 목록→요약→불변식 또는 통제 배치 판정 순서로 확인하고, PASS를 운영 성능이나 실제 공연장 보증으로 해석하지 마세요."
   }
 );
 
@@ -41,6 +41,12 @@ server.tool("compare_controlled_hotspot_runs", "같은 가상 좌석 배치의 �
   secondArtifact: z.string()
 }, { readOnlyHint: true, openWorldHint: false }, async ({ batchId, firstArtifact, secondArtifact }) => withEvidenceError(async () => {
   return success(await repository.compareControlledHotspot(batchId, firstArtifact, secondArtifact));
+}));
+
+server.tool("assess_seat_hold_churn_batch", "인기 좌석 Hold→Release 6-run 배치의 manifest·상태 불변식·측정 조건을 검증합니다. 같은 RPS 배치의 관측값만 제공하며 개선 효과는 판정하지 않습니다.", {
+  batchId: z.string()
+}, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () => {
+  return success(await repository.assessSeatHoldChurn(batchId));
 }));
 
 await server.connect(new StdioServerTransport());
