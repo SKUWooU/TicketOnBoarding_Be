@@ -37,6 +37,8 @@ Issue #170의 Hold-only 경로는 좌석이 HELD가 된 후 같은 좌석의 후
 
 ## 재현과 공개 근거
 
+PR #173 리뷰에서 전용 DB가 비어 있다는 검사만으로는 Backend가 그 DB를 바라본다고 보장할 수 없다는 점을 확인했다. 후속 수정으로 runner는 **첫 fixture POST 전** 전용 MariaDB와 `loadtest` 프로필 Backend가 읽기 전용으로 계산한 DB fingerprint를 비교하며, 불일치·API 부재·조회 실패 시 쓰지 않고 중단한다. 위 12회 수치는 이 가드를 추가하기 전에 환경 변수와 연결 포트를 수동 확인하며 수집한 결과로, 새 가드가 측정 수치를 개선했다는 의미는 아니다.
+
 `load-test/results/churn172a`와 `churn172b`에 공개용 manifest·summary만 추적한다. stdout·stderr·CSV와 JWT는 공개 근거에서 제외한다. 새 배치를 실행하려면 빈 전용 DB·새 Compose 프로젝트·새 batch ID가 필요하며 기존 결과를 덮어쓰거나 볼륨을 삭제하지 않는다. runner는 loopback, 프로젝트 label, Flyway 이외 애플리케이션 테이블의 빈 상태, RPS≤100·10초 이하를 확인한다.
 
 ```powershell

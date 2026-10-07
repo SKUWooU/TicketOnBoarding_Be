@@ -16,6 +16,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $compose = Join-Path $root 'compose.yml'
 $measure = Join-Path $PSScriptRoot 'Measure-SeatHoldContention.ps1'
 Import-Module (Join-Path $PSScriptRoot 'ControlledHotspot.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'SeatHoldContention.psm1') -Force
 if ($BaseUrl -ne 'http://127.0.0.1:18080' -or $ManagementBaseUrl -ne 'http://127.0.0.1:18081') {
     throw 'Controlled load must target only the fixed local loopback endpoints.'
 }
@@ -40,6 +41,15 @@ if ($LASTEXITCODE -ne 0 -or $rowCounts.Count -ne $emptyTables.Count -or
     @($rowCounts | Where-Object { $_.Trim() -ne '0' }).Count -ne 0) {
     throw 'The dedicated database must have no application data before this batch; no cleanup is performed.'
 }
+$databaseFingerprint = [string](& docker compose -p $ComposeProject -f $compose exec -T mariadb `
+    mariadb -uroot -ponticket-root -N -B onticket_local `
+    -e "SELECT SHA2(CONCAT(@@hostname, ':', DATABASE()), 256);" 2>&1)
+if ($LASTEXITCODE -ne 0 -or $databaseFingerprint.Trim() -cnotmatch '^[0-9a-f]{64}$') {
+    throw 'Could not identify the dedicated MariaDB instance.'
+}
+$backendIdentity = Invoke-RestMethod -Method Get -Uri "$BaseUrl/loadtest/database-identity" -TimeoutSec 10
+Assert-SeatHoldDedicatedDatabaseIdentity -DedicatedFingerprint $databaseFingerprint.Trim() `
+    -BackendFingerprint ([string]$backendIdentity.fingerprint) | Out-Null
 
 $output = Join-Path $root "load-test\results\$BatchId"
 if (Test-Path -LiteralPath $output) { throw "Refusing to overwrite an existing batch: $output" }

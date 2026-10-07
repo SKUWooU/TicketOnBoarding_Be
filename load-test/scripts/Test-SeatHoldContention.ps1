@@ -273,4 +273,10 @@ Assert-Issue65Equal $issue65Aggregate[0].HoldP95Ms.Minimum 20 'aggregate minimum
 Assert-Issue65Equal $issue65Aggregate[0].HoldP95Ms.Maximum 40 'aggregate maximum'
 Assert-Issue65Equal $issue65Aggregate[0].DbDeadlocksDelta.Median 0 'aggregate deadlocks'
 
+$issue172Fingerprint = 'a' * 64
+Assert-Issue65Equal (Assert-SeatHoldDedicatedDatabaseIdentity $issue172Fingerprint $issue172Fingerprint) $true 'matching dedicated DB'
+Assert-Issue65Throws { Assert-SeatHoldDedicatedDatabaseIdentity $issue172Fingerprint ('b' * 64) } 'wrong Backend DB'
+Assert-Issue65Throws { Assert-SeatHoldDedicatedDatabaseIdentity $issue172Fingerprint '' } 'missing Backend identity'
+Assert-Issue65Throws { Assert-SeatHoldDedicatedDatabaseIdentity 'invalid' $issue172Fingerprint } 'invalid dedicated identity'
+
 Write-Output "SEAT_HOLD_CONTENTION_TESTS_PASSED assertions=$issue65Assertions"

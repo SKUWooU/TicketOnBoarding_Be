@@ -563,6 +563,16 @@ function New-SeatHoldBaselineAggregate {
     @($issue65Aggregates.ToArray() | Sort-Object -Property Scenario, Rate)
 }
 
+function Assert-SeatHoldDedicatedDatabaseIdentity {
+    param([string]$DedicatedFingerprint, [string]$BackendFingerprint)
+    if ($DedicatedFingerprint -cnotmatch '^[0-9a-f]{64}$' -or
+        $BackendFingerprint -cnotmatch '^[0-9a-f]{64}$' -or
+        $DedicatedFingerprint -cne $BackendFingerprint) {
+        throw 'Backend datasource does not match the dedicated MariaDB instance; refusing to create fixture data.'
+    }
+    $true
+}
+
 Export-ModuleMember -Function @(
     'ConvertFrom-SeatHoldK6Result',
     'ConvertFrom-SeatHoldFinalSnapshot',
@@ -574,5 +584,6 @@ Export-ModuleMember -Function @(
     'Assert-SeatHoldDomainScenarioGate',
     'New-SeatHoldBaselinePlan',
     'Get-SeatHoldBaselineStopReasons',
-    'New-SeatHoldBaselineAggregate'
+    'New-SeatHoldBaselineAggregate',
+    'Assert-SeatHoldDedicatedDatabaseIdentity'
 )
