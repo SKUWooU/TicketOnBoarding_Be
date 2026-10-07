@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue #178: #176의 MCP `-CheckOnly`를 전용 로컬 DB·Backend에서 통합 검증하고 거부 경로를 기록. 부하 실행·fixture POST 제외. [Issue #178](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/178)
+- 없음.
 
 ## 완료
+
+### Backend Issue #178 — MCP 로컬 사전 점검 통합 검증
+
+- PR [#179](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/179): 관리자 자동 생성으로 신규 DB 사전 점검이 실패하던 경로를 `!loadtest`로 수정. 실제 stdio MCP `READY`·3개 거부 조건과 쓰기 부재를 확인했다. 부하 실행은 제외. [상세 근거](docs/project-improvement/mcp-preflight-integration.md)
 
 ### Backend Issue #176 — MCP 통제 실험 카탈로그와 로컬 사전 점검
 
