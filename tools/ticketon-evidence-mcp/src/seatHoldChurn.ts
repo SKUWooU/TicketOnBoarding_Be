@@ -7,6 +7,10 @@ export const SEAT_HOLD_CHURN_LIMITATIONS = [
   "각 조건은 2회이고 별도 배치의 cache·호스트 부하와 warm-up이 통제되지 않아 p95 차이를 개선 효과로 판단하지 않습니다."
 ];
 
+export function insufficientSeatHoldChurnEvidence(reason: string) {
+  return verdict("INSUFFICIENT_EVIDENCE", [reason]);
+}
+
 export function assessSeatHoldChurnBatch(batchId: string, manifestValue: unknown, summaryValues: unknown[]) {
   const missing: string[] = [];
   const invalid: string[] = [];

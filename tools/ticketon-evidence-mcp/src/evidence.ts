@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { compareControlledHotspotEvidence } from "./comparison.js";
-import { assessSeatHoldChurnBatch, SEAT_HOLD_CHURN_LIMITATIONS } from "./seatHoldChurn.js";
+import { assessSeatHoldChurnBatch, insufficientSeatHoldChurnEvidence } from "./seatHoldChurn.js";
 
 const RUN_ID = /^[A-Za-z0-9-]{1,64}$/;
 const SUMMARY_FILE = /^[A-Za-z0-9-]+-summary\.json$/;
@@ -127,7 +127,7 @@ export class EvidenceRepository {
       manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, ""));
     } catch (error) {
       if (error instanceof EvidenceError) throw error;
-      throw new EvidenceError("ARTIFACT_NOT_FOUND", "허용된 Hold 경합 manifest를 읽을 수 없습니다.");
+      return insufficientSeatHoldChurnEvidence("허용된 Hold 경합 manifest를 읽거나 해석할 수 없습니다.");
     }
     const filenames = [20, 40, 200, 200, 40, 20].map((hotSeatCount, index) =>
       `${batchId}-r${index < 3 ? 1 : 2}-h${hotSeatCount}-summary.json`);
@@ -136,9 +136,9 @@ export class EvidenceRepository {
       try {
         summaries.push((await this.readSummary(batchId, filename)).summary);
       } catch (error) {
-        if (error instanceof EvidenceError && error.code === "UNSUPPORTED_ARTIFACT") {
-          return { status: "INSUFFICIENT_EVIDENCE", reasons: [`${filename}: 허용된 summary가 없습니다.`],
-            limitations: SEAT_HOLD_CHURN_LIMITATIONS };
+        if (error instanceof EvidenceError &&
+            (error.code === "UNSUPPORTED_ARTIFACT" || error.code === "MALFORMED_ARTIFACT")) {
+          return insufficientSeatHoldChurnEvidence(`${filename}: 허용된 summary를 읽거나 해석할 수 없습니다.`);
         }
         throw error;
       }

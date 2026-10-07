@@ -290,6 +290,34 @@ test("Hold 배치 summary가 없으면 비교 수치 없이 근거 부족을 반
   }
 });
 
+test("손상된 Hold manifest·summary도 관측값을 반환하지 않는다", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketon-hold-mcp-malformed-"));
+  try {
+    const id = "churn172a";
+    const folder = path.join(root, id);
+    await mkdir(folder);
+    const manifestFile = "controlled-seat-hold-churn-manifest.json";
+    await writeFile(path.join(folder, manifestFile), "{invalid");
+    const isolated = new EvidenceRepository({ resultsRoot: root });
+    const invalidManifest = await isolated.assessSeatHoldChurn(id);
+    assert.equal(invalidManifest.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in invalidManifest, false);
+
+    await writeFile(path.join(folder, manifestFile), await readFile(path.join(measuredRoot, id, manifestFile)));
+    const filenames = [20, 40, 200, 200, 40, 20].map((hotSeatCount, index) =>
+      `${id}-r${index < 3 ? 1 : 2}-h${hotSeatCount}-summary.json`);
+    for (const filename of filenames) {
+      await writeFile(path.join(folder, filename), await readFile(path.join(measuredRoot, id, filename)));
+    }
+    await writeFile(path.join(folder, filenames[0]), "{invalid");
+    const invalidSummary = await isolated.assessSeatHoldChurn(id);
+    assert.equal(invalidSummary.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in invalidSummary, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function seatHoldChurnFixture(id) {
   const folder = path.join(measuredRoot, id);
   const filenames = [20, 40, 200, 200, 40, 20].map((hotSeatCount, index) =>
