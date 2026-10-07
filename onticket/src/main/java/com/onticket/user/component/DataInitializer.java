@@ -5,12 +5,14 @@ import com.onticket.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 
 @RequiredArgsConstructor
 @Component
+@Profile("!loadtest")
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;

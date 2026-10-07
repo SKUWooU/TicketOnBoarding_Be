@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue #176: 고정된 Hold→Release 실험 카탈로그와 쓰기 없는 로컬 사전 점검을 MCP에 추가. 부하 실행 권한은 제외. [Issue #176](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/176)
+- Backend Issue #178: #176의 MCP `-CheckOnly`를 전용 로컬 DB·Backend에서 통합 검증하고 거부 경로를 기록. 부하 실행·fixture POST 제외. [Issue #178](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/178)
 
 ## 완료
+
+### Backend Issue #176 — MCP 통제 실험 카탈로그와 로컬 사전 점검
+
+- PR [#177](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/177) / squash `3ad685c`: 고정 50/100 RPS 카탈로그와 쓰기 없는 `-CheckOnly`를 추가했다. MCP 29건·Backend CI·Reviewer 통과; 실제 전용 DB `READY/NOT_READY`는 #178에서 검증한다.
 
 ### Backend Issue #174 — MCP Hold·Release 배치 근거 판정
 
