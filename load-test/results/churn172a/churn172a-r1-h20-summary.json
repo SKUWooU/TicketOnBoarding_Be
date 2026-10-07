@@ -1,0 +1,149 @@
+﻿{
+    "SchemaVersion":  1,
+    "ValidMeasurement":  true,
+    "Run":  {
+                "Id":  "churn172a-r1-h20",
+                "FixtureRunId":  "churn172a-fixture",
+                "Scenario":  "weighted-hotspot-churn",
+                "RatePerSecond":  50,
+                "DurationSeconds":  10,
+                "SampleIntervalMilliseconds":  1000,
+                "WeightedHotspot":  {
+                                        "HotSeatCount":  20,
+                                        "HotRequestPercent":  70,
+                                        "Seed":  17
+                                    },
+                "HoldDwellMilliseconds":  100,
+                "StartedAtUtc":  "2026-10-06T14:13:02.5188262Z",
+                "EndedAtUtc":  "2026-10-06T14:13:17.8041153Z"
+            },
+    "FixturePreparation":  {
+                               "StartedAtUtc":  "2026-10-06T14:12:58.6676803Z",
+                               "DurationMilliseconds":  3808,
+                               "ExcludedFromMetricSamples":  true,
+                               "ReusedAndReset":  true,
+                               "TotalSeats":  2000
+                           },
+    "K6":  {
+               "ExitCode":  0,
+               "StateInvariantSatisfied":  true,
+               "Result":  {
+                              "Scenario":  "weighted-hotspot-churn",
+                              "TargetRatePerSecond":  50,
+                              "DurationSeconds":  10,
+                              "ThresholdsEnforced":  false,
+                              "Iterations":  501,
+                              "DroppedIterations":  0,
+                              "ScheduledIterationAttainmentRate":  1,
+                              "CompletedIterationsPerScheduledSecond":  50.1,
+                              "HoldSuccess":  440,
+                              "ReleaseSuccess":  440,
+                              "ExpectedContention":  61,
+                              "UnexpectedNonSuccessful":  0,
+                              "UnexpectedRelease":  0,
+                              "UnexpectedFailureRate":  0,
+                              "HoldDurationMs":  {
+                                                     "Average":  25.954059680638721,
+                                                     "Median":  20.8076,
+                                                     "P95":  49.3442,
+                                                     "Maximum":  203.8526
+                                                 },
+                              "HoldSuccessDurationMs":  {
+                                                            "Average":  25.92495886363637,
+                                                            "Median":  21.03985,
+                                                            "P95":  49.348675,
+                                                            "Maximum":  170.3156
+                                                        },
+                              "HoldSeatConflictDurationMs":  {
+                                                                 "Average":  26.16396721311477,
+                                                                 "Median":  19.159,
+                                                                 "P95":  42.8815,
+                                                                 "Maximum":  203.8526
+                                                             },
+                              "HoldDwellMilliseconds":  100,
+                              "CycleDurationMs":  {
+                                                      "Average":  140.37325349301398,
+                                                      "Median":  145,
+                                                      "P95":  196,
+                                                      "Maximum":  343
+                                                  },
+                              "MaxObservedVus":  12,
+                              "MaxAllocatedVus":  200,
+                              "PreAllocatedVus":  200,
+                              "ConfiguredMaxVus":  200,
+                              "WeightedHotspot":  {
+                                                      "HotSeatCount":  20,
+                                                      "HotRequestPercent":  70,
+                                                      "Seed":  17,
+                                                      "HotSelections":  355,
+                                                      "ColdSelections":  146
+                                                  }
+                          },
+               "FinalSnapshot":  {
+                                     "expectedTotalSeats":  2000,
+                                     "actualSeatCount":  2000,
+                                     "remainingSeats":  2000,
+                                     "reservedSeats":  0,
+                                     "activeHeldSeats":  0,
+                                     "holdRows":  0,
+                                     "partialHoldStates":  0,
+                                     "reservations":  0,
+                                     "bookings":  0,
+                                     "payments":  0,
+                                     "invariantSatisfied":  true
+                                 },
+               "StdoutFile":  "churn172a-r1-h20-k6.stdout.log",
+               "StderrFile":  "churn172a-r1-h20-k6.stderr.log"
+           },
+    "Metrics":  {
+                    "SampleCount":  12,
+                    "Sampling":  {
+                                     "MinimumIntervalMs":  748,
+                                     "AverageIntervalMs":  1246.5454545454545,
+                                     "MaximumIntervalMs":  1925
+                                 },
+                    "Peaks":  {
+                                  "HikariActive":  2,
+                                  "HikariPending":  0,
+                                  "HikariIdle":  24,
+                                  "HikariMax":  24,
+                                  "ProcessCpuUsage":  0.28080034610042703,
+                                  "SystemCpuUsage":  0.93173037114845836,
+                                  "HeapUsedBytes":  234339784,
+                                  "JvmThreadsLive":  41,
+                                  "DbRowLockCurrentWaits":  0,
+                                  "DbThreadsConnected":  25,
+                                  "DbThreadsRunning":  3
+                              },
+                    "Deltas":  {
+                                   "DbRowLockWaits":  15,
+                                   "DbRowLockTimeMs":  112,
+                                   "DbDeadlocks":  0,
+                                   "JvmGcPauseSeconds":  0.028000000000000004,
+                                   "JvmGcPauseCount":  6
+                               },
+                    "MariaDbContainer":  null,
+                    "ObserverEffects":  {
+                                            "DbCliConnectionIncludedInThreadGauges":  true,
+                                            "ConnectionsCounterExcluded":  true,
+                                            "ComposeHealthcheckMayOpenConnections":  true,
+                                            "DockerStatsCollected":  false
+                                        }
+                },
+    "DomainMetrics":  {
+                          "HoldSuccess":  440,
+                          "HoldConflict":  61,
+                          "HoldInvalid":  0,
+                          "HoldError":  0,
+                          "HoldAcquired":  440,
+                          "HoldReused":  0,
+                          "HoldReclaimed":  0,
+                          "ReleaseSuccess":  440,
+                          "ReleaseConflict":  0,
+                          "ReleaseInvalid":  0,
+                          "ReleaseError":  0,
+                          "Released":  440,
+                          "ExpiredCleared":  0
+                      },
+    "SamplesFile":  "churn172a-r1-h20-metrics.csv"
+}

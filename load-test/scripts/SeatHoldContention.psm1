@@ -41,6 +41,20 @@ function ConvertFrom-SeatHoldK6Result {
     if ([int]$issue65Result.schemaVersion -ne 1) {
         throw "Unsupported structured seat-hold result schema: $($issue65Result.schemaVersion)"
     }
+    if ([string]$issue65Result.scenario -eq 'weighted-hotspot-churn') {
+        foreach ($name in @('holdDwellMilliseconds', 'holdSuccessDurationMs', 'holdSeatConflictDurationMs')) {
+            if ($name -notin $issue65Result.PSObject.Properties.Name) {
+                throw "Weighted churn result is missing: $name"
+            }
+        }
+        foreach ($name in @('holdSuccessDurationMs', 'holdSeatConflictDurationMs')) {
+            foreach ($durationProperty in @('average', 'median', 'p95', 'maximum')) {
+                if ($durationProperty -notin $issue65Result.$name.PSObject.Properties.Name) {
+                    throw "Weighted churn duration is missing: $name.$durationProperty"
+                }
+            }
+        }
+    }
     $issue65Result
 }
 
@@ -120,7 +134,7 @@ function New-SeatHoldRunSummary {
         throw 'Structured seat-hold counters do not match completed iterations.'
     }
     $issue170Weighted = $null
-    if ([string]$Result.scenario -eq 'weighted-hotspot') {
+    if ([string]$Result.scenario -in @('weighted-hotspot', 'weighted-hotspot-churn')) {
         $issue170Weighted = $Result.weightedHotspot
         if ($null -eq $issue170Weighted -or
             [int]$issue170Weighted.hotSeatCount -lt 1 -or [int]$issue170Weighted.hotSeatCount -gt 2000 -or
@@ -130,12 +144,18 @@ function New-SeatHoldRunSummary {
             throw 'Weighted seat-hold selections must cover every completed iteration.'
         }
     }
-    $issue65ChurnScenario = [string]$Result.scenario -in @('distributed-churn', 'hot-seat-churn')
+    $issue65ChurnScenario = [string]$Result.scenario -in @('distributed-churn', 'hot-seat-churn', 'weighted-hotspot-churn')
     if ($issue65ChurnScenario -and $issue65Success -ne ($issue65ReleaseSuccess + $issue65UnexpectedRelease)) {
         throw 'Churn seat-hold successes must have exactly one release result.'
     }
     if (-not $issue65ChurnScenario -and ($issue65ReleaseSuccess -ne 0 -or $issue65UnexpectedRelease -ne 0)) {
         throw 'Non-churn seat-hold scenarios must not report release results.'
+    }
+    if ([string]$Result.scenario -eq 'weighted-hotspot-churn' -and
+        ([long]$Result.holdDwellMilliseconds -lt 0 -or [long]$Result.holdDwellMilliseconds -gt 1000 -or
+         [double]$Result.holdSuccessDurationMs.p95 -le 0 -or
+         ($issue65Contention -gt 0 -and [double]$Result.holdSeatConflictDurationMs.p95 -le 0))) {
+        throw 'Weighted churn dwell or outcome-specific duration is invalid.'
     }
     $issue65Scheduled = $issue65Iterations + $issue65Dropped
     [pscustomobject]@{
@@ -159,6 +179,19 @@ function New-SeatHoldRunSummary {
             P95 = [double]$Result.holdDurationMs.p95
             Maximum = [double]$Result.holdDurationMs.maximum
         }
+        HoldSuccessDurationMs = if ([string]$Result.scenario -eq 'weighted-hotspot-churn') { [pscustomobject]@{
+            Average = [double]$Result.holdSuccessDurationMs.average
+            Median = [double]$Result.holdSuccessDurationMs.median
+            P95 = [double]$Result.holdSuccessDurationMs.p95
+            Maximum = [double]$Result.holdSuccessDurationMs.maximum
+        } } else { $null }
+        HoldSeatConflictDurationMs = if ([string]$Result.scenario -eq 'weighted-hotspot-churn') { [pscustomobject]@{
+            Average = [double]$Result.holdSeatConflictDurationMs.average
+            Median = [double]$Result.holdSeatConflictDurationMs.median
+            P95 = [double]$Result.holdSeatConflictDurationMs.p95
+            Maximum = [double]$Result.holdSeatConflictDurationMs.maximum
+        } } else { $null }
+        HoldDwellMilliseconds = if ([string]$Result.scenario -eq 'weighted-hotspot-churn') { [int]$Result.holdDwellMilliseconds } else { 0 }
         CycleDurationMs = [pscustomobject]@{
             Average = [double]$Result.cycleDurationMs.average
             Median = [double]$Result.cycleDurationMs.median
@@ -213,6 +246,7 @@ function Assert-SeatHoldFinalState {
             }
             [long]$Snapshot.activeHeldSeats
         }
+        'weighted-hotspot-churn' { 0 }
         'distributed-churn' { 0 }
         'hot-seat-churn' { 0 }
         default { throw "Unsupported seat-hold scenario: $($Summary.Scenario)" }
@@ -387,7 +421,7 @@ function Assert-SeatHoldDomainMetricDelta {
     if ($issue91CommittedTransitions -ne [long]$issue91Delta.HoldSuccess) {
         throw "Committed hold transitions do not match successful one-seat requests: transitions=$issue91CommittedTransitions success=$($issue91Delta.HoldSuccess)"
     }
-    if ([string]$K6Summary.Scenario -in @('distributed-churn', 'hot-seat-churn')) {
+    if ([string]$K6Summary.Scenario -in @('distributed-churn', 'hot-seat-churn', 'weighted-hotspot-churn')) {
         if ([long]$issue91Delta.ReleaseSuccess -ne [long]$K6Summary.ReleaseSuccess -or
             [long]$issue91Delta.ReleaseInvalid -ne 0 -or
             [long]$issue91Delta.ReleaseConflict -ne 0 -or
@@ -469,6 +503,17 @@ function Assert-SeatHoldDomainScenarioGate {
                 throw 'Hot-seat churn must release every acquired hold before the final snapshot.'
             }
         }
+        'weighted-hotspot-churn' {
+            if ([long]$Snapshot.activeHeldSeats -ne 0 -or
+                [long]$Snapshot.holdRows -ne 0 -or
+                [long]$DomainMetricDelta.HoldAcquired -ne $issue106Success -or
+                [long]$DomainMetricDelta.HoldReused -ne 0 -or
+                [long]$DomainMetricDelta.HoldReclaimed -ne 0 -or
+                [long]$DomainMetricDelta.Released -ne $issue106Success -or
+                [long]$DomainMetricDelta.ReleaseSuccess -ne $issue106Success) {
+                throw 'Weighted churn must acquire and release each successful hold before the final snapshot.'
+            }
+        }
         default { throw "Unsupported seat-hold scenario: $($K6Summary.Scenario)" }
     }
 
@@ -518,6 +563,16 @@ function New-SeatHoldBaselineAggregate {
     @($issue65Aggregates.ToArray() | Sort-Object -Property Scenario, Rate)
 }
 
+function Assert-SeatHoldDedicatedDatabaseIdentity {
+    param([string]$DedicatedFingerprint, [string]$BackendFingerprint)
+    if ($DedicatedFingerprint -cnotmatch '^[0-9a-f]{64}$' -or
+        $BackendFingerprint -cnotmatch '^[0-9a-f]{64}$' -or
+        $DedicatedFingerprint -cne $BackendFingerprint) {
+        throw 'Backend datasource does not match the dedicated MariaDB instance; refusing to create fixture data.'
+    }
+    $true
+}
+
 Export-ModuleMember -Function @(
     'ConvertFrom-SeatHoldK6Result',
     'ConvertFrom-SeatHoldFinalSnapshot',
@@ -529,5 +584,6 @@ Export-ModuleMember -Function @(
     'Assert-SeatHoldDomainScenarioGate',
     'New-SeatHoldBaselinePlan',
     'Get-SeatHoldBaselineStopReasons',
-    'New-SeatHoldBaselineAggregate'
+    'New-SeatHoldBaselineAggregate',
+    'Assert-SeatHoldDedicatedDatabaseIdentity'
 )

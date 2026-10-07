@@ -61,6 +61,15 @@ function New-Issue65ResultText {
         preAllocatedVus = 250
         configuredMaxVus = 250
     }
+    if ($Scenario -eq 'weighted-hotspot-churn') {
+        $issue65Result.holdDwellMilliseconds = 100
+        $issue65Result.holdSuccessDurationMs = [ordered]@{ average = 10; median = 9; p95 = 20; maximum = 30 }
+        $issue65Result.holdSeatConflictDurationMs = [ordered]@{ average = 8; median = 7; p95 = 15; maximum = 25 }
+        $issue65Result.weightedHotspot = [ordered]@{
+            hotSeatCount = 20; hotRequestPercent = 70; seed = 17
+            hotSelections = 70; coldSelections = 30
+        }
+    }
     'SEAT_HOLD_RESULT ' + ($issue65Result | ConvertTo-Json -Compress -Depth 4)
 }
 
@@ -196,6 +205,20 @@ $issue110HotChurnRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText
 $issue110HotChurnSummary = New-SeatHoldRunSummary -Result $issue110HotChurnRaw -DurationSeconds 10
 $issue110HotChurnSnapshot = ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 0)
 Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue110HotChurnSummary -Snapshot $issue110HotChurnSnapshot) 'hot-seat churn accepts expected conflicts and leaves no holds'
+$issue172WeightedChurnRaw = ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario weighted-hotspot-churn -Success 40 -ReleaseSuccess 40 -Contention 60)
+$issue172WeightedChurnSummary = New-SeatHoldRunSummary -Result $issue172WeightedChurnRaw -DurationSeconds 10
+Assert-Issue65Equal $issue172WeightedChurnSummary.HoldSuccessDurationMs.P95 20 'weighted churn success p95'
+Assert-Issue65Equal $issue172WeightedChurnSummary.HoldSeatConflictDurationMs.P95 15 'weighted churn conflict p95'
+Assert-Issue65Equal $issue172WeightedChurnSummary.HoldDwellMilliseconds 100 'weighted churn dwell'
+Assert-Issue65True (Assert-SeatHoldFinalState -Summary $issue172WeightedChurnSummary -Snapshot $issue110HotChurnSnapshot) 'weighted churn leaves no holds'
+Assert-Issue65Throws {
+    New-SeatHoldRunSummary -Result (ConvertFrom-SeatHoldK6Result -Text (New-Issue65ResultText -Scenario weighted-hotspot-churn -Success 40 -ReleaseSuccess 39 -Contention 60)) -DurationSeconds 10
+} 'weighted churn release mismatch'
+Assert-Issue65Throws {
+    $bad = $issue172WeightedChurnRaw.PSObject.Copy()
+    $bad.holdSeatConflictDurationMs = [pscustomobject]@{ average = 0; median = 0; p95 = 0; maximum = 0 }
+    New-SeatHoldRunSummary -Result $bad -DurationSeconds 10
+} 'weighted churn missing conflict latency'
 
 $issue106DistributedDomain = [pscustomobject]@{ HoldSuccess = 100; HoldConflict = 0; HoldInvalid = 0; HoldError = 0; HoldAcquired = 100; HoldReused = 0; HoldReclaimed = 0 }
 Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue65Summary -Snapshot $issue65Snapshot -DomainMetricDelta $issue106DistributedDomain) 'distributed domain scenario gate'
@@ -213,6 +236,10 @@ $issue110ChurnDomain = [pscustomobject]@{ HoldSuccess = 100; HoldConflict = 0; H
 Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue110ChurnSummary -Snapshot $issue110ChurnSnapshot -DomainMetricDelta $issue110ChurnDomain) 'distributed churn domain scenario gate'
 $issue110HotChurnDomain = [pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 0; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0; ReleaseSuccess = 40; ReleaseConflict = 0; ReleaseInvalid = 0; ReleaseError = 0; Released = 40; ExpiredCleared = 0 }
 Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue110HotChurnSummary -Snapshot $issue110HotChurnSnapshot -DomainMetricDelta $issue110HotChurnDomain) 'hot-seat churn domain scenario gate'
+Assert-Issue65True (Assert-SeatHoldDomainScenarioGate -K6Summary $issue172WeightedChurnSummary -Snapshot $issue110HotChurnSnapshot -DomainMetricDelta $issue110HotChurnDomain) 'weighted churn domain scenario gate'
+Assert-Issue65Throws {
+    Assert-SeatHoldDomainScenarioGate -K6Summary $issue172WeightedChurnSummary -Snapshot $issue110HotChurnSnapshot -DomainMetricDelta ([pscustomobject]@{ HoldSuccess = 40; HoldConflict = 60; HoldInvalid = 0; HoldError = 0; HoldAcquired = 40; HoldReused = 0; HoldReclaimed = 0; ReleaseSuccess = 39; ReleaseConflict = 0; ReleaseInvalid = 0; ReleaseError = 0; Released = 39; ExpiredCleared = 0 })
+} 'weighted churn release transition mismatch'
 Assert-Issue65Throws { Assert-SeatHoldFinalState -Summary $issue65Summary -Snapshot (ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 99)) } 'distributed persistence mismatch'
 Assert-Issue65Throws { Assert-SeatHoldFinalState -Summary $issue65Summary -Snapshot (ConvertFrom-SeatHoldFinalSnapshot -Text (New-Issue65SnapshotText -Held 100 -Invariant $false)) } 'false invariant'
 
@@ -245,5 +272,11 @@ Assert-Issue65Equal $issue65Aggregate[0].HoldP95Ms.Median 30 'aggregate median'
 Assert-Issue65Equal $issue65Aggregate[0].HoldP95Ms.Minimum 20 'aggregate minimum'
 Assert-Issue65Equal $issue65Aggregate[0].HoldP95Ms.Maximum 40 'aggregate maximum'
 Assert-Issue65Equal $issue65Aggregate[0].DbDeadlocksDelta.Median 0 'aggregate deadlocks'
+
+$issue172Fingerprint = 'a' * 64
+Assert-Issue65Equal (Assert-SeatHoldDedicatedDatabaseIdentity $issue172Fingerprint $issue172Fingerprint) $true 'matching dedicated DB'
+Assert-Issue65Throws { Assert-SeatHoldDedicatedDatabaseIdentity $issue172Fingerprint ('b' * 64) } 'wrong Backend DB'
+Assert-Issue65Throws { Assert-SeatHoldDedicatedDatabaseIdentity $issue172Fingerprint '' } 'missing Backend identity'
+Assert-Issue65Throws { Assert-SeatHoldDedicatedDatabaseIdentity 'invalid' $issue172Fingerprint } 'invalid dedicated identity'
 
 Write-Output "SEAT_HOLD_CONTENTION_TESTS_PASSED assertions=$issue65Assertions"
