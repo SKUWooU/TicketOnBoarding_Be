@@ -7,7 +7,8 @@ param(
     [ValidateRange(0, 1000)][int]$HoldDwellMilliseconds = 100,
     [ValidatePattern('^ticketon-controlled172(-[a-z0-9]{1,12})?$')][string]$ComposeProject = 'ticketon-controlled172',
     [string]$BaseUrl = 'http://127.0.0.1:18080',
-    [string]$ManagementBaseUrl = 'http://127.0.0.1:18081'
+    [string]$ManagementBaseUrl = 'http://127.0.0.1:18081',
+    [switch]$CheckOnly
 )
 
 Set-StrictMode -Version Latest
@@ -53,8 +54,24 @@ Assert-SeatHoldDedicatedDatabaseIdentity -DedicatedFingerprint $databaseFingerpr
 
 $output = Join-Path $root "load-test\results\$BatchId"
 if (Test-Path -LiteralPath $output) { throw "Refusing to overwrite an existing batch: $output" }
-New-Item -ItemType Directory -Path $output | Out-Null
 $plan = @(New-ControlledHotspotPlan -Repeats $Repeats -DurationSeconds $DurationSeconds -Rate $Rate)
+if ($CheckOnly) {
+    [ordered]@{
+        Status = 'READY'
+        Scenario = 'weighted-hotspot-churn'
+        BatchId = $BatchId
+        ComposeProject = $ComposeProject
+        Rate = $Rate
+        DurationSeconds = $DurationSeconds
+        Repeats = $Repeats
+        HoldDwellMilliseconds = $HoldDwellMilliseconds
+        PlannedRuns = @($plan | ForEach-Object { "$BatchId-r$($_.Repeat)-h$($_.HotSeatCount)" })
+        Checks = @('loopback', 'dedicated_compose_label', 'empty_application_tables',
+            'backend_database_identity', 'bounded_load', 'unused_result_path')
+    } | ConvertTo-Json -Depth 4 -Compress
+    return
+}
+New-Item -ItemType Directory -Path $output | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
 $manifest = Join-Path $output 'controlled-seat-hold-churn-manifest.json'
 $fixtureRunId = "$BatchId-fixture"

@@ -58,4 +58,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File load-test/scripts/Run-Co
   -BatchId churn172c -ComposeProject ticketon-controlled172-r2 -Rate 50 -Repeats 2 -DurationSeconds 10
 ```
 
-현재 MCP는 이 summary를 단일 조회·기본 불변식 검증할 수 있지만, Hold 전용 배치의 manifest 멤버십·점유 해제·결과별 latency 비교 판정은 아직 제공하지 않는다. 다음 Issue의 MCP 검증 계약은 이 12개 공개 summary를 입력으로 삼되, k6 실행 권한은 별도 판단 전까지 추가하지 않는다.
+#174에서 MCP의 `assess_seat_hold_churn_batch`가 이 12개 공개 summary의 manifest 멤버십·점유 해제·측정 조건을 검증하고 동일 RPS 내 관측값만 제공하도록 추가했다. #176에서는 다음 실험의 사전 점검을 추가하지만, k6 실행 권한은 여전히 제공하지 않는다.

@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue #174: #172의 12개 Hold→Release 실측을 read-only MCP에서 배치 단위로 검증하고 동일 RPS 내 관측값만 제공. [Issue #174](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/174)
+- Backend Issue #176: 고정된 Hold→Release 실험 카탈로그와 쓰기 없는 로컬 사전 점검을 MCP에 추가. 부하 실행 권한은 제외. [Issue #176](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/176)
 
 ## 완료
+
+### Backend Issue #174 — MCP Hold·Release 배치 근거 판정
+
+- PR [#175](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/175) / squash `5699687`: 12개 실측 summary의 manifest·상태 불변식·측정 조건을 read-only MCP에서 배치 단위로 검증. 동일 RPS의 관측값만 제공하고 개선 효과·운영 성능 판정은 제외했다. Backend CI·Reviewer 통과. [상세 근거](docs/project-improvement/mcp-seat-hold-churn-assessment.md)
 
 ### Backend Issue #172 — 인기 좌석 Hold·Release 지속 경합 검증
 

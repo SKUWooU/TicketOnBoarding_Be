@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { createInvariantReport, EvidenceError, EvidenceRepository } from "./evidence.js";
+import { preflightScenario, scenarios } from "./preflight.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultResultsRoot = path.resolve(here, "../../../load-test/results");
@@ -48,6 +49,16 @@ server.tool("assess_seat_hold_churn_batch", "인기 좌석 Hold→Release 6-run 
 }, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () => {
   return success(await repository.assessSeatHoldChurn(batchId));
 }));
+
+server.tool("list_controlled_experiments", "실행 권한 없이 고정된 로컬 Hold→Release 실험 조건만 조회합니다.", {},
+  { readOnlyHint: true, openWorldHint: false }, async () => success(scenarios));
+
+server.tool("preflight_controlled_experiment", "고정 실험의 전용 로컬 DB·Backend 연결·빈 테이블·결과 경로를 읽기 전용으로 점검합니다. 부하·fixture는 실행하지 않습니다.", {
+  scenarioId: z.enum(["hold-churn-50", "hold-churn-100"]),
+  batchId: z.string().regex(/^[A-Za-z0-9-]{1,16}$/),
+  composeProject: z.string().regex(/^ticketon-controlled172(-[a-z0-9]{1,12})?$/)
+}, { readOnlyHint: true, openWorldHint: false }, async ({ scenarioId, batchId, composeProject }) =>
+  success(await preflightScenario(scenarioId, batchId, composeProject)));
 
 await server.connect(new StdioServerTransport());
 
