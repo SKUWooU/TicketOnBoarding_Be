@@ -35,6 +35,11 @@ public class LoadTestController {
         return fixtureService.initialize(runId);
     }
 
+    @GetMapping("/fixture-config")
+    public LoadTestFixtureService.FixtureDimensions fixtureConfig() {
+        return fixtureService.dimensions();
+    }
+
     @GetMapping("/fixture")
     public LoadTestFixtureService.FixtureMetadata fixture(@RequestParam String runId) {
         return fixtureService.metadata(runId);

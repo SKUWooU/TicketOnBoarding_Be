@@ -40,6 +40,18 @@ class LoadTestControllerTest {
     }
 
     @Test
+    void exposesConfiguredFixtureDimensionsBeforeCreation() throws Exception {
+        when(fixtureService.dimensions())
+                .thenReturn(new LoadTestFixtureService.FixtureDimensions(2, 10, 20));
+
+        mockMvc.perform(get("/loadtest/fixture-config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rows").value(2))
+                .andExpect(jsonPath("$.seatsPerRow").value(10))
+                .andExpect(jsonPath("$.totalSeats").value(20));
+    }
+
+    @Test
     void createsFixtureUsersBeforeIssuingTokens() throws Exception {
         JwtUtil jwtUtil = mock(JwtUtil.class);
         fixtureService = mock(LoadTestFixtureService.class);

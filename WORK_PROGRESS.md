@@ -17,6 +17,10 @@
 
 ## 완료
 
+### Backend Issue #180 — 소규모 좌석 fixture 준비 검증
+
+- PR [#181](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/181): 전용 빈 DB 사전 점검 뒤 20석 fixture 한 번만 생성. 공연·회차 각 1, 예약·결제·Hold 0과 재실행 거부를 확인했다. k6·MCP 쓰기 권한 제외. [상세 근거](docs/project-improvement/controlled-small-fixture-evidence.md)
+
 ### Backend Issue #178 — MCP 로컬 사전 점검 통합 검증
 
 - PR [#179](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/179): 관리자 자동 생성으로 신규 DB 사전 점검이 실패하던 경로를 `!loadtest`로 수정. 실제 stdio MCP `READY`·3개 거부 조건과 쓰기 부재를 확인했다. 부하 실행은 제외. [상세 근거](docs/project-improvement/mcp-preflight-integration.md)
