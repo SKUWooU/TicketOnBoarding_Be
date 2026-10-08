@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue [#182](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/182) / [PR #183](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/183): 20석 fixture 저강도 Hold→Release 실측 완료. CI·Reviewer 검증 중.
+- Backend Issue [#184](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/184): 20석 fixture의 인기 좌석 Hold 경합을 고정 조건·단계별 RPS로 로컬 검증 중.
 
 ## 완료
+
+### Backend Issue #182 — 20석 fixture 저강도 Hold→Release smoke
+
+- PR [#183](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/183) / squash `55e8e2e`: 5 RPS×10초에 Hold=Release=51, 누락·예상 밖 실패·deadlock·종료 HELD 0. 409 미발생으로 고경합 성능 해석 제외. [상세 근거](docs/project-improvement/controlled-small-seat-hold-smoke.md)
 
 ### Backend Issue #180 — 소규모 좌석 fixture 준비 검증
 
