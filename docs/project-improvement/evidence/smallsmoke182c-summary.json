@@ -1,0 +1,20 @@
+{
+  "SchemaVersion": 1,
+  "Status": "PASS",
+  "Scope": "local virtual 20-seat fixture smoke; not production performance",
+  "RunId": "smallsmoke182c",
+  "ComposeProject": "ticketon-controlled172-r7",
+  "Rate": 5,
+  "DurationSeconds": 10,
+  "HotSeatCount": 5,
+  "Iterations": 51,
+  "HoldSuccess": 51,
+  "ReleaseSuccess": 51,
+  "ExpectedContention": 0,
+  "DroppedIterations": 0,
+  "UnexpectedFailures": 0,
+  "FinalActiveHolds": 0,
+  "FinalHoldRows": 0,
+  "InvariantSatisfied": true,
+  "DbDeadlocksDelta": 0
+}

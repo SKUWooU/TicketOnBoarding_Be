@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue [#182](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/182) / [PR #183](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/183): 20석 fixture 저강도 Hold→Release 실측 완료. CI·Reviewer 검증 중.
 
 ## 완료
 
