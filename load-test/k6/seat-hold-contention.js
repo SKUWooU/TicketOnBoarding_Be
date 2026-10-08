@@ -4,6 +4,7 @@ import { check } from 'k6';
 import { sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import { createWeightedSeatPlan, selectWeightedSeat } from './weighted-seat-selection.mjs';
+import { expectedFixtureSeatCount } from './fixture-seat-count.mjs';
 
 const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:18080';
 const TEST_SCENARIO = __ENV.TEST_SCENARIO || 'distributed';
@@ -13,6 +14,7 @@ const PRE_ALLOCATED_VUS = Number(__ENV.PRE_ALLOCATED_VUS || 20);
 const MAX_VUS = Number(__ENV.MAX_VUS || 100);
 const TOKEN_COUNT = Number(__ENV.TOKEN_COUNT || 500);
 const FIXTURE_RUN_ID = (__ENV.FIXTURE_RUN_ID || '').trim();
+const EXPECTED_TOTAL_SEATS = expectedFixtureSeatCount(__ENV.EXPECTED_TOTAL_SEATS);
 const ENFORCE_THRESHOLDS = (__ENV.ENFORCE_THRESHOLDS || 'true').toLowerCase() === 'true';
 const HOLD_DWELL_MS = TEST_SCENARIO === 'weighted-hotspot-churn'
   ? integerSetting('HOLD_DWELL_MS', 100) : 0;
@@ -21,7 +23,7 @@ if (HOLD_DWELL_MS < 0 || HOLD_DWELL_MS > 1000) {
 }
 const weightedPlan = (TEST_SCENARIO === 'weighted-hotspot' || TEST_SCENARIO === 'weighted-hotspot-churn')
   ? createWeightedSeatPlan(
-      2000,
+      EXPECTED_TOTAL_SEATS,
       integerSetting('HOT_SEAT_COUNT', 40),
       integerSetting('HOT_REQUEST_PERCENT', 70),
       integerSetting('SELECTION_SEED', 1),
@@ -106,8 +108,8 @@ export function setup() {
 
   const fixture = fixtureResponse.json();
   const tokens = tokenResponse.json();
-  if (fixture.totalSeats !== 2000 || tokens.length === 0) {
-    throw new Error('Expected the default 2,000-seat fixture and at least one loadtest token.');
+  if (fixture.totalSeats !== EXPECTED_TOTAL_SEATS || tokens.length === 0) {
+    throw new Error(`Expected exactly ${EXPECTED_TOTAL_SEATS} fixture seats and at least one loadtest token.`);
   }
   if (weightedPlan && fixture.totalSeats !== weightedPlan.totalSeats) {
     throw new Error('Weighted seat plan does not match the fixture seat count.');
