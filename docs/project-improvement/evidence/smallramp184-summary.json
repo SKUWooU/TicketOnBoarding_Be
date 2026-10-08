@@ -1,0 +1,63 @@
+{
+  "SchemaVersion": 1,
+  "Scope": "local virtual 20-seat fixture; not production performance",
+  "RunId": "smallramp184",
+  "ComposeProject": "ticketon-controlled172-r8",
+  "Complete": true,
+  "FixedHotSeatCount": 1,
+  "FixedHoldDwellMilliseconds": 500,
+  "FixedHotRequestPercent": 70,
+  "Records": [
+    {
+      "TargetRps": 5,
+      "DurationSeconds": 10,
+      "HotSeatCount": 1,
+      "HoldDwellMilliseconds": 500,
+      "Iterations": 50,
+      "HoldSuccess": 29,
+      "ReleaseSuccess": 29,
+      "ExpectedSeatConflicts": 21,
+      "DroppedIterations": 0,
+      "UnexpectedFailures": 0,
+      "HoldSuccessP95Ms": 33.399219999999985,
+      "SeatConflictP95Ms": 28.5016,
+      "FinalHoldRows": 0,
+      "DatabaseCounts": [20, 0, 0, 20, 0],
+      "DbDeadlocksDelta": 0
+    },
+    {
+      "TargetRps": 10,
+      "DurationSeconds": 10,
+      "HotSeatCount": 1,
+      "HoldDwellMilliseconds": 500,
+      "Iterations": 101,
+      "HoldSuccess": 47,
+      "ReleaseSuccess": 47,
+      "ExpectedSeatConflicts": 54,
+      "DroppedIterations": 0,
+      "UnexpectedFailures": 0,
+      "HoldSuccessP95Ms": 26.45225,
+      "SeatConflictP95Ms": 24.880874999999989,
+      "FinalHoldRows": 0,
+      "DatabaseCounts": [20, 0, 0, 20, 0],
+      "DbDeadlocksDelta": 0
+    },
+    {
+      "TargetRps": 20,
+      "DurationSeconds": 10,
+      "HotSeatCount": 1,
+      "HoldDwellMilliseconds": 500,
+      "Iterations": 200,
+      "HoldSuccess": 74,
+      "ReleaseSuccess": 74,
+      "ExpectedSeatConflicts": 126,
+      "DroppedIterations": 0,
+      "UnexpectedFailures": 0,
+      "HoldSuccessP95Ms": 27.144674999999971,
+      "SeatConflictP95Ms": 20.337225,
+      "FinalHoldRows": 0,
+      "DatabaseCounts": [20, 0, 0, 20, 0],
+      "DbDeadlocksDelta": 0
+    }
+  ]
+}

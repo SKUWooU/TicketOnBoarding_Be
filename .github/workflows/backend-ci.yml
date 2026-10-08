@@ -45,6 +45,7 @@ jobs:
           ./load-test/scripts/Test-SeatIndexContentionComparison.ps1
           ./load-test/scripts/Test-SeatHoldContention.ps1
           ./load-test/scripts/Test-ControlledSmallFixture.ps1
+          ./load-test/scripts/Test-ControlledSmallSeatHoldRamp.ps1
 
       - name: Set up Node.js for workload contract
         uses: actions/setup-node@v4
