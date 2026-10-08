@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- 없음.
+- Backend Issue #180: 전용 빈 DB 사전 점검 뒤 가상 20석 fixture 한 번만 생성·검증하는 로컬 쓰기 경로. k6·MCP 실행 권한 제외. [Issue #180](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/180)
 
 ## 완료
 

@@ -310,6 +310,10 @@ public class LoadTestFixtureService {
         return Math.multiplyExact(rows, seatsPerRow);
     }
 
+    public FixtureDimensions dimensions() {
+        return new FixtureDimensions(rows, seatsPerRow, totalSeats());
+    }
+
     private static String concertId(String runId) {
         return CONCERT_ID_PREFIX + validateRunId(runId);
     }
@@ -333,6 +337,9 @@ public class LoadTestFixtureService {
             int seatsPerRow,
             int totalSeats
     ) {
+    }
+
+    public record FixtureDimensions(int rows, int seatsPerRow, int totalSeats) {
     }
 
     public record InventorySnapshot(
