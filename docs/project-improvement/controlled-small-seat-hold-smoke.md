@@ -9,7 +9,7 @@ Issue #182는 #180에서 **생성만 확인한** 20석 가상 좌석이 실제 H
 - Windows 로컬, Java 21, Spring Boot `local,loadtest`, MariaDB 10.11.8, k6. 새 Compose 프로젝트 `ticketon-controlled172-r7`의 빈 볼륨, DB 127.0.0.1:3309, Backend 127.0.0.1:18080/18081을 사용했다.
 - `ONTICKET_LOADTEST_ROWS=2`, `ONTICKET_LOADTEST_SEATS_PER_ROW=10`, 배치 자동 실행 비활성. 실 KOPIS·PG·SMS 자격 정보와 호출은 사용하지 않았다.
 - `Run-ControlledSmallSeatHoldSmoke.ps1 -RunId smallsmoke182c -ComposeProject ticketon-controlled172-r7`은 #176의 전용 DB·빈 테이블·Backend fingerprint·loopback·새 결과 경로 사전 점검을 재사용한다. #180 runner로 fixture를 만든 뒤 k6 `weighted-hotspot-churn`을 고정 5 RPS×10초·인기 5/20석·선택 비율 70%·Hold 100ms·20개 가상 사용자 토큰으로 실행한다. 각 성공 Hold는 동일 사용자가 Release한다.
-- 성공은 k6 완료 수·dropped·예상 밖 상태·Hold=Release, teardown/API의 최종 Hold=0·잔여 20·예약/결제 0·재고 불변식, MariaDB deadlock 전후 차이 0을 모두 만족할 때만 기록한다. 결과 JSON은 git 제외된 `load-test/results/smallsmoke182c/smoke-summary.json`에 생성한다. 실패 시 DB와 결과 경로를 삭제·재사용하지 않는다.
+- 성공은 k6 완료 수·dropped·예상 밖 상태·Hold=Release, teardown/API의 최종 Hold=0·잔여 20·예약/결제 0·재고 불변식, MariaDB deadlock 전후 차이 0을 모두 만족할 때만 기록한다. 결과 JSON은 git 제외된 `load-test/results/smallsmoke182c/smoke-summary.json`에 생성하며, 민감 정보 없는 [r7 요약본](evidence/smallsmoke182c-summary.json)을 저장소에도 보관한다. 최종 좌석·예약 수는 API snapshot으로 확인했고, DB에서 독립 조회한 항목은 deadlock 카운터다. 실패 시 DB와 결과 경로를 삭제·재사용하지 않는다.
 
 ## 관측 결과와 실패 이력
 
