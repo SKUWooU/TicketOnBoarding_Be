@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- Backend Issue [#184](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/184): 20석 fixture의 인기 좌석 Hold 경합을 고정 조건·단계별 RPS로 로컬 검증 중.
+- Backend Issue [#184](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/184) / [PR #185](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/185): 20석 fixture의 인기 좌석 Hold 경합 실측 완료. CI·Reviewer 검증 중.
 
 ## 완료
 
