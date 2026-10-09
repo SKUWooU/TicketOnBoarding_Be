@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- Backend Issue [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) / [PR #187](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/187): 20석 Hold 경합 9회 실측·근거 보관 완료. CI·별도 Reviewer 검증 중.
+- Backend Issue [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) / [PR #187](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/187): 20석 Hold 경합 9회 실측·근거 보관 완료. Hikari 관측 누락 Blocking 수정 후 CI·Reviewer 재검토 중.
 
 ## 완료
 

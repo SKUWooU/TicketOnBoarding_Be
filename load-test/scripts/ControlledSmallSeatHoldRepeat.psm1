@@ -40,6 +40,9 @@ function New-ControlledSmallSeatHoldWaitSummary {
     $first = $Samples[0]
     $last = $Samples[$Samples.Count - 1]
     $acquireCount = [long]$last.HikariAcquireCount - [long]$first.HikariAcquireCount
+    if ($acquireCount -le 0) {
+        throw 'Hikari acquire counter did not advance during the measured Hold run.'
+    }
     $acquireWaitMs = ([double]$last.HikariAcquireSeconds - [double]$first.HikariAcquireSeconds) * 1000
     [pscustomobject]@{
         SampleCount = $Samples.Count
@@ -48,7 +51,7 @@ function New-ControlledSmallSeatHoldWaitSummary {
         HikariActivePeak = [double](($Samples | Measure-Object -Property HikariActive -Maximum).Maximum)
         HikariMax = [double]$first.HikariMax
         HikariAcquireCount = $acquireCount
-        HikariAcquireWaitAverageMs = if ($acquireCount -eq 0) { 0.0 } else { $acquireWaitMs / $acquireCount }
+        HikariAcquireWaitAverageMs = $acquireWaitMs / $acquireCount
         HikariTimeoutDelta = [long]$last.HikariTimeoutCount - [long]$first.HikariTimeoutCount
         DbRowLockCurrentWaitsPeak = [long](($Samples | Measure-Object -Property DbRowLockCurrentWaits -Maximum).Maximum)
         DbRowLockWaitsDelta = [long]$last.DbRowLockWaits - [long]$first.DbRowLockWaits

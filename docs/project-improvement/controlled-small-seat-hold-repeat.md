@@ -16,7 +16,7 @@
 
 각 run의 k6 완료 수를 성공 Hold와 예상 409로 분리하고, 성공 Hold=Release, dropped·예상 밖 HTTP/해제 오류 0을 요구했다. k6 teardown과 별도 API snapshot, MariaDB SQL을 교차 확인했다. 독립 SQL 배열 `20,0,0,20,0`은 좌석 총수·Hold 컬럼 존재 행·예약 완료 좌석·잔여 수량·Reservation 수를 뜻한다.
 
-Actuator Prometheus에서 Hikari active/pending/max와 connection acquire count·누적 시간·timeout을 읽었다. 전용 DB의 loopback 포트에서 MariaDB `Innodb_row_lock_current_waits`, 누적 wait/time, deadlock을 읽었다. 샘플을 약 1초 간격으로 수집했으며, run당 12~13개·최대 간격 1,393ms였다. 표본 5개 미만, 간격 3초 초과, 누적 counter 감소, deadlock·Hikari timeout은 실패 처리했다. gauge peak는 **표본에서 관측한 최대값**일 뿐 순간 최대의 완전한 포착을 보장하지 않는다. MariaDB global counter는 DB 전체 수치로 특정 좌석 SQL의 원인을 단정할 수 없다.
+Actuator Prometheus에서 Hikari active/pending/max와 connection acquire count·누적 시간·timeout을 읽었다. 전용 DB의 loopback 포트에서 MariaDB `Innodb_row_lock_current_waits`, 누적 wait/time, deadlock을 읽었다. 샘플을 약 1초 간격으로 수집했으며, run당 12~13개·최대 간격 1,393ms였다. 표본 5개 미만, 간격 3초 초과, 누적 counter 감소, **Hikari acquire 증가 0건**, deadlock·Hikari timeout은 실패 처리했다. 실제 9회 acquire 증가는 run당 83~279건이었다. gauge peak는 **표본에서 관측한 최대값**일 뿐 순간 최대의 완전한 포착을 보장하지 않는다. MariaDB global counter는 DB 전체 수치로 특정 좌석 SQL의 원인을 단정할 수 없다.
 
 ## r12 결과
 

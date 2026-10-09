@@ -50,5 +50,7 @@ $bad = @($samples | ForEach-Object { $_.PSObject.Copy() }); $bad[4].DbRowLockWai
 Assert-Throws { New-ControlledSmallSeatHoldWaitSummary $bad }
 $bad = @($samples | ForEach-Object { $_.PSObject.Copy() }); $bad[4].HikariAcquireCount = 0
 Assert-Throws { New-ControlledSmallSeatHoldWaitSummary $bad }
+$bad = @($samples | ForEach-Object { $_.PSObject.Copy() }); foreach ($sample in $bad) { $sample.HikariAcquireCount = 0 }
+Assert-Throws { New-ControlledSmallSeatHoldWaitSummary $bad }
 
 Write-Output "CONTROLLED_SMALL_SEAT_HOLD_REPEAT_TESTS_PASSED assertions=$assertions"
