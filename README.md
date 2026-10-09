@@ -16,9 +16,9 @@ KOPIS 공연 데이터를 바탕으로 공연·회차·가상 좌석을 구성�
 ## 프로젝트 문서
 
 - [개선 문서 인덱스](docs/project-improvement/README.md)
-- [현재 기준선](docs/project-improvement/PROJECT_BASELINE.md)
+- [탑다운 학습 가이드](docs/project-improvement/STUDY_GUIDE.md)
 - [개선 BACKLOG](BACKLOG.md)
 - [작업 절차](WORKFLOW.md)
 - [작업 진행 기록](WORK_PROGRESS.md)
 
-상세 근거·학습 기록·ADR은 [개선 문서 인덱스](docs/project-improvement/README.md)에서 찾을 수 있습니다. 전체 애플리케이션 실행 제약과 외부 연동 주의사항은 [현재 기준선](docs/project-improvement/PROJECT_BASELINE.md)에서 확인합니다.
+실험 조건·수치·한계는 [실험 요약](docs/project-improvement/EXPERIMENTS.md), 기술 판단과 원자료 진입점은 [개선 문서 인덱스](docs/project-improvement/README.md)에서 찾을 수 있습니다.

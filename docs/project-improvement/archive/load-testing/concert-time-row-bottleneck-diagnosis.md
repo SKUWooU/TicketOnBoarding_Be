@@ -159,4 +159,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 - [좌석 복합 인덱스와 deadlock 비교 기준선](../foundations/seat-composite-index-deadlock-comparison.md)
 - [좌석 복합 unique index migration 안전성 기준선](../foundations/seat-unique-index-migration-baseline.md)
 - [개선 근거 연결표](../../EVIDENCE_MAP.md)
-- [학습·개선 여정](../../LEARNING_JOURNEY.md)
+- [현재 학습 가이드](../../STUDY_GUIDE.md)

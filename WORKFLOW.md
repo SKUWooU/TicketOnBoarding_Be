@@ -29,7 +29,7 @@
 - Issue·PR 본문은 Markdown 파일로 작성하고 `--body-file`로 전달합니다.
 - Issue 하나의 결과는 최종적으로 squash commit 하나로 정리합니다.
 - Issue·PR 본문은 목적, 범위, 작은 작업 항목, 완료 기준, 테스트와 참고 링크만 간결하게 기록합니다.
-- 상세한 전후 코드, 측정 조건, 결과와 한계는 `docs/project-improvement`에 기록하고 Issue·PR에서는 해당 문서를 연결합니다.
+- 상세한 전후 코드와 측정 조건은 Issue·PR 및 추적된 실험 JSON에 기록하고, 재사용할 결론만 `docs/project-improvement`의 주제별 요약에 반영합니다. Issue마다 별도 Markdown 파일을 만들지 않습니다.
 - Reviewer에게 전달할 검토 요청 문구와 확인 항목은 PR 본문에 복제하지 않습니다. Reviewer의 최종 판단만 PR comment로 남깁니다.
 - Issue 범위를 바꿀 때에는 먼저 Issue body-file을 고치고 GitHub 본문을 갱신합니다.
 - Backend와 Frontend는 각각 독립된 Issue·Branch·PR을 사용하고 관련 작업을 상호 링크합니다.

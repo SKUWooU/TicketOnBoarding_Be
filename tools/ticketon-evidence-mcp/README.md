@@ -38,4 +38,4 @@ codex mcp add ticketonEvidence -- node D:\project2\TicketOnBoarding_Be\tools\tic
 codex mcp list
 ```
 
-등록 후 새 Codex 로컬 세션에서 측정 결과 조회와 고정 실험의 사전 점검을 사용할 수 있습니다. 사전 점검은 Windows PowerShell, 별도 빈 MariaDB, 그 DB를 바라보는 `loadtest` Backend와 18080 loopback 연결이 준비된 경우에만 `READY`를 반환합니다. 실패 원인의 원시 stderr·DB 연결 정보는 MCP에 반환하지 않습니다. `READY`는 **실행 승인이나 성능 보증이 아닙니다**. 부하 실행·DB 변경·외부 API 호출 도구는 제공하지 않습니다. 전체 등록·해석 계약은 [고경합 측정 근거 MCP 로컬 연동](../../docs/project-improvement/mcp-local-integration.md)을 확인합니다.
+등록 후 새 Codex 로컬 세션에서 측정 결과 조회와 고정 실험의 사전 점검을 사용할 수 있습니다. 사전 점검은 Windows PowerShell, 별도 빈 MariaDB, 그 DB를 바라보는 `loadtest` Backend와 18080 loopback 연결이 준비된 경우에만 `READY`를 반환합니다. 실패 원인의 원시 stderr·DB 연결 정보는 MCP에 반환하지 않습니다. `READY`는 **실행 승인이나 성능 보증이 아닙니다**. 부하 실행·DB 변경·외부 API 호출 도구는 제공하지 않습니다. 결과 해석 범위와 한계는 [실험 요약](../../docs/project-improvement/EXPERIMENTS.md)을 확인합니다.
