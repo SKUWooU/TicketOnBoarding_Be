@@ -1,0 +1,16 @@
+﻿{
+    "SchemaVersion":  4,
+    "Scope":  "local virtual 20-seat fixture; not production performance",
+    "RunId":  "repeat196a",
+    "ComposeProject":  "ticketon-controlled172-r14",
+    "Complete":  false,
+    "Repeats":  3,
+    "Probe30":  false,
+    "Repeat30":  true,
+    "FixedHotSeatCount":  1,
+    "FixedHoldDwellMilliseconds":  500,
+    "FixedHotRequestPercent":  70,
+    "Records":  [
+
+                ]
+}

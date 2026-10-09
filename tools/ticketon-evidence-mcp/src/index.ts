@@ -72,6 +72,11 @@ server.tool("assess_small_seat_probe", "가상 20석 20→30 RPS 단일 탐색�
 }, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () =>
   success(await repository.assessSmallSeatProbe(batchId))));
 
+server.tool("assess_small_seat_repeat_30", "가상 20석 20/30 RPS 6단계 반복의 재고·자원 게이트를 검증합니다. 호스트 CPU 관측이 높으면 증량 전 원인 확인을 요구하며 부하는 실행하지 않습니다.", {
+  batchId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
+}, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () =>
+  success(await repository.assessSmallSeatRepeat30(batchId))));
+
 await server.connect(new StdioServerTransport());
 
 function success(payload: unknown) {

@@ -10,6 +10,7 @@ import { compareControlledHotspotEvidence } from "../dist/comparison.js";
 import { assessSeatHoldChurnBatch } from "../dist/seatHoldChurn.js";
 import { assessSmallSeatHold } from "../dist/smallSeatHold.js";
 import { assessSmallSeatProbe } from "../dist/smallSeatProbe.js";
+import { assessSmallSeatRepeat30 } from "../dist/smallSeatRepeat30.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repository = new EvidenceRepository({ resultsRoot: path.join(here, "fixtures") });
@@ -429,6 +430,59 @@ test("stdio MCP가 20→30 판정 도구를 read-only로 노출한다", async ()
   const output = await runServerCall("assess_small_seat_probe", { batchId: "probe190a" });
   const response = output.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 3);
   assert.equal(JSON.parse(response.result.content[0].text).status, "REPEAT_REQUIRED");
+});
+
+test("20/30 RPS 6단계 실측은 재고를 지켜도 높은 호스트 CPU의 원인 확인을 요구한다", async () => {
+  const report = await measuredRepository.assessSmallSeatRepeat30("repeat196b");
+  assert.equal(report.status, "RESOURCE_REVIEW_REQUIRED");
+  assert.equal(report.nextAction, "VERIFY_CPU_SOURCE_BEFORE_HIGHER_RATE");
+  assert.deepEqual(report.observations.map((item) => item.ratePerSecond), [20, 30, 30, 20, 20, 30]);
+  assert.equal(report.observations.reduce((sum, item) => sum + item.completed, 0), 1506);
+  assert.equal(report.observations.reduce((sum, item) => sum + item.holdAndRelease, 0), 516);
+  assert.equal(report.observations.reduce((sum, item) => sum + item.expectedSeatConflicts, 0), 990);
+  assert.ok(report.observations.every((item) => item.hikariPendingPeak === 0));
+  assert.match(report.limitations.join(" "), /does not attribute/);
+});
+
+test("20/30 반복의 불완전·변조·포화 근거는 관측값 없이 차단한다", async () => {
+  const original = JSON.parse((await readFile(path.join(measuredRoot, "repeat196b", "small-seat-hold-ramp.json"), "utf8")).replace(/^\uFEFF/, ""));
+  const cases = [
+    [(data) => { data.Complete = false; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records.pop(); }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records.reverse(); }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { delete data.Records[1].HostMetrics; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { delete data.Records[1].WaitMetrics.DbRowLockTimeMsDelta; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].HostMetrics.HostCpuPeakPercent = 101; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].HostMetrics.SampleCount -= 1; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].DatabaseCounts[1] = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].DroppedIterations = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].WaitMetrics.HikariPendingPeak = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].HostMetrics.HostFreeMemoryMinimumKb = 2000000; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].WaitMetrics.MaxSampleGapMs = 4000; }, "STOP_ESCALATION"]
+  ];
+  for (const [mutate, expected] of cases) {
+    const altered = structuredClone(original);
+    mutate(altered);
+    const report = assessSmallSeatRepeat30("repeat196b", altered);
+    assert.equal(report.status, expected);
+    assert.equal("observations" in report, false);
+  }
+  const noPeak = structuredClone(original);
+  for (const item of noPeak.Records) item.HostMetrics.HostCpuPeakPercent = 60;
+  assert.equal(assessSmallSeatRepeat30("repeat196b", noPeak).status, "REPEATED_OBSERVATION");
+});
+
+test("20/30 반복 MCP는 경로 이탈을 차단하고 stdio read-only 판정을 노출한다", async () => {
+  await assert.rejects(() => measuredRepository.assessSmallSeatRepeat30("../repeat196b"),
+    (error) => error instanceof EvidenceError && error.code === "INVALID_RUN_ID");
+  const listing = await runServerHandshake();
+  const list = listing.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 2);
+  const tool = list.result.tools.find((item) => item.name === "assess_small_seat_repeat_30");
+  assert.equal(tool.annotations.readOnlyHint, true);
+  assert.equal(tool.annotations.openWorldHint, false);
+  const output = await runServerCall("assess_small_seat_repeat_30", { batchId: "repeat196b" });
+  const response = output.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 3);
+  assert.equal(JSON.parse(response.result.content[0].text).status, "RESOURCE_REVIEW_REQUIRED");
 });
 
 test("20-seat assessment fails closed on malformed, reordered or invalid evidence", async () => {

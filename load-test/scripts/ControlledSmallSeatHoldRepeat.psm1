@@ -18,6 +18,43 @@ function Get-ControlledSmallSeatHoldRepeatPlan {
     }
 }
 
+function Get-ControlledSmallSeatHoldRepeat30Plan {
+    $order = @(@(20, 30), @(30, 20), @(20, 30))
+    $sequence = 0
+    foreach ($round in 1..3) {
+        foreach ($rate in $order[$round - 1]) {
+            $sequence++
+            [pscustomobject]@{
+                Sequence = $sequence
+                Round = $round
+                Rate = $rate
+                DurationSeconds = 10
+                HotSeatCount = 1
+                HoldDwellMilliseconds = 500
+            }
+        }
+    }
+}
+
+function New-ControlledSmallSeatHostSummary {
+    param([Parameter(Mandatory = $true)][object[]]$Samples)
+    if ($Samples.Count -lt 5) { throw 'At least five host samples are required.' }
+    foreach ($sample in $Samples) {
+        if ($null -eq $sample.HostCpuPercent -or $null -eq $sample.HostFreeMemoryKb -or
+            [double]::IsNaN([double]$sample.HostCpuPercent) -or
+            [double]::IsInfinity([double]$sample.HostCpuPercent) -or
+            [double]$sample.HostCpuPercent -lt 0 -or [double]$sample.HostCpuPercent -gt 100 -or
+            [long]$sample.HostFreeMemoryKb -lt 0) {
+            throw 'Host CPU or free-memory sample is missing or invalid.'
+        }
+    }
+    [pscustomobject]@{
+        SampleCount = $Samples.Count
+        HostCpuPeakPercent = [double](($Samples | Measure-Object -Property HostCpuPercent -Maximum).Maximum)
+        HostFreeMemoryMinimumKb = [long](($Samples | Measure-Object -Property HostFreeMemoryKb -Minimum).Minimum)
+    }
+}
+
 function New-ControlledSmallSeatHoldWaitSummary {
     param([Parameter(Mandatory = $true)][object[]]$Samples)
     if ($Samples.Count -lt 5) { throw 'At least five wait samples are required.' }
@@ -61,4 +98,5 @@ function New-ControlledSmallSeatHoldWaitSummary {
 }
 
 Export-ModuleMember -Function 'Get-ControlledSmallSeatHoldRepeatPlan',
-    'New-ControlledSmallSeatHoldWaitSummary'
+    'Get-ControlledSmallSeatHoldRepeat30Plan', 'New-ControlledSmallSeatHoldWaitSummary',
+    'New-ControlledSmallSeatHostSummary'

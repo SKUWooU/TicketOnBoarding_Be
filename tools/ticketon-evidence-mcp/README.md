@@ -11,6 +11,7 @@
 - `assess_seat_hold_churn_batch`: Hold→Release 6-run 배치의 조건·상태 수렴을 검증하고 같은 RPS 내 관측값만 제공
 - `assess_controlled_hold_evidence`: `small-seat-repeat`(20석·9회) 또는 `large-seat-churn`(2,000석·6회)을 명시해 각각의 저장된 배치를 검증. 조건과 재고 게이트를 통과한 해당 시나리오의 관측값만 제공하며 시나리오 사이 p95 비교는 제공하지 않음
 - `assess_small_seat_probe`: 가상 20석 20→30 RPS 단일 탐색의 완료·Hold/Release·재고·자원 게이트를 확인하고 `REPEAT_REQUIRED` 또는 `STOP_ESCALATION`/`INSUFFICIENT_EVIDENCE`를 반환. 30 RPS 안정성이나 p95 개선을 판정하지 않음
+- `assess_small_seat_repeat_30`: 같은 fixture의 20/30 RPS 6단계 교차 반복 manifest를 읽어 완료·재고·wait·호스트 자원 조건을 fail-closed로 확인. 관측값이 유효해도 전체 호스트 CPU 순간 peak가 90% 이상이면 `RESOURCE_REVIEW_REQUIRED`로 **상위 부하 실행 전 원인 확인**을 요구. 이 임계값은 로컬 실험의 보수적 중단 정책이며 Backend 또는 DB CPU 병목의 증명이 아님
 - `list_controlled_experiments`: 고정된 Hold→Release 50/100 RPS 실험 조건 목록
 - `preflight_controlled_experiment`: 새 배치 ID와 전용 Compose 프로젝트를 받아 기존 runner의 `-CheckOnly`로 로컬 준비 상태만 확인. 부하·fixture·결과 디렉터리를 생성하지 않음
 
