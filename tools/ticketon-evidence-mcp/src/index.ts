@@ -60,6 +60,13 @@ server.tool("preflight_controlled_experiment", "고정 실험의 전용 로컬 D
 }, { readOnlyHint: true, openWorldHint: false }, async ({ scenarioId, batchId, composeProject }) =>
   success(await preflightScenario(scenarioId, batchId, composeProject)));
 
+server.tool("assess_controlled_hold_evidence", "Read-only assessment of a fixed 20-seat repeat or 2,000-seat churn batch. Reports are scenario-specific; never compare their p95 as an improvement.", {
+  scenarioId: z.enum(["small-seat-repeat", "large-seat-churn"]),
+  batchId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
+}, { readOnlyHint: true, openWorldHint: false }, async ({ scenarioId, batchId }) => withEvidenceError(async () => {
+  return success(await repository.assessControlledHold(scenarioId, batchId));
+}));
+
 await server.connect(new StdioServerTransport());
 
 function success(payload: unknown) {

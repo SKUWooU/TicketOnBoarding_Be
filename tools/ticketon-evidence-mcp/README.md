@@ -1,6 +1,6 @@
 # TicketOnBoarding Evidence MCP
 
-로컬 `load-test/results`의 **허용된 `*-summary.json` 측정 결과만 읽는** stdio MCP 서버입니다. 비교 도구는 고정된 manifest를 멤버십·격리 조건 확인에만 사용합니다. 원시 k6 로그, CSV, JWT·쿠키·요청 본문 및 운영 데이터에는 접근하지 않습니다.
+로컬 `load-test/results`의 **허용된 `*-summary.json` 측정 결과와 고정된 통제 실험 manifest만 읽는** stdio MCP 서버입니다. manifest는 실험 조건·완료·재고 검증에만 사용합니다. 원시 k6 로그, CSV, JWT·쿠키·요청 본문 및 운영 데이터에는 접근하지 않습니다.
 
 ## 제공 도구
 
@@ -9,6 +9,7 @@
 - `verify_domain_invariants`: 측정 유효성, k6 종료 상태, 좌석 수 및 최종 상태 불변식 확인
 - `compare_controlled_hotspot_runs`: 같은 통제 배치의 두 summary가 비교 가능한지 판정하고, 통과할 때만 성공·좌석 충돌의 관측 차이 제공
 - `assess_seat_hold_churn_batch`: Hold→Release 6-run 배치의 조건·상태 수렴을 검증하고 같은 RPS 내 관측값만 제공
+- `assess_controlled_hold_evidence`: `small-seat-repeat`(20석·9회) 또는 `large-seat-churn`(2,000석·6회)을 명시해 각각의 저장된 배치를 검증. 조건과 재고 게이트를 통과한 해당 시나리오의 관측값만 제공하며 시나리오 사이 p95 비교는 제공하지 않음
 - `list_controlled_experiments`: 고정된 Hold→Release 50/100 RPS 실험 조건 목록
 - `preflight_controlled_experiment`: 새 배치 ID와 전용 Compose 프로젝트를 받아 기존 runner의 `-CheckOnly`로 로컬 준비 상태만 확인. 부하·fixture·결과 디렉터리를 생성하지 않음
 
