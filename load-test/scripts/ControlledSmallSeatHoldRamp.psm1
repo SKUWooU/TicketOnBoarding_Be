@@ -8,6 +8,32 @@ function Get-ControlledSmallSeatHoldRampPlan {
     )
 }
 
+function Get-ControlledSmallSeatHoldProbe30Plan {
+    @(
+        [pscustomobject]@{ Sequence = 1; Round = 1; Rate = 20; DurationSeconds = 10; HotSeatCount = 1; HoldDwellMilliseconds = 500 },
+        [pscustomobject]@{ Sequence = 2; Round = 1; Rate = 30; DurationSeconds = 10; HotSeatCount = 1; HoldDwellMilliseconds = 500 }
+    )
+}
+
+function Assert-ControlledSmallSeatProbeMemory {
+    param([Parameter(Mandatory = $true)][long]$FreePhysicalMemoryKb)
+    if ($FreePhysicalMemoryKb -lt 2097152) {
+        throw 'Probe30 stopped: less than 2 GiB host physical memory free.'
+    }
+    $true
+}
+
+function Assert-ControlledSmallSeatProbeBaseline {
+    param([Parameter(Mandatory = $true)][object]$WaitSummary)
+    if ([long]$WaitSummary.HikariPendingPeak -ne 0 -or
+        [long]$WaitSummary.HikariActivePeak -ge [long]$WaitSummary.HikariMax -or
+        [long]$WaitSummary.HikariTimeoutDelta -ne 0 -or
+        [long]$WaitSummary.DbDeadlocksDelta -ne 0) {
+        throw 'Probe30 stopped: 20 RPS baseline already showed pool pressure, timeout or deadlock.'
+    }
+    $true
+}
+
 function ConvertFrom-ControlledK6ConsoleSnapshot {
     param([Parameter(Mandatory = $true)][string]$StandardError)
     $lines = @($StandardError -split "`r?`n" | Where-Object { $_.Contains('SEAT_HOLD_FINAL_SNAPSHOT ') })
@@ -31,7 +57,7 @@ function Assert-ControlledSmallSeatHoldStage {
         [Parameter(Mandatory = $true)][object[]]$DatabaseCounts,
         [Parameter(Mandatory = $true)][long]$DeadlockDelta
     )
-    if ([int]$Plan.Rate -notin @(5, 10, 20) -or [int]$Plan.DurationSeconds -ne 10 -or
+    if ([int]$Plan.Rate -notin @(5, 10, 20, 30) -or [int]$Plan.DurationSeconds -ne 10 -or
         [int]$Plan.HotSeatCount -ne 1 -or [int]$Plan.HoldDwellMilliseconds -ne 500 -or
         [string]$Summary.Scenario -ne 'weighted-hotspot-churn' -or
         [int]$Summary.TargetRatePerSecond -ne [int]$Plan.Rate -or
@@ -62,5 +88,6 @@ function Assert-ControlledSmallSeatHoldStage {
     $true
 }
 
-Export-ModuleMember -Function 'Get-ControlledSmallSeatHoldRampPlan',
+Export-ModuleMember -Function 'Get-ControlledSmallSeatHoldRampPlan', 'Get-ControlledSmallSeatHoldProbe30Plan',
+    'Assert-ControlledSmallSeatProbeMemory', 'Assert-ControlledSmallSeatProbeBaseline',
     'ConvertFrom-ControlledK6ConsoleSnapshot', 'Assert-ControlledSmallSeatHoldStage'
