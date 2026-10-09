@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue [#184](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/184) / [PR #185](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/185): 20석 fixture의 인기 좌석 Hold 경합 실측 완료. CI·Reviewer 검증 중.
+- Backend Issue [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) / [PR #187](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/187): 20석 Hold 경합 9회 실측·근거 보관 완료. Hikari 관측 누락 Blocking 수정 후 CI·Reviewer 재검토 중.
 
 ## 완료
+
+### Backend Issue #184 — 20석 인기 좌석 Hold 경합 단계별 검증
+
+- PR [#185](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/185) / squash `ce8d22a`: 5/10/20 RPS 성공·예상 409를 분리 측정하고 매 단계 Hold=Release·재고 수렴을 확인했다. 운영 성능 해석은 제외. [상세 근거](docs/project-improvement/controlled-small-seat-hold-ramp.md)
 
 ### Backend Issue #182 — 20석 fixture 저강도 Hold→Release smoke
 
