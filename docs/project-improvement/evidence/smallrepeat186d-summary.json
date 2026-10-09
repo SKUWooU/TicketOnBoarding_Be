@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "scope": "local virtual 20-seat fixture; not production performance",
+  "runId": "smallrepeat186d",
+  "composeProject": "ticketon-controlled172-r12",
+  "complete": true,
+  "fixedConditions": {
+    "seats": 20,
+    "hotSeatCount": 1,
+    "hotRequestPercent": 70,
+    "holdDwellMilliseconds": 500,
+    "selectionSeed": 17,
+    "tokenCount": 20,
+    "durationSecondsPerRun": 10,
+    "orderRps": [5, 10, 20, 20, 10, 5, 5, 10, 20]
+  },
+  "recordFields": [
+    "sequence", "round", "targetRps", "iterations", "holdSuccess", "releaseSuccess",
+    "expectedSeatConflicts", "holdSuccessP95Ms", "seatConflictP95Ms",
+    "hikariPendingPeak", "hikariActivePeak", "hikariMax", "hikariAcquireWaitAverageMs",
+    "dbRowLockWaitsDelta", "dbRowLockTimeMsDelta", "sampleCount", "maxSampleGapMs"
+  ],
+  "records": [
+    [1, 1, 5, 51, 29, 29, 22, 52.913, 65.247, 0, 1, 24, 0.043, 0, 0, 13, 1326],
+    [2, 1, 10, 101, 47, 47, 54, 49.236, 39.847, 0, 1, 24, 0.243, 0, 0, 13, 1273],
+    [3, 1, 20, 201, 75, 75, 126, 41.176, 32.665, 0, 2, 24, 0.096, 1, 7, 13, 1252],
+    [4, 2, 20, 201, 75, 75, 126, 81.268, 69.974, 0, 2, 24, 0.055, 4, 21, 13, 1372],
+    [5, 2, 10, 101, 47, 47, 54, 44.846, 34.183, 0, 1, 24, 0.280, 0, 0, 13, 1345],
+    [6, 2, 5, 51, 29, 29, 22, 47.512, 34.408, 0, 1, 24, 1.553, 0, 0, 13, 1350],
+    [7, 3, 5, 51, 29, 29, 22, 45.885, 45.186, 0, 1, 24, 1.116, 0, 0, 13, 1250],
+    [8, 3, 10, 101, 47, 47, 54, 46.273, 41.606, 0, 1, 24, 0.689, 0, 0, 13, 1362],
+    [9, 3, 20, 200, 74, 74, 126, 44.339, 42.196, 0, 2, 24, 0.045, 2, 12, 12, 1393]
+  ],
+  "allRuns": {
+    "droppedIterations": 0,
+    "unexpectedFailures": 0,
+    "hikariTimeoutDelta": 0,
+    "dbDeadlocksDelta": 0,
+    "finalHoldRows": 0,
+    "databaseCounts": [20, 0, 0, 20, 0]
+  },
+  "excludedAttempts": [
+    "r9: Docker exec sampling gap exceeded contract",
+    "r10: Windows sleep interrupted samples",
+    "r11: Windows sleep interrupted k6"
+  ]
+}

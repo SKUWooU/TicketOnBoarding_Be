@@ -4,7 +4,8 @@ param(
     [ValidatePattern('^[A-Za-z0-9-]{1,16}$')][string]$RunId,
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^ticketon-controlled172(-[a-z0-9]{1,12})?$')]
-    [string]$ComposeProject
+    [string]$ComposeProject,
+    [ValidateSet(1, 3)][int]$Repeats = 1
 )
 
 Set-StrictMode -Version Latest
@@ -16,7 +17,13 @@ $scenario = 'weighted-hotspot-churn'
 $output = Join-Path $root "load-test\results\$RunId"
 Import-Module (Join-Path $PSScriptRoot 'SeatHoldContention.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRamp.psm1') -Force
-$plan = @(Get-ControlledSmallSeatHoldRampPlan)
+if ($Repeats -eq 3) {
+    Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
+    Import-Module (Join-Path $PSScriptRoot 'ContentionMetrics.psm1') -Force
+    $mysql = Get-Command mysql -ErrorAction Stop
+}
+$plan = if ($Repeats -eq 3) { @(Get-ControlledSmallSeatHoldRepeatPlan) } `
+    else { @(Get-ControlledSmallSeatHoldRampPlan) }
 $k6 = Get-Command k6 -ErrorAction Stop
 
 # One fresh fixture per batch. The reused fixture runner refuses a nonempty DB, wrong
@@ -56,6 +63,37 @@ function Get-DatabaseCounts {
     $counts
 }
 
+function Get-WaitSample {
+    param([Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch)
+    $prometheus = Invoke-WebRequest -UseBasicParsing -Method Get -TimeoutSec 10 `
+        -Uri 'http://127.0.0.1:18081/actuator/prometheus'
+    $hikari = ConvertFrom-PrometheusHikari -Text $prometheus.Content
+    $acquire = ConvertFrom-PrometheusHikariAcquireTiming -Text $prometheus.Content
+    $query = "SHOW GLOBAL STATUS WHERE Variable_name IN ('Innodb_deadlocks'," +
+        "'Innodb_row_lock_current_waits','Innodb_row_lock_time','Innodb_row_lock_waits'," +
+        "'Threads_connected','Threads_running');"
+    # The dedicated DB identity is checked before fixture POST. Use its loopback port
+    # for repeated samples: Docker exec startup can exceed the sampling interval.
+    $env:MYSQL_PWD = 'onticket-root'
+    $dbLines = @(& $mysql.Source --protocol=tcp --host=127.0.0.1 --port=3309 `
+        --user=root --batch --skip-column-names onticket_local --execute $query 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not sample the dedicated MariaDB wait status.' }
+    $db = ConvertFrom-MariaDbStatus -Lines $dbLines
+    [pscustomobject]@{
+        ElapsedMilliseconds = $Stopwatch.ElapsedMilliseconds
+        HikariPending = $hikari.Pending
+        HikariActive = $hikari.Active
+        HikariMax = $hikari.Max
+        HikariAcquireCount = $acquire.AcquireCount
+        HikariAcquireSeconds = $acquire.AcquireSeconds
+        HikariTimeoutCount = $acquire.TimeoutCount
+        DbRowLockCurrentWaits = $db.RowLockCurrentWaits
+        DbRowLockWaits = $db.RowLockWaits
+        DbRowLockTimeMs = $db.RowLockTimeMs
+        DbDeadlocks = $db.Deadlocks
+    }
+}
+
 New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
 $manifest = Join-Path $output 'small-seat-hold-ramp.json'
@@ -86,10 +124,26 @@ try {
         $start.CreateNoWindow = $true
         $process = New-Object Diagnostics.Process
         $process.StartInfo = $start
+        $waitSamples = New-Object 'Collections.Generic.List[object]'
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        if ($Repeats -eq 3) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
         if (-not $process.Start()) { throw 'Could not start k6.' }
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
+        if ($Repeats -eq 3) {
+            $nextSampleAt = $watch.ElapsedMilliseconds + 1000
+            while (-not $process.HasExited) {
+                $waitMilliseconds = $nextSampleAt - $watch.ElapsedMilliseconds
+                if ($waitMilliseconds -gt 0) { Start-Sleep -Milliseconds $waitMilliseconds }
+                $process.Refresh()
+                if ($process.HasExited) { break }
+                $waitSamples.Add((Get-WaitSample -Stopwatch $watch))
+                do { $nextSampleAt += 1000 } while ($nextSampleAt -le $watch.ElapsedMilliseconds)
+            }
+        }
         $process.WaitForExit()
+        if ($Repeats -eq 3) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
+        $watch.Stop()
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
         if ($process.ExitCode -ne 0) { throw "k6 failed at $($stage.Rate) RPS with exit code $($process.ExitCode)." }
@@ -103,10 +157,17 @@ try {
             -Uri "$baseUrl/loadtest/seat-holds/snapshot?runId=$RunId"
         $databaseCounts = @(Get-DatabaseCounts)
         $deadlockDelta = (Get-DeadlockCount) - $deadlocksBefore
+        $waitSummary = if ($Repeats -eq 3) {
+            New-ControlledSmallSeatHoldWaitSummary -Samples $waitSamples.ToArray()
+        } else { $null }
+        if ($null -ne $waitSummary -and
+            ($waitSummary.DbDeadlocksDelta -ne 0 -or $waitSummary.HikariTimeoutDelta -ne 0)) {
+            throw 'Wait metrics observed a deadlock or Hikari connection timeout.'
+        }
         Assert-ControlledSmallSeatHoldStage -Plan $stage -Summary $summary -Snapshot $snapshot `
             -FreshSnapshot $freshSnapshot -DatabaseCounts $databaseCounts `
             -DeadlockDelta $deadlockDelta | Out-Null
-        $records.Add([pscustomobject]@{
+        $record = [ordered]@{
             TargetRps = $stage.Rate
             DurationSeconds = $stage.DurationSeconds
             HotSeatCount = $stage.HotSeatCount
@@ -122,16 +183,23 @@ try {
             FinalHoldRows = $freshSnapshot.holdRows
             DatabaseCounts = @($databaseCounts | ForEach-Object { [long]$_ })
             DbDeadlocksDelta = $deadlockDelta
-        })
+        }
+        if ($Repeats -eq 3) {
+            $record.Sequence = $stage.Sequence
+            $record.Round = $stage.Round
+            $record.WaitMetrics = $waitSummary
+        }
+        $records.Add([pscustomobject]$record)
         Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
     }
 } finally {
     [ordered]@{
-        SchemaVersion = 1
+        SchemaVersion = if ($Repeats -eq 3) { 2 } else { 1 }
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
         Complete = $records.Count -eq $plan.Count
+        Repeats = $Repeats
         FixedHotSeatCount = 1
         FixedHoldDwellMilliseconds = 500
         FixedHotRequestPercent = 70
