@@ -67,6 +67,11 @@ server.tool("assess_controlled_hold_evidence", "Read-only assessment of a fixed 
   return success(await repository.assessControlledHold(scenarioId, batchId));
 }));
 
+server.tool("assess_small_seat_probe", "가상 20석 20→30 RPS 단일 탐색의 안전 게이트를 확인하고 다음 재측정 필요성을 판정합니다. 안정 처리량·p95 개선을 주장하거나 부하를 실행하지 않습니다.", {
+  batchId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
+}, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () =>
+  success(await repository.assessSmallSeatProbe(batchId))));
+
 await server.connect(new StdioServerTransport());
 
 function success(payload: unknown) {

@@ -30,7 +30,7 @@
 - **부하 결과:** 목표 RPS×시간과 완료·dropped를 분리한다. 좌석 선점의 정상 409는 서버 오류와 다른 범주이며 성공/409 p95를 따로 본다.
 - **도메인 결과:** Hold=Release, 종료 HELD·예약·재고를 API snapshot과 독립 SQL로 교차한다. 20석 반복/탐색의 최종 SQL 배열 `20,0,0,20,0`은 총 좌석·Hold 행·예약 좌석·잔여 수량·Reservation 수다.
 - **자원 결과:** Hikari pending/active/acquire/timeout, DB deadlock·전역 row-lock wait, 표본 간격을 같이 본다. #190은 실행 중 CPU·메모리 시계열이 없어 30 RPS 안정 구간을 선언하지 않는다.
-- **MCP:** [read-only 근거 서버](../../tools/ticketon-evidence-mcp/README.md)는 허용된 summary/manifest와 불변식만 조회한다. `assess_controlled_hold_evidence`는 20석 9-run과 2,000석 6-run을 **각각** 판정하고 근거가 부족하면 관측값을 숨긴다. 30 RPS의 schema v3 단일 탐색은 이 9-run 판정 대상이 아니다. 새 부하·PG·운영 DB 실행 권한도 없다. [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188)
+- **MCP:** [read-only 근거 서버](../../tools/ticketon-evidence-mcp/README.md)는 허용된 summary/manifest와 불변식만 조회한다. `assess_controlled_hold_evidence`는 20석 9-run과 2,000석 6-run을 **각각** 판정한다. 별도 `assess_small_seat_probe`는 schema v3의 20→30 단일 탐색을 안전 게이트에 통과시켜도 `REPEAT_REQUIRED`로 표시하며, 실패·근거 누락 시 비교 수치를 숨긴다. 부하·PG·운영 DB 실행 권한은 없다. [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188), [#194](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/194)
 
 ## 4. 다음 실험의 중단 기준
 
