@@ -13,7 +13,7 @@
 
 ## 진행 중
 
-- Backend Issue [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186): 20석 인기 좌석 Hold 경합 반복 측정과 Hikari·DB 대기 관측 중.
+- Backend Issue [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) / [PR #187](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/187): 20석 Hold 경합 9회 실측·근거 보관 완료. CI·별도 Reviewer 검증 중.
 
 ## 완료
 
