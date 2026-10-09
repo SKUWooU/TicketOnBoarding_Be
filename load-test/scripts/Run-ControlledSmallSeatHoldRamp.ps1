@@ -6,7 +6,8 @@ param(
     [ValidatePattern('^ticketon-controlled172(-[a-z0-9]{1,12})?$')]
     [string]$ComposeProject,
     [ValidateSet(1, 3)][int]$Repeats = 1,
-    [switch]$Probe30
+    [switch]$Probe30,
+    [switch]$Repeat30
 )
 
 Set-StrictMode -Version Latest
@@ -19,13 +20,15 @@ $output = Join-Path $root "load-test\results\$RunId"
 Import-Module (Join-Path $PSScriptRoot 'SeatHoldContention.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRamp.psm1') -Force
 if ($Probe30 -and $Repeats -ne 1) { throw 'Probe30 uses one bounded 20->30 RPS pair; Repeats must be 1.' }
-$observeWaits = $Repeats -eq 3 -or $Probe30
+if ($Repeat30 -and ($Probe30 -or $Repeats -ne 1)) { throw 'Repeat30 is a fixed six-stage plan and cannot be combined with Probe30 or Repeats.' }
+$observeWaits = $Repeats -eq 3 -or $Probe30 -or $Repeat30
 if ($observeWaits) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
     Import-Module (Join-Path $PSScriptRoot 'ContentionMetrics.psm1') -Force
     $mysql = Get-Command mysql -ErrorAction Stop
 }
-$plan = if ($Probe30) { @(Get-ControlledSmallSeatHoldProbe30Plan) } `
+$plan = if ($Repeat30) { @(Get-ControlledSmallSeatHoldRepeat30Plan) } `
+    elseif ($Probe30) { @(Get-ControlledSmallSeatHoldProbe30Plan) } `
     elseif ($Repeats -eq 3) { @(Get-ControlledSmallSeatHoldRepeatPlan) } `
     else { @(Get-ControlledSmallSeatHoldRampPlan) }
 $k6 = Get-Command k6 -ErrorAction Stop
@@ -68,7 +71,12 @@ function Get-DatabaseCounts {
 }
 
 function Get-WaitSample {
-    param([Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch)
+    param(
+        [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch,
+        [switch]$IncludeHost,
+        [Diagnostics.PerformanceCounter]$CpuCounter,
+        [object]$HostMemory
+    )
     $prometheus = Invoke-WebRequest -UseBasicParsing -Method Get -TimeoutSec 10 `
         -Uri 'http://127.0.0.1:18081/actuator/prometheus'
     $hikari = ConvertFrom-PrometheusHikari -Text $prometheus.Content
@@ -83,6 +91,13 @@ function Get-WaitSample {
         --user=root --batch --skip-column-names onticket_local --execute $query 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'Could not sample the dedicated MariaDB wait status.' }
     $db = ConvertFrom-MariaDbStatus -Lines $dbLines
+    $hostCpu = $null
+    $hostFreeMemory = $null
+    if ($IncludeHost) {
+        if ($null -eq $CpuCounter -or $null -eq $HostMemory) { throw 'Host counters are not initialized.' }
+        $hostCpu = [double]$CpuCounter.NextValue()
+        $hostFreeMemory = [long][math]::Floor([double]$HostMemory.AvailablePhysicalMemory / 1024)
+    }
     [pscustomobject]@{
         ElapsedMilliseconds = $Stopwatch.ElapsedMilliseconds
         HikariPending = $hikari.Pending
@@ -95,13 +110,23 @@ function Get-WaitSample {
         DbRowLockWaits = $db.RowLockWaits
         DbRowLockTimeMs = $db.RowLockTimeMs
         DbDeadlocks = $db.Deadlocks
+        HostCpuPercent = $hostCpu
+        HostFreeMemoryKb = $hostFreeMemory
     }
 }
 
 New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
 $manifest = Join-Path $output 'small-seat-hold-ramp.json'
+$cpuCounter = $null
+$hostMemory = $null
 try {
+    if ($Repeat30) {
+        Add-Type -AssemblyName Microsoft.VisualBasic
+        $hostMemory = New-Object Microsoft.VisualBasic.Devices.ComputerInfo
+        $cpuCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total')
+        $null = $cpuCounter.NextValue()
+    }
     foreach ($stage in $plan) {
         $before = Invoke-RestMethod -Method Get -TimeoutSec 10 `
             -Uri "$baseUrl/loadtest/seat-holds/snapshot?runId=$RunId"
@@ -130,11 +155,11 @@ try {
         $process.StartInfo = $start
         $waitSamples = New-Object 'Collections.Generic.List[object]'
         $watch = [Diagnostics.Stopwatch]::StartNew()
-        if ($Probe30 -and $stage.Rate -eq 30) {
+        if ($Repeat30 -or ($Probe30 -and $stage.Rate -eq 30)) {
             $freeKb = [long](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
             Assert-ControlledSmallSeatProbeMemory -FreePhysicalMemoryKb $freeKb | Out-Null
         }
-        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
         if (-not $process.Start()) { throw 'Could not start k6.' }
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
@@ -145,12 +170,12 @@ try {
                 if ($waitMilliseconds -gt 0) { Start-Sleep -Milliseconds $waitMilliseconds }
                 $process.Refresh()
                 if ($process.HasExited) { break }
-                $waitSamples.Add((Get-WaitSample -Stopwatch $watch))
+                $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -CpuCounter $cpuCounter -HostMemory $hostMemory))
                 do { $nextSampleAt += 1000 } while ($nextSampleAt -le $watch.ElapsedMilliseconds)
             }
         }
         $process.WaitForExit()
-        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
         $watch.Stop()
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -168,11 +193,14 @@ try {
         $waitSummary = if ($observeWaits) {
             New-ControlledSmallSeatHoldWaitSummary -Samples $waitSamples.ToArray()
         } else { $null }
+        $hostSummary = if ($Repeat30) {
+            New-ControlledSmallSeatHostSummary -Samples $waitSamples.ToArray()
+        } else { $null }
         if ($null -ne $waitSummary -and
             ($waitSummary.DbDeadlocksDelta -ne 0 -or $waitSummary.HikariTimeoutDelta -ne 0)) {
             throw 'Wait metrics observed a deadlock or Hikari connection timeout.'
         }
-        if ($Probe30 -and $stage.Rate -eq 20) {
+        if (($Probe30 -or $Repeat30) -and $stage.Rate -eq 20) {
             Assert-ControlledSmallSeatProbeBaseline -WaitSummary $waitSummary | Out-Null
         }
         Assert-ControlledSmallSeatHoldStage -Plan $stage -Summary $summary -Snapshot $snapshot `
@@ -200,18 +228,26 @@ try {
             $record.Round = $stage.Round
             $record.WaitMetrics = $waitSummary
         }
+        if ($Repeat30) { $record.HostMetrics = $hostSummary }
         $records.Add([pscustomobject]$record)
         Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
+        if ($Repeat30 -and ($hostSummary.HostFreeMemoryMinimumKb -lt 2097152 -or
+            $waitSummary.HikariPendingPeak -gt 0 -or
+            $waitSummary.HikariActivePeak -ge $waitSummary.HikariMax)) {
+            throw 'Repeat30 stopped: host free memory or Hikari pool gate failed.'
+        }
     }
 } finally {
+    if ($null -ne $cpuCounter) { $cpuCounter.Dispose() }
     [ordered]@{
-        SchemaVersion = if ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
+        SchemaVersion = if ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
         Complete = $records.Count -eq $plan.Count
-        Repeats = $Repeats
+        Repeats = if ($Repeat30) { 3 } else { $Repeats }
         Probe30 = [bool]$Probe30
+        Repeat30 = [bool]$Repeat30
         FixedHotSeatCount = 1
         FixedHoldDwellMilliseconds = 500
         FixedHotRequestPercent = 70

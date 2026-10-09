@@ -25,6 +25,13 @@ Assert-True ($probePlan.Count -eq 2)
 Assert-True ((@($probePlan | ForEach-Object Rate) -join ',') -eq '20,30')
 Assert-True (@($probePlan | Where-Object { $_.DurationSeconds -ne 10 -or $_.HotSeatCount -ne 1 -or
     $_.HoldDwellMilliseconds -ne 500 }).Count -eq 0)
+Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
+$repeat30Plan = @(Get-ControlledSmallSeatHoldRepeat30Plan)
+Assert-True ($repeat30Plan.Count -eq 6)
+Assert-True ((@($repeat30Plan | ForEach-Object Rate) -join ',') -eq '20,30,30,20,20,30')
+Assert-True ((@($repeat30Plan | ForEach-Object Sequence) -join ',') -eq '1,2,3,4,5,6')
+Assert-True (@($repeat30Plan | Where-Object { $_.DurationSeconds -ne 10 -or $_.HotSeatCount -ne 1 -or
+    $_.HoldDwellMilliseconds -ne 500 }).Count -eq 0)
 Assert-True (Assert-ControlledSmallSeatProbeMemory 2097152)
 Assert-Throws { Assert-ControlledSmallSeatProbeMemory 2097151 }
 $healthyWait = [pscustomobject]@{ HikariPendingPeak = 0; HikariActivePeak = 1; HikariMax = 24; HikariTimeoutDelta = 0; DbDeadlocksDelta = 0 }
@@ -33,6 +40,17 @@ $badWait = $healthyWait.PSObject.Copy(); $badWait.HikariPendingPeak = 1
 Assert-Throws { Assert-ControlledSmallSeatProbeBaseline $badWait }
 $runner = Join-Path $PSScriptRoot 'Run-ControlledSmallSeatHoldRamp.ps1'
 Assert-Throws { & $runner -RunId 'invalidprobe' -ComposeProject 'ticketon-controlled172-r13' -Probe30 -Repeats 3 }
+Assert-Throws { & $runner -RunId 'invalidrepeat' -ComposeProject 'ticketon-controlled172-r14' -Repeat30 -Probe30 }
+Assert-Throws { & $runner -RunId 'invalidrepeat' -ComposeProject 'ticketon-controlled172-r14' -Repeat30 -Repeats 3 }
+$hostSamples = @(1..5 | ForEach-Object { [pscustomobject]@{ HostCpuPercent = [double]($_ * 10); HostFreeMemoryKb = [long](3000000 - $_ * 100000) } })
+$hostSummary = New-ControlledSmallSeatHostSummary -Samples $hostSamples
+Assert-True ($hostSummary.SampleCount -eq 5 -and $hostSummary.HostCpuPeakPercent -eq 50 -and
+    $hostSummary.HostFreeMemoryMinimumKb -eq 2500000)
+$hostSamples[0].HostFreeMemoryKb = -1
+Assert-Throws { New-ControlledSmallSeatHostSummary -Samples $hostSamples }
+$hostSamples[0].HostFreeMemoryKb = 2900000
+$hostSamples[0].HostCpuPercent = [double]::NaN
+Assert-Throws { New-ControlledSmallSeatHostSummary -Samples $hostSamples }
 $badWait = $healthyWait.PSObject.Copy(); $badWait.HikariActivePeak = 24
 Assert-Throws { Assert-ControlledSmallSeatProbeBaseline $badWait }
 $badWait = $healthyWait.PSObject.Copy(); $badWait.HikariTimeoutDelta = 1

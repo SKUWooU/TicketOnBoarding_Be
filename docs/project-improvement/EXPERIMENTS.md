@@ -21,17 +21,20 @@
 | 20석 단계 | 같은 fixture, 5→10→20 RPS×각 10초 | 성공/정상 409가 29/21→47/54→74/126. 한 번씩 실행한 탐색. [#184](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/184) | [단계 요약](evidence/smallramp184-summary.json) |
 | 20석 반복 | 같은 조건, 5/10/20 RPS 교차 순서 각 3회 | 9회 완료 1,058=Hold·해제 452+정상 409 606. dropped·예상 밖 오류·pending·timeout·deadlock·종료 Hold 0. 20 RPS 전역 DB row-lock wait 1/4/2건. [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) | [9-run manifest](../../load-test/results/smallrepeat186d/small-seat-hold-ramp.json) |
 | 20→30 RPS 탐색 | 같은 가상 20석, 각 10초 단일 순차 실행 | 완료 200/301, Hold=Release 74/97, 정상 409 126/204. 두 단계 모두 pending·dropped·deadlock·최종 Hold 0. 30 RPS 안정 구간 또는 p95 개선 주장은 불가. [#190](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/190) | [2-run manifest](../../load-test/results/probe190a/small-seat-hold-ramp.json) |
+| 20/30 RPS 교차 반복 | 같은 가상 20석, 20·30→30·20→20·30 RPS, 각 10초·각 속도 3회 | 6단계 완료 1,506=Hold·해제 516+정상 409 990. dropped·예상 밖 오류·pending·timeout·deadlock·종료 Hold 0. 한 20 RPS 단계의 호스트 CPU peak 91.5%로 **추가 증량 전 원인 확인 필요**. [#196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196) | [완료 manifest](../../load-test/results/repeat196b/small-seat-hold-ramp.json), [수집 간격 중단 manifest](../../load-test/results/repeat196a/small-seat-hold-ramp.json) |
 | 2,000석 지속 쓰기 경합 | 인기 20/40/200석·70%, Hold 100ms, 50/100 RPS×10초, 각 속도 6-run | Hold=Release·최종 HELD 0, dropped·예상 밖 오류·deadlock 0. 인기 집합별 성공/409 비중이 달라 혼합 p95 직접 비교 금지. [#172](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/172) | [50 RPS manifest](../../load-test/results/churn172a/controlled-seat-hold-churn-manifest.json), [100 RPS manifest](../../load-test/results/churn172b/controlled-seat-hold-churn-manifest.json) |
 
 좌석 수, 인기 분포, Hold 지속 시간이 다르므로 **20석과 2,000석 p95를 전후 개선처럼 비교하지 않는다.** DB row-lock wait는 DB 전역 counter라 특정 SQL의 잠금 원인을 단정할 수 없다. 짧은 표본에서 Hikari pending 0도 순간 최대 대기를 전부 포착했다는 뜻은 아니다.
+
+#196은 로컬 8 logical CPU·15.81GiB RAM 호스트에서 계측했다. 첫 시도 `repeat196a`는 CPU 수집 비용 때문에 표본 간격 4,340ms로 첫 단계에서 중단했으며, 완료 결과로 사용하지 않는다. 별도 빈 DB의 `repeat196b`는 약 1초 간격 Windows 전체 CPU·가용 메모리 카운터로 재실행했다. 단계별 최대 표본 간격 1,201~1,379ms, 최소 가용 메모리 3.32GiB, 20 RPS Hold 성공 p95 21.95~33.61ms, 30 RPS 22.05~34.01ms였다. 호스트 CPU의 단일 peak는 Backend/DB 병목의 원인 증명이 아니며, 서로 다른 호스트·fixture 또는 단일 탐색과의 성능 개선 수치로 비교하지 않는다.
 
 ## 3. 결과를 믿기 위한 관측 경계
 
 - **부하 결과:** 목표 RPS×시간과 완료·dropped를 분리한다. 좌석 선점의 정상 409는 서버 오류와 다른 범주이며 성공/409 p95를 따로 본다.
 - **도메인 결과:** Hold=Release, 종료 HELD·예약·재고를 API snapshot과 독립 SQL로 교차한다. 20석 반복/탐색의 최종 SQL 배열 `20,0,0,20,0`은 총 좌석·Hold 행·예약 좌석·잔여 수량·Reservation 수다.
 - **자원 결과:** Hikari pending/active/acquire/timeout, DB deadlock·전역 row-lock wait, 표본 간격을 같이 본다. #190은 실행 중 CPU·메모리 시계열이 없어 30 RPS 안정 구간을 선언하지 않는다.
-- **MCP:** [read-only 근거 서버](../../tools/ticketon-evidence-mcp/README.md)는 허용된 summary/manifest와 불변식만 조회한다. `assess_controlled_hold_evidence`는 20석 9-run과 2,000석 6-run을 **각각** 판정한다. 별도 `assess_small_seat_probe`는 schema v3의 20→30 단일 탐색을 안전 게이트에 통과시켜도 `REPEAT_REQUIRED`로 표시하며, 실패·근거 누락 시 비교 수치를 숨긴다. 부하·PG·운영 DB 실행 권한은 없다. [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188), [#194](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/194)
+- **MCP:** [read-only 근거 서버](../../tools/ticketon-evidence-mcp/README.md)는 허용된 summary/manifest와 불변식만 조회한다. `assess_controlled_hold_evidence`는 20석 9-run과 2,000석 6-run을 **각각** 판정한다. `assess_small_seat_probe`는 schema v3 단일 탐색에 `REPEAT_REQUIRED`, `assess_small_seat_repeat_30`은 schema v4 반복에서 호스트 CPU peak 90% 이상이면 `RESOURCE_REVIEW_REQUIRED`를 반환한다. 두 도구 모두 실패·근거 누락 시 관측값을 숨기고, 더 높은 부하를 직접 실행하지 않는다. [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188), [#194](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/194), [#196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196)
 
 ## 4. 다음 실험의 중단 기준
 
-같은 가상 20석 조건에서 30 RPS를 교차 순서로 반복하고, 완료율·정상 충돌/오류·Hikari 대기·DB wait·CPU/메모리·종료 재고를 한 run으로 묶는다. dropped, 예상 밖 오류, timeout, deadlock, 재고 불일치, 샘플 단절 또는 로컬 자원 부족이 나오면 다음 강도로 자동 증량하지 않는다. 제한된 노트북에서 측정이 어려우면 16GB PC에서 동일 조건으로 **새 기준선**을 잡는다. 호스트가 다른 수치를 직접 개선 전후로 취급하지 않는다.
+다음은 20 RPS 한 단계에서 관측한 전체 호스트 CPU peak 91.5%의 원인을 분리해 보는 것이다. Backend JVM·MariaDB·다른 로컬 프로세스의 CPU와 표본 시각을 교차하지 않은 상태에서 40 RPS 등으로 자동 증량하지 않는다. dropped, 예상 밖 오류, timeout, deadlock, 재고 불일치, 샘플 단절 또는 메모리 부족이 나오면 중단한다. 별도 장비에서 재실행하면 **새 기준선**으로 기록하고 이 호스트의 수치를 직접 전후 비교하지 않는다.
