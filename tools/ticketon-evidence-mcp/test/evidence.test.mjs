@@ -9,6 +9,7 @@ import { createInvariantReport, EvidenceError, EvidenceRepository } from "../dis
 import { compareControlledHotspotEvidence } from "../dist/comparison.js";
 import { assessSeatHoldChurnBatch } from "../dist/seatHoldChurn.js";
 import { assessSmallSeatHold } from "../dist/smallSeatHold.js";
+import { assessSmallSeatProbe } from "../dist/smallSeatProbe.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repository = new EvidenceRepository({ resultsRoot: path.join(here, "fixtures") });
@@ -365,6 +366,69 @@ test("scenario-aware MCP assesses the stored 20-seat and 2,000-seat batches sepa
   const wrongScenario = await measuredRepository.assessControlledHold("small-seat-repeat", "churn172a");
   assert.equal(wrongScenario.status, "INSUFFICIENT_EVIDENCE");
   assert.equal("observations" in wrongScenario, false);
+});
+
+test("실측 20→30 단일 탐색은 안전 게이트를 통과해도 반복·호스트 관측을 요구한다", async () => {
+  const report = await measuredRepository.assessSmallSeatProbe("probe190a");
+  assert.equal(report.status, "REPEAT_REQUIRED");
+  assert.equal(report.nextAction, "REPEAT_20_30_WITH_HOST_TELEMETRY");
+  assert.deepEqual(report.observations.map((item) => item.completed), [200, 301]);
+  assert.deepEqual(report.observations.map((item) => item.expectedSeatConflicts), [126, 204]);
+  assert.equal("holdSuccessP95Ms" in report.observations[0], false);
+  assert.match(report.missingEvidence.join(" "), /host CPU/);
+});
+
+test("20→30 탐색의 누락·조건 변경·재고 위반·포화는 관측 비교를 숨긴다", async () => {
+  const original = JSON.parse((await readFile(path.join(measuredRoot, "probe190a", "small-seat-hold-ramp.json"), "utf8")).replace(/^\uFEFF/, ""));
+  const cases = [
+    [(data) => { data.Records.pop(); }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records.reverse(); }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].TargetRps = 40; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].WaitMetrics.SampleCount = undefined; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { delete data.Records[1].WaitMetrics.DbRowLockCurrentWaitsPeak; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { delete data.Records[1].WaitMetrics.DbRowLockTimeMsDelta; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].WaitMetrics.DbRowLockCurrentWaitsPeak = -1; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].WaitMetrics.DbRowLockTimeMsDelta = -1; }, "INSUFFICIENT_EVIDENCE"],
+    [(data) => { data.Records[1].DatabaseCounts[1] = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].DroppedIterations = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].WaitMetrics.HikariPendingPeak = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].WaitMetrics.HikariTimeoutDelta = 1; }, "STOP_ESCALATION"],
+    [(data) => { data.Records[1].WaitMetrics.MaxSampleGapMs = 4000; }, "STOP_ESCALATION"]
+  ];
+  for (const [mutate, expected] of cases) {
+    const altered = structuredClone(original);
+    mutate(altered);
+    const report = assessSmallSeatProbe("probe190a", altered);
+    assert.equal(report.status, expected);
+    assert.equal("observations" in report, false);
+  }
+});
+
+test("20→30 MCP 판정은 임의 경로·잘못된 manifest를 거절한다", async () => {
+  await assert.rejects(() => measuredRepository.assessSmallSeatProbe("../probe190a"),
+    (error) => error instanceof EvidenceError && error.code === "INVALID_RUN_ID");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketon-probe-mcp-"));
+  try {
+    const folder = path.join(root, "probe190a");
+    await mkdir(folder);
+    const isolated = new EvidenceRepository({ resultsRoot: root });
+    assert.equal((await isolated.assessSmallSeatProbe("probe190a")).status, "INSUFFICIENT_EVIDENCE");
+    await writeFile(path.join(folder, "small-seat-hold-ramp.json"), "{invalid");
+    assert.equal((await isolated.assessSmallSeatProbe("probe190a")).status, "INSUFFICIENT_EVIDENCE");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("stdio MCP가 20→30 판정 도구를 read-only로 노출한다", async () => {
+  const listing = await runServerHandshake();
+  const list = listing.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 2);
+  const tool = list.result.tools.find((item) => item.name === "assess_small_seat_probe");
+  assert.equal(tool.annotations.readOnlyHint, true);
+  assert.equal(tool.annotations.openWorldHint, false);
+  const output = await runServerCall("assess_small_seat_probe", { batchId: "probe190a" });
+  const response = output.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 3);
+  assert.equal(JSON.parse(response.result.content[0].text).status, "REPEAT_REQUIRED");
 });
 
 test("20-seat assessment fails closed on malformed, reordered or invalid evidence", async () => {

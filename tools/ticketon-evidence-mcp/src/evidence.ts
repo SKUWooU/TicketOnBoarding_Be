@@ -3,6 +3,7 @@ import path from "node:path";
 import { compareControlledHotspotEvidence } from "./comparison.js";
 import { assessSeatHoldChurnBatch, insufficientSeatHoldChurnEvidence } from "./seatHoldChurn.js";
 import { assessSmallSeatHold, insufficientSmallSeatHold } from "./smallSeatHold.js";
+import { assessSmallSeatProbe, insufficientSmallSeatProbe } from "./smallSeatProbe.js";
 
 const RUN_ID = /^[A-Za-z0-9-]{1,64}$/;
 const SUMMARY_FILE = /^[A-Za-z0-9-]+-summary\.json$/;
@@ -164,6 +165,23 @@ export class EvidenceRepository {
     } catch (error) {
       if (error instanceof EvidenceError) throw error;
       return { scenarioId, ...insufficientSmallSeatHold("The allowed small-seat manifest is missing or malformed.") };
+    }
+  }
+
+  async assessSmallSeatProbe(batchId: string) {
+    const canonicalRoot = await this.canonicalRootOrThrow();
+    const directory = await this.resolveCanonicalRunDirectory(batchId, canonicalRoot);
+    if (!directory) throw new EvidenceError("RUN_NOT_FOUND", `Run '${batchId}' was not found.`);
+    try {
+      const manifestPath = await realpath(path.join(directory, "small-seat-hold-ramp.json"));
+      if (!isDescendant(directory, manifestPath)) {
+        throw new EvidenceError("UNSUPPORTED_ARTIFACT", "The evidence artifact points outside its run directory.");
+      }
+      const manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, ""));
+      return assessSmallSeatProbe(batchId, manifest);
+    } catch (error) {
+      if (error instanceof EvidenceError) throw error;
+      return insufficientSmallSeatProbe("The allowed 20→30 RPS probe manifest is missing or malformed.");
     }
   }
 
