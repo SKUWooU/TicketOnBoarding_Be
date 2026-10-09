@@ -1,0 +1,92 @@
+﻿{
+    "SchemaVersion":  3,
+    "Scope":  "local virtual 20-seat fixture; not production performance",
+    "RunId":  "probe190a",
+    "ComposeProject":  "ticketon-controlled172-r13",
+    "Complete":  true,
+    "Repeats":  1,
+    "Probe30":  true,
+    "FixedHotSeatCount":  1,
+    "FixedHoldDwellMilliseconds":  500,
+    "FixedHotRequestPercent":  70,
+    "Records":  [
+                    {
+                        "TargetRps":  20,
+                        "DurationSeconds":  10,
+                        "HotSeatCount":  1,
+                        "HoldDwellMilliseconds":  500,
+                        "Iterations":  200,
+                        "HoldSuccess":  74,
+                        "ReleaseSuccess":  74,
+                        "ExpectedSeatConflicts":  126,
+                        "DroppedIterations":  0,
+                        "UnexpectedFailures":  0,
+                        "HoldSuccessP95Ms":  47.26944,
+                        "SeatConflictP95Ms":  30.154875,
+                        "FinalHoldRows":  0,
+                        "DatabaseCounts":  [
+                                               20,
+                                               0,
+                                               0,
+                                               20,
+                                               0
+                                           ],
+                        "DbDeadlocksDelta":  0,
+                        "Sequence":  1,
+                        "Round":  1,
+                        "WaitMetrics":  {
+                                            "SampleCount":  12,
+                                            "MaxSampleGapMs":  2489,
+                                            "HikariPendingPeak":  0,
+                                            "HikariActivePeak":  1,
+                                            "HikariMax":  24,
+                                            "HikariAcquireCount":  277,
+                                            "HikariAcquireWaitAverageMs":  0.026797833935018049,
+                                            "HikariTimeoutDelta":  0,
+                                            "DbRowLockCurrentWaitsPeak":  0,
+                                            "DbRowLockWaitsDelta":  2,
+                                            "DbRowLockTimeMsDelta":  19,
+                                            "DbDeadlocksDelta":  0
+                                        }
+                    },
+                    {
+                        "TargetRps":  30,
+                        "DurationSeconds":  10,
+                        "HotSeatCount":  1,
+                        "HoldDwellMilliseconds":  500,
+                        "Iterations":  301,
+                        "HoldSuccess":  97,
+                        "ReleaseSuccess":  97,
+                        "ExpectedSeatConflicts":  204,
+                        "DroppedIterations":  0,
+                        "UnexpectedFailures":  0,
+                        "HoldSuccessP95Ms":  17.04254,
+                        "SeatConflictP95Ms":  24.825149999999987,
+                        "FinalHoldRows":  0,
+                        "DatabaseCounts":  [
+                                               20,
+                                               0,
+                                               0,
+                                               20,
+                                               0
+                                           ],
+                        "DbDeadlocksDelta":  0,
+                        "Sequence":  2,
+                        "Round":  1,
+                        "WaitMetrics":  {
+                                            "SampleCount":  12,
+                                            "MaxSampleGapMs":  1171,
+                                            "HikariPendingPeak":  0,
+                                            "HikariActivePeak":  1,
+                                            "HikariMax":  24,
+                                            "HikariAcquireCount":  401,
+                                            "HikariAcquireWaitAverageMs":  0.010599750623441389,
+                                            "HikariTimeoutDelta":  0,
+                                            "DbRowLockCurrentWaitsPeak":  0,
+                                            "DbRowLockWaitsDelta":  0,
+                                            "DbRowLockTimeMsDelta":  0,
+                                            "DbDeadlocksDelta":  0
+                                        }
+                    }
+                ]
+}

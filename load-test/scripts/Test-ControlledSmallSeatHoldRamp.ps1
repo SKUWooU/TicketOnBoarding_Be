@@ -20,6 +20,25 @@ Assert-True ($plan.Count -eq 3)
 Assert-True ((@($plan | ForEach-Object Rate) -join ',') -eq '5,10,20')
 Assert-True (@($plan | Where-Object { $_.DurationSeconds -ne 10 -or $_.HotSeatCount -ne 1 -or
     $_.HoldDwellMilliseconds -ne 500 }).Count -eq 0)
+$probePlan = @(Get-ControlledSmallSeatHoldProbe30Plan)
+Assert-True ($probePlan.Count -eq 2)
+Assert-True ((@($probePlan | ForEach-Object Rate) -join ',') -eq '20,30')
+Assert-True (@($probePlan | Where-Object { $_.DurationSeconds -ne 10 -or $_.HotSeatCount -ne 1 -or
+    $_.HoldDwellMilliseconds -ne 500 }).Count -eq 0)
+Assert-True (Assert-ControlledSmallSeatProbeMemory 2097152)
+Assert-Throws { Assert-ControlledSmallSeatProbeMemory 2097151 }
+$healthyWait = [pscustomobject]@{ HikariPendingPeak = 0; HikariActivePeak = 1; HikariMax = 24; HikariTimeoutDelta = 0; DbDeadlocksDelta = 0 }
+Assert-True (Assert-ControlledSmallSeatProbeBaseline $healthyWait)
+$badWait = $healthyWait.PSObject.Copy(); $badWait.HikariPendingPeak = 1
+Assert-Throws { Assert-ControlledSmallSeatProbeBaseline $badWait }
+$runner = Join-Path $PSScriptRoot 'Run-ControlledSmallSeatHoldRamp.ps1'
+Assert-Throws { & $runner -RunId 'invalidprobe' -ComposeProject 'ticketon-controlled172-r13' -Probe30 -Repeats 3 }
+$badWait = $healthyWait.PSObject.Copy(); $badWait.HikariActivePeak = 24
+Assert-Throws { Assert-ControlledSmallSeatProbeBaseline $badWait }
+$badWait = $healthyWait.PSObject.Copy(); $badWait.HikariTimeoutDelta = 1
+Assert-Throws { Assert-ControlledSmallSeatProbeBaseline $badWait }
+$badWait = $healthyWait.PSObject.Copy(); $badWait.DbDeadlocksDelta = 1
+Assert-Throws { Assert-ControlledSmallSeatProbeBaseline $badWait }
 
 $console = 'time="2026-10-08T20:00:00+09:00" level=info msg="SEAT_HOLD_FINAL_SNAPSHOT {\"expectedTotalSeats\":20,\"invariantSatisfied\":true}" source=console'
 $parsed = ConvertFrom-ControlledK6ConsoleSnapshot $console
@@ -42,6 +61,12 @@ $fresh = [pscustomobject]@{
 }
 $counts = @(20, 0, 0, 20, 0)
 Assert-True (Assert-ControlledSmallSeatHoldStage $plan[0] $summary $snapshot $fresh $counts 0)
+$probeSummary = $summary.PSObject.Copy(); $probeSummary.TargetRatePerSecond = 30
+$probeSummary.Iterations = 300; $probeSummary.HoldSuccess = 90
+$probeSummary.ReleaseSuccess = 90; $probeSummary.ExpectedContention = 210
+Assert-True (Assert-ControlledSmallSeatHoldStage $probePlan[1] $probeSummary $snapshot $fresh $counts 0)
+$badProbe = $probeSummary.PSObject.Copy(); $badProbe.DroppedIterations = 1
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $probePlan[1] $badProbe $snapshot $fresh $counts 0 }
 $bad = $summary.PSObject.Copy(); $bad.ReleaseSuccess = 34
 Assert-Throws { Assert-ControlledSmallSeatHoldStage $plan[0] $bad $snapshot $fresh $counts 0 }
 $bad = $summary.PSObject.Copy(); $bad.DroppedIterations = 1

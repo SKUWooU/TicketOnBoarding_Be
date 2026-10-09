@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188): 20석·2,000석 Hold 측정 근거를 read-only MCP에서 시나리오별로 판정. 새 부하 실행은 제외.
+- Backend Issue [#190](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/190): 전용 로컬 20석 fixture의 20→30 RPS 단일 탐색과 중단 게이트 검증·근거 보관 진행 중.
 
 ## 완료
+
+### Backend Issue #188 — Hold 실측 근거의 시나리오별 MCP 판정
+
+- PR [#189](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/189) / squash `f58ab47`: 20석 9회·2,000석 6회 판정을 분리하고 교차 p95 비교 차단. MCP 34건·CI·Reviewer 통과. [상세 근거](docs/project-improvement/mcp-scenario-hold-assessment.md)
 
 ### Backend Issue #186 — 20석 Hold 경합 9회 반복 실측
 

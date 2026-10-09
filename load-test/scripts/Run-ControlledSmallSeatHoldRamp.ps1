@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^ticketon-controlled172(-[a-z0-9]{1,12})?$')]
     [string]$ComposeProject,
-    [ValidateSet(1, 3)][int]$Repeats = 1
+    [ValidateSet(1, 3)][int]$Repeats = 1,
+    [switch]$Probe30
 )
 
 Set-StrictMode -Version Latest
@@ -17,12 +18,15 @@ $scenario = 'weighted-hotspot-churn'
 $output = Join-Path $root "load-test\results\$RunId"
 Import-Module (Join-Path $PSScriptRoot 'SeatHoldContention.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRamp.psm1') -Force
-if ($Repeats -eq 3) {
+if ($Probe30 -and $Repeats -ne 1) { throw 'Probe30 uses one bounded 20->30 RPS pair; Repeats must be 1.' }
+$observeWaits = $Repeats -eq 3 -or $Probe30
+if ($observeWaits) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
     Import-Module (Join-Path $PSScriptRoot 'ContentionMetrics.psm1') -Force
     $mysql = Get-Command mysql -ErrorAction Stop
 }
-$plan = if ($Repeats -eq 3) { @(Get-ControlledSmallSeatHoldRepeatPlan) } `
+$plan = if ($Probe30) { @(Get-ControlledSmallSeatHoldProbe30Plan) } `
+    elseif ($Repeats -eq 3) { @(Get-ControlledSmallSeatHoldRepeatPlan) } `
     else { @(Get-ControlledSmallSeatHoldRampPlan) }
 $k6 = Get-Command k6 -ErrorAction Stop
 
@@ -126,11 +130,15 @@ try {
         $process.StartInfo = $start
         $waitSamples = New-Object 'Collections.Generic.List[object]'
         $watch = [Diagnostics.Stopwatch]::StartNew()
-        if ($Repeats -eq 3) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
+        if ($Probe30 -and $stage.Rate -eq 30) {
+            $freeKb = [long](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
+            Assert-ControlledSmallSeatProbeMemory -FreePhysicalMemoryKb $freeKb | Out-Null
+        }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
         if (-not $process.Start()) { throw 'Could not start k6.' }
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
-        if ($Repeats -eq 3) {
+        if ($observeWaits) {
             $nextSampleAt = $watch.ElapsedMilliseconds + 1000
             while (-not $process.HasExited) {
                 $waitMilliseconds = $nextSampleAt - $watch.ElapsedMilliseconds
@@ -142,7 +150,7 @@ try {
             }
         }
         $process.WaitForExit()
-        if ($Repeats -eq 3) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch)) }
         $watch.Stop()
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -157,12 +165,15 @@ try {
             -Uri "$baseUrl/loadtest/seat-holds/snapshot?runId=$RunId"
         $databaseCounts = @(Get-DatabaseCounts)
         $deadlockDelta = (Get-DeadlockCount) - $deadlocksBefore
-        $waitSummary = if ($Repeats -eq 3) {
+        $waitSummary = if ($observeWaits) {
             New-ControlledSmallSeatHoldWaitSummary -Samples $waitSamples.ToArray()
         } else { $null }
         if ($null -ne $waitSummary -and
             ($waitSummary.DbDeadlocksDelta -ne 0 -or $waitSummary.HikariTimeoutDelta -ne 0)) {
             throw 'Wait metrics observed a deadlock or Hikari connection timeout.'
+        }
+        if ($Probe30 -and $stage.Rate -eq 20) {
+            Assert-ControlledSmallSeatProbeBaseline -WaitSummary $waitSummary | Out-Null
         }
         Assert-ControlledSmallSeatHoldStage -Plan $stage -Summary $summary -Snapshot $snapshot `
             -FreshSnapshot $freshSnapshot -DatabaseCounts $databaseCounts `
@@ -184,7 +195,7 @@ try {
             DatabaseCounts = @($databaseCounts | ForEach-Object { [long]$_ })
             DbDeadlocksDelta = $deadlockDelta
         }
-        if ($Repeats -eq 3) {
+        if ($observeWaits) {
             $record.Sequence = $stage.Sequence
             $record.Round = $stage.Round
             $record.WaitMetrics = $waitSummary
@@ -194,12 +205,13 @@ try {
     }
 } finally {
     [ordered]@{
-        SchemaVersion = if ($Repeats -eq 3) { 2 } else { 1 }
+        SchemaVersion = if ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
         Complete = $records.Count -eq $plan.Count
         Repeats = $Repeats
+        Probe30 = [bool]$Probe30
         FixedHotSeatCount = 1
         FixedHoldDwellMilliseconds = 500
         FixedHotRequestPercent = 70
