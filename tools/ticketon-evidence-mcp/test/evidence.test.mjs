@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createInvariantReport, EvidenceError, EvidenceRepository } from "../dist/evidence.js";
 import { compareControlledHotspotEvidence } from "../dist/comparison.js";
 import { assessSeatHoldChurnBatch } from "../dist/seatHoldChurn.js";
+import { assessSmallSeatHold } from "../dist/smallSeatHold.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repository = new EvidenceRepository({ resultsRoot: path.join(here, "fixtures") });
@@ -349,6 +350,94 @@ async function controlledFixture() {
   ].map(async (name) => JSON.parse((await readFile(path.join(folder, name), "utf8")).replace(/^\uFEFF/, ""))));
   return { manifest, first, second };
 }
+
+test("scenario-aware MCP assesses the stored 20-seat and 2,000-seat batches separately", async () => {
+  const small = await measuredRepository.assessControlledHold("small-seat-repeat", "smallrepeat186d");
+  assert.equal(small.status, "COMPARABLE");
+  assert.deepEqual(small.observations.map((item) => item.ratePerSecond), [5, 10, 20, 20, 10, 5, 5, 10, 20]);
+  assert.equal(small.observations.reduce((sum, item) => sum + item.iterations, 0), 1058);
+  assert.equal(small.observations.reduce((sum, item) => sum + item.holdSuccess, 0), 452);
+  assert.equal("observedDifference" in small, false);
+  const large = await measuredRepository.assessControlledHold("large-seat-churn", "churn172a");
+  assert.equal(large.status, "COMPARABLE");
+  assert.equal(large.observations.length, 6);
+  assert.equal(large.controlledConditions.totalSeats, 2000);
+  const wrongScenario = await measuredRepository.assessControlledHold("small-seat-repeat", "churn172a");
+  assert.equal(wrongScenario.status, "INSUFFICIENT_EVIDENCE");
+  assert.equal("observations" in wrongScenario, false);
+});
+
+test("20-seat assessment fails closed on malformed, reordered or invalid evidence", async () => {
+  const manifest = JSON.parse((await readFile(path.join(measuredRoot, "smallrepeat186d", "small-seat-hold-ramp.json"), "utf8")).replace(/^\uFEFF/, ""));
+  const run = (mutate) => {
+    const altered = structuredClone(manifest);
+    mutate(altered);
+    const report = assessSmallSeatHold("smallrepeat186d", altered);
+    assert.notEqual(report.status, "COMPARABLE");
+    assert.equal("observations" in report, false);
+  };
+  run((data) => data.Records.pop());
+  run((data) => data.Records.reverse());
+  run((data) => data.Records[0].WaitMetrics.HikariAcquireCount = undefined);
+  run((data) => data.Records[0].WaitMetrics.MaxSampleGapMs = 4000);
+  run((data) => data.Records[0].WaitMetrics.HikariTimeoutDelta = 1);
+  run((data) => data.Records[0].DroppedIterations = 1);
+  run((data) => data.Records[0].ReleaseSuccess -= 1);
+  run((data) => data.Records[0].DatabaseCounts[1] = 1);
+  run((data) => data.Records[0].DbDeadlocksDelta = 1);
+});
+
+test("20-seat manifest lookup refuses traversal and symlink escape", async () => {
+  await assert.rejects(() => measuredRepository.assessControlledHold("small-seat-repeat", "../smallrepeat186d"),
+    (error) => error instanceof EvidenceError && error.code === "INVALID_RUN_ID");
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketon-small-evidence-"));
+  const outside = await mkdtemp(path.join(os.tmpdir(), "ticketon-small-outside-"));
+  try {
+    const folder = path.join(root, "smallrepeat186d");
+    await writeFile(path.join(outside, "small-seat-hold-ramp.json"), "{}");
+    await symlink(outside, folder, "junction");
+    const isolated = new EvidenceRepository({ resultsRoot: root });
+    await assert.rejects(() => isolated.assessControlledHold("small-seat-repeat", "smallrepeat186d"),
+      (error) => error instanceof EvidenceError && error.code === "RUN_NOT_FOUND");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("missing or malformed 20-seat manifest never exposes observations", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ticketon-small-missing-"));
+  try {
+    const folder = path.join(root, "smallrepeat186d");
+    await mkdir(folder);
+    const isolated = new EvidenceRepository({ resultsRoot: root });
+    const missing = await isolated.assessControlledHold("small-seat-repeat", "smallrepeat186d");
+    assert.equal(missing.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in missing, false);
+    await writeFile(path.join(folder, "small-seat-hold-ramp.json"), "{invalid");
+    const malformed = await isolated.assessControlledHold("small-seat-repeat", "smallrepeat186d");
+    assert.equal(malformed.status, "INSUFFICIENT_EVIDENCE");
+    assert.equal("observations" in malformed, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("stdio exposes read-only scenario assessment without cross-scenario comparison", async () => {
+  const listing = await runServerHandshake();
+  const list = listing.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 2);
+  const tool = list.result.tools.find((item) => item.name === "assess_controlled_hold_evidence");
+  assert.equal(tool.annotations.readOnlyHint, true);
+  assert.equal(tool.annotations.openWorldHint, false);
+  const output = await runServerCall("assess_controlled_hold_evidence", {
+    scenarioId: "small-seat-repeat", batchId: "smallrepeat186d"
+  });
+  const response = output.split("\n").filter(Boolean).map(JSON.parse).find((item) => item.id === 3);
+  const report = JSON.parse(response.result.content[0].text);
+  assert.equal(report.status, "COMPARABLE");
+  assert.equal(report.observations.length, 9);
+  assert.equal("observedDifference" in report, false);
+});
 
 function runServerHandshake() {
   return new Promise((resolve, reject) => {

@@ -13,9 +13,13 @@
 
 ## 진행 중
 
-- Backend Issue [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) / [PR #187](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/187): 20석 Hold 경합 9회 실측·근거 보관 완료. Hikari 관측 누락 Blocking 수정 후 CI·Reviewer 재검토 중.
+- Backend Issue [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188): 20석·2,000석 Hold 측정 근거를 read-only MCP에서 시나리오별로 판정. 새 부하 실행은 제외.
 
 ## 완료
+
+### Backend Issue #186 — 20석 Hold 경합 9회 반복 실측
+
+- PR [#187](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/187) / squash `03667ac`: 5·10·20 RPS 교차 9회, 완료 1,058건·정상 충돌 606건·Hold/Release 452건, dropped·예상 밖 오류·Hikari pending·deadlock 0. [상세 근거](docs/project-improvement/controlled-small-seat-hold-repeat.md)
 
 ### Backend Issue #184 — 20석 인기 좌석 Hold 경합 단계별 검증
 
