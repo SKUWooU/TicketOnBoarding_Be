@@ -52,7 +52,8 @@ export function assessSmallSeatProbe(batchId: string, value: unknown) {
       item.UnexpectedFailures, item.FinalHoldRows, item.DbDeadlocksDelta,
       wait.SampleCount, wait.MaxSampleGapMs, wait.HikariPendingPeak, wait.HikariActivePeak,
       wait.HikariMax, wait.HikariAcquireCount, wait.HikariTimeoutDelta,
-      wait.DbRowLockWaitsDelta, wait.DbDeadlocksDelta];
+      wait.DbRowLockCurrentWaitsPeak, wait.DbRowLockWaitsDelta,
+      wait.DbRowLockTimeMsDelta, wait.DbDeadlocksDelta];
     const counts = item.DatabaseCounts;
     if (integers.some((number) => !natural(number)) ||
         !finite(item.HoldSuccessP95Ms) || !finite(item.SeatConflictP95Ms) ||
