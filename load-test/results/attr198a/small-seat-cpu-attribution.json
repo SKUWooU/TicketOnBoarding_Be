@@ -1,0 +1,501 @@
+﻿{
+    "SchemaVersion":  1,
+    "Scope":  "local virtual 20-seat fixture; not production performance",
+    "RunId":  "attr198a",
+    "ComposeProject":  "ticketon-controlled172-r16",
+    "Complete":  true,
+    "LogicalProcessors":  8,
+    "HostTotalPhysicalMemoryBytes":  16980230144,
+    "Method":  "JVM Prometheus gauge samples; MariaDB PID 1 and k6 cumulative process CPU; not identical peak windows",
+    "Records":  [
+                    {
+                        "Sequence":  1,
+                        "Round":  1,
+                        "TargetRps":  20,
+                        "HostCpuPeakPercent":  82.269729614257813,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  19.102908218014353,
+                                            "BackendProcessCpuAveragePercent":  8.4308143791424079,
+                                            "MariaDbProcessCpuSeconds":  0.58,
+                                            "MariaDbCoreAveragePercent":  4.6316012395762014,
+                                            "K6ProcessCpuSeconds":  0.8125,
+                                            "K6CoreAveragePercent":  7.2050053975023216,
+                                            "K6ElapsedSeconds":  11.276882599999999,
+                                            "MariaDbElapsedSeconds":  12.522667
+                                        },
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:30.8445003Z",
+                                            "HostCpuPercent":  55.560661315917969,
+                                            "BackendProcessCpuPercent":  12.789848666417827
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:32.8869718Z",
+                                            "HostCpuPercent":  71.1874771118164,
+                                            "BackendProcessCpuPercent":  6.4093447558855825
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:33.9008781Z",
+                                            "HostCpuPercent":  82.269729614257813,
+                                            "BackendProcessCpuPercent":  12.33901062243012
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:34.8134874Z",
+                                            "HostCpuPercent":  69.215850830078125,
+                                            "BackendProcessCpuPercent":  19.102908218014353
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:35.7832876Z",
+                                            "HostCpuPercent":  60.3022346496582,
+                                            "BackendProcessCpuPercent":  8.469261700974398
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:36.8277262Z",
+                                            "HostCpuPercent":  65.983901977539063,
+                                            "BackendProcessCpuPercent":  10.331345568160701
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:37.8532689Z",
+                                            "HostCpuPercent":  78.0868911743164,
+                                            "BackendProcessCpuPercent":  5.9180626519000974
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:38.7578447Z",
+                                            "HostCpuPercent":  58.975784301757813,
+                                            "BackendProcessCpuPercent":  7.124611623171198
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:39.7639941Z",
+                                            "HostCpuPercent":  56.710060119628906,
+                                            "BackendProcessCpuPercent":  11.373180993825137
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:40.7695052Z",
+                                            "HostCpuPercent":  58.433422088623047,
+                                            "BackendProcessCpuPercent":  6.29285303244182
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:41.7101244Z",
+                                            "HostCpuPercent":  49.335666656494141,
+                                            "BackendProcessCpuPercent":  7.610454450837298
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:42.7107772Z",
+                                            "HostCpuPercent":  36.209033966064453,
+                                            "BackendProcessCpuPercent":  1.1810273716163409
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:44.1932267Z",
+                                            "HostCpuPercent":  73.2547836303711,
+                                            "BackendProcessCpuPercent":  0.65867727317641878
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  2,
+                        "Round":  1,
+                        "TargetRps":  30,
+                        "HostCpuPeakPercent":  73.877891540527344,
+                        "Attribution":  {
+                                            "SampleCount":  12,
+                                            "BackendProcessCpuPeakPercent":  9.922202028290398,
+                                            "BackendProcessCpuAveragePercent":  5.7762089566037744,
+                                            "MariaDbProcessCpuSeconds":  0.68,
+                                            "MariaDbCoreAveragePercent":  5.9082604588504521,
+                                            "K6ProcessCpuSeconds":  0.71875,
+                                            "K6CoreAveragePercent":  6.5705069282990269,
+                                            "K6ElapsedSeconds":  10.9390342,
+                                            "MariaDbElapsedSeconds":  11.509309799999999
+                                        },
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:46.8518449Z",
+                                            "HostCpuPercent":  61.48785400390625,
+                                            "BackendProcessCpuPercent":  0.22058660762446702
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:48.5459631Z",
+                                            "HostCpuPercent":  51.9411735534668,
+                                            "BackendProcessCpuPercent":  3.4484810290582466
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:49.5254128Z",
+                                            "HostCpuPercent":  73.877891540527344,
+                                            "BackendProcessCpuPercent":  9.5490795677345286
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:50.5002239Z",
+                                            "HostCpuPercent":  44.701591491699219,
+                                            "BackendProcessCpuPercent":  6.7871674102719215
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:51.5769442Z",
+                                            "HostCpuPercent":  52.439262390136719,
+                                            "BackendProcessCpuPercent":  7.7401129533939184
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:52.5506316Z",
+                                            "HostCpuPercent":  61.493167877197266,
+                                            "BackendProcessCpuPercent":  7.5120420406134842
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:53.5259547Z",
+                                            "HostCpuPercent":  66.398109436035156,
+                                            "BackendProcessCpuPercent":  7.312511567207487
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:54.6091223Z",
+                                            "HostCpuPercent":  61.933528900146484,
+                                            "BackendProcessCpuPercent":  9.922202028290398
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:55.5070065Z",
+                                            "HostCpuPercent":  65.197502136230469,
+                                            "BackendProcessCpuPercent":  4.4592640038921365
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:56.5081177Z",
+                                            "HostCpuPercent":  51.225288391113281,
+                                            "BackendProcessCpuPercent":  5.1272165604008695
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:57.5505201Z",
+                                            "HostCpuPercent":  60.445018768310547,
+                                            "BackendProcessCpuPercent":  5.89807531631827
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:54:59.0142692Z",
+                                            "HostCpuPercent":  58.784423828125,
+                                            "BackendProcessCpuPercent":  1.3377683944395684
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  3,
+                        "Round":  2,
+                        "TargetRps":  30,
+                        "HostCpuPeakPercent":  77.924369812011719,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  6.490303704005437,
+                                            "BackendProcessCpuAveragePercent":  4.2474673351136749,
+                                            "MariaDbProcessCpuSeconds":  0.7,
+                                            "MariaDbCoreAveragePercent":  5.859991459983303,
+                                            "K6ProcessCpuSeconds":  0.578125,
+                                            "K6CoreAveragePercent":  5.22847781047583,
+                                            "K6ElapsedSeconds":  11.057233499999999,
+                                            "MariaDbElapsedSeconds":  11.9454099
+                                        },
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:01.4791986Z",
+                                            "HostCpuPercent":  65.301933288574219,
+                                            "BackendProcessCpuPercent":  0.38980018281316736
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:03.2492896Z",
+                                            "HostCpuPercent":  62.254001617431641,
+                                            "BackendProcessCpuPercent":  3.4859617661052105
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:04.1783248Z",
+                                            "HostCpuPercent":  77.924369812011719,
+                                            "BackendProcessCpuPercent":  6.490303704005437
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:05.1215898Z",
+                                            "HostCpuPercent":  56.515693664550781,
+                                            "BackendProcessCpuPercent":  6.2126581966432557
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:06.1734128Z",
+                                            "HostCpuPercent":  64.905715942382813,
+                                            "BackendProcessCpuPercent":  6.2115733438231064
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:07.1437995Z",
+                                            "HostCpuPercent":  70.009559631347656,
+                                            "BackendProcessCpuPercent":  4.6653744616157873
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:08.1145632Z",
+                                            "HostCpuPercent":  52.313453674316406,
+                                            "BackendProcessCpuPercent":  5.200890991680418
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:09.1981523Z",
+                                            "HostCpuPercent":  54.783561706542969,
+                                            "BackendProcessCpuPercent":  5.5514567875314249
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:10.0989352Z",
+                                            "HostCpuPercent":  53.352268218994141,
+                                            "BackendProcessCpuPercent":  3.9127480448319276
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:11.1576589Z",
+                                            "HostCpuPercent":  58.699481964111328,
+                                            "BackendProcessCpuPercent":  3.8620343412340796
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:12.4205920Z",
+                                            "HostCpuPercent":  67.368865966796875,
+                                            "BackendProcessCpuPercent":  6.2642242994011363
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:13.2337557Z",
+                                            "HostCpuPercent":  58.687591552734375,
+                                            "BackendProcessCpuPercent":  2.09281518131481
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:14.0483193Z",
+                                            "HostCpuPercent":  71.448081970214844,
+                                            "BackendProcessCpuPercent":  0.87723405547802213
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  4,
+                        "Round":  2,
+                        "TargetRps":  20,
+                        "HostCpuPeakPercent":  64.349357604980469,
+                        "Attribution":  {
+                                            "SampleCount":  12,
+                                            "BackendProcessCpuPeakPercent":  8.6002294128396333,
+                                            "BackendProcessCpuAveragePercent":  3.4015064597465225,
+                                            "MariaDbProcessCpuSeconds":  0.5,
+                                            "MariaDbCoreAveragePercent":  4.3519977606360323,
+                                            "K6ProcessCpuSeconds":  0.671875,
+                                            "K6CoreAveragePercent":  6.3388467502012276,
+                                            "K6ElapsedSeconds":  10.599325499999999,
+                                            "MariaDbElapsedSeconds":  11.4889765
+                                        },
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:16.4249968Z",
+                                            "HostCpuPercent":  64.252006530761719,
+                                            "BackendProcessCpuPercent":  0.50517351565202684
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:18.1638296Z",
+                                            "HostCpuPercent":  57.203929901123047,
+                                            "BackendProcessCpuPercent":  1.5212855915456607
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:19.1503641Z",
+                                            "HostCpuPercent":  47.961891174316406,
+                                            "BackendProcessCpuPercent":  3.1196912214484609
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:20.1301874Z",
+                                            "HostCpuPercent":  47.176372528076172,
+                                            "BackendProcessCpuPercent":  4.3431328392442223
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:21.1314982Z",
+                                            "HostCpuPercent":  49.255165100097656,
+                                            "BackendProcessCpuPercent":  3.3351023448585093
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:22.1964518Z",
+                                            "HostCpuPercent":  58.757972717285156,
+                                            "BackendProcessCpuPercent":  3.9777251754308636
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:23.1700629Z",
+                                            "HostCpuPercent":  57.044292449951172,
+                                            "BackendProcessCpuPercent":  3.7993635063094966
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:24.1342492Z",
+                                            "HostCpuPercent":  64.349357604980469,
+                                            "BackendProcessCpuPercent":  8.6002294128396333
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:25.1363556Z",
+                                            "HostCpuPercent":  48.350345611572266,
+                                            "BackendProcessCpuPercent":  4.1317199237232556
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:26.1527123Z",
+                                            "HostCpuPercent":  52.914627075195313,
+                                            "BackendProcessCpuPercent":  2.8914686457344114
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:27.1471750Z",
+                                            "HostCpuPercent":  63.689846038818359,
+                                            "BackendProcessCpuPercent":  3.9236557291802163
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:28.5921949Z",
+                                            "HostCpuPercent":  51.341499328613281,
+                                            "BackendProcessCpuPercent":  0.66952961099151231
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  5,
+                        "Round":  3,
+                        "TargetRps":  20,
+                        "HostCpuPeakPercent":  75.683677673339844,
+                        "Attribution":  {
+                                            "SampleCount":  12,
+                                            "BackendProcessCpuPeakPercent":  4.7754895798297792,
+                                            "BackendProcessCpuAveragePercent":  3.4351118328705748,
+                                            "MariaDbProcessCpuSeconds":  0.59,
+                                            "MariaDbCoreAveragePercent":  5.0572658642980075,
+                                            "K6ProcessCpuSeconds":  0.921875,
+                                            "K6CoreAveragePercent":  8.6639478606977587,
+                                            "K6ElapsedSeconds":  10.6403572,
+                                            "MariaDbElapsedSeconds":  11.6663829
+                                        },
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:31.0211143Z",
+                                            "HostCpuPercent":  58.507781982421875,
+                                            "BackendProcessCpuPercent":  0.56879312452959829
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:32.8357164Z",
+                                            "HostCpuPercent":  60.713668823242188,
+                                            "BackendProcessCpuPercent":  1.6732014150283105
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:33.8162013Z",
+                                            "HostCpuPercent":  75.683677673339844,
+                                            "BackendProcessCpuPercent":  4.44059752606172
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:34.8932315Z",
+                                            "HostCpuPercent":  50.881504058837891,
+                                            "BackendProcessCpuPercent":  4.2352391412534249
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:35.8630040Z",
+                                            "HostCpuPercent":  64.883094787597656,
+                                            "BackendProcessCpuPercent":  4.314917395597953
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:36.8346012Z",
+                                            "HostCpuPercent":  55.639717102050781,
+                                            "BackendProcessCpuPercent":  3.7576225786797757
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:37.8424763Z",
+                                            "HostCpuPercent":  62.6209602355957,
+                                            "BackendProcessCpuPercent":  3.8520216247686694
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:38.8757526Z",
+                                            "HostCpuPercent":  63.4986457824707,
+                                            "BackendProcessCpuPercent":  4.7754895798297792
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:39.8360371Z",
+                                            "HostCpuPercent":  59.549198150634766,
+                                            "BackendProcessCpuPercent":  4.0179345167961236
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:40.8210371Z",
+                                            "HostCpuPercent":  48.37762451171875,
+                                            "BackendProcessCpuPercent":  4.2740906774168268
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:41.7988090Z",
+                                            "HostCpuPercent":  53.690334320068359,
+                                            "BackendProcessCpuPercent":  3.8040702699777023
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:43.5279516Z",
+                                            "HostCpuPercent":  58.560451507568359,
+                                            "BackendProcessCpuPercent":  1.5073641445070098
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  6,
+                        "Round":  3,
+                        "TargetRps":  30,
+                        "HostCpuPeakPercent":  87.183547973632813,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  9.7643400128543085,
+                                            "BackendProcessCpuAveragePercent":  4.645226886275081,
+                                            "MariaDbProcessCpuSeconds":  0.78,
+                                            "MariaDbCoreAveragePercent":  6.6891341533297055,
+                                            "K6ProcessCpuSeconds":  0.734375,
+                                            "K6CoreAveragePercent":  6.6395427050956668,
+                                            "K6ElapsedSeconds":  11.0606262,
+                                            "MariaDbElapsedSeconds":  11.660701999999999
+                                        },
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:46.5831094Z",
+                                            "HostCpuPercent":  69.9462661743164,
+                                            "BackendProcessCpuPercent":  0.31613671537720062
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:48.4855510Z",
+                                            "HostCpuPercent":  58.3223762512207,
+                                            "BackendProcessCpuPercent":  2.2607334428289021
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:49.4811212Z",
+                                            "HostCpuPercent":  53.302211761474609,
+                                            "BackendProcessCpuPercent":  5.712404292566271
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:50.6086749Z",
+                                            "HostCpuPercent":  87.183547973632813,
+                                            "BackendProcessCpuPercent":  6.3441486155458122
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:51.5391122Z",
+                                            "HostCpuPercent":  74.18035888671875,
+                                            "BackendProcessCpuPercent":  6.322227080013036
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:52.5097500Z",
+                                            "HostCpuPercent":  63.377857208251953,
+                                            "BackendProcessCpuPercent":  5.5438975310331546
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:53.5855247Z",
+                                            "HostCpuPercent":  69.6956787109375,
+                                            "BackendProcessCpuPercent":  4.1219074482549827
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:54.6179255Z",
+                                            "HostCpuPercent":  61.5753173828125,
+                                            "BackendProcessCpuPercent":  6.5927980063608977
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:55.4064351Z",
+                                            "HostCpuPercent":  53.187705993652344,
+                                            "BackendProcessCpuPercent":  4.3547128444287546
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:56.4087603Z",
+                                            "HostCpuPercent":  72.703208923339844,
+                                            "BackendProcessCpuPercent":  5.6086645980323153
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:57.5103229Z",
+                                            "HostCpuPercent":  64.009109497070313,
+                                            "BackendProcessCpuPercent":  9.7643400128543085
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:58.4178764Z",
+                                            "HostCpuPercent":  44.9358024597168,
+                                            "BackendProcessCpuPercent":  2.5184017836074624
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T16:55:59.0425151Z",
+                                            "HostCpuPercent":  62.200313568115234,
+                                            "BackendProcessCpuPercent":  0.927577150672961
+                                        }
+                                    ]
+                    }
+                ]
+}

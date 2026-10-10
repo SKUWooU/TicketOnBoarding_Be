@@ -1,0 +1,1288 @@
+﻿{
+    "SchemaVersion":  1,
+    "Scope":  "local virtual 20-seat fixture; not production performance",
+    "RunId":  "attr198b",
+    "ComposeProject":  "ticketon-controlled172-r17",
+    "Complete":  true,
+    "LogicalProcessors":  8,
+    "HostTotalPhysicalMemoryBytes":  16980230144,
+    "Method":  "JVM Prometheus gauge samples; MariaDB PID 1 and k6 cumulative process CPU; not identical peak windows",
+    "Records":  [
+                    {
+                        "Sequence":  1,
+                        "Round":  1,
+                        "TargetRps":  20,
+                        "HostCpuPeakPercent":  81.972396850585938,
+                        "Attribution":  {
+                                            "SampleCount":  12,
+                                            "BackendProcessCpuPeakPercent":  14.09486447945072,
+                                            "BackendProcessCpuAveragePercent":  7.9536247750694153,
+                                            "MariaDbProcessCpuSeconds":  0.54,
+                                            "MariaDbCoreAveragePercent":  4.7063782555075155,
+                                            "K6ProcessCpuSeconds":  0.609375,
+                                            "K6CoreAveragePercent":  5.6404531755980472,
+                                            "K6ElapsedSeconds":  10.8036532,
+                                            "MariaDbElapsedSeconds":  11.4737909
+                                        },
+                        "GroupSamples":  [
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:00:56.4510590Z",
+                                                 "IntervalMilliseconds":  2134,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  2,
+                                                 "HostCpuPercent":  70.168807983398438,
+                                                 "BackendJvmHostCapacityPercent":  7.1388823805060921,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.7389585285848173,
+                                                 "OtherReadableHostCapacityPercent":  21.050550609184629
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:00:57.4114572Z",
+                                                 "IntervalMilliseconds":  959,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  50.610488891601563,
+                                                 "BackendJvmHostCapacityPercent":  8.14650677789364,
+                                                 "LoadGeneratorHostCapacityPercent":  0.814650677789364,
+                                                 "DockerWslHostCapacityPercent":  1.8329640250260688,
+                                                 "OtherReadableHostCapacityPercent":  9.775808133472367
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:00:58.5091449Z",
+                                                 "IntervalMilliseconds":  1098,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  62.593536376953125,
+                                                 "BackendJvmHostCapacityPercent":  14.230418943533696,
+                                                 "LoadGeneratorHostCapacityPercent":  0.889401183970856,
+                                                 "DockerWslHostCapacityPercent":  1.4230418943533696,
+                                                 "OtherReadableHostCapacityPercent":  18.855305100182147
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:00:59.4142352Z",
+                                                 "IntervalMilliseconds":  905,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  52.990615844726563,
+                                                 "BackendJvmHostCapacityPercent":  6.0428176795580111,
+                                                 "LoadGeneratorHostCapacityPercent":  0.43162983425414364,
+                                                 "DockerWslHostCapacityPercent":  2.589779005524862,
+                                                 "OtherReadableHostCapacityPercent":  15.538674033149171
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:00.5396627Z",
+                                                 "IntervalMilliseconds":  1125,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  70.51190185546875,
+                                                 "BackendJvmHostCapacityPercent":  9.20138888888889,
+                                                 "LoadGeneratorHostCapacityPercent":  0.1736111111111111,
+                                                 "DockerWslHostCapacityPercent":  1.9097222222222223,
+                                                 "OtherReadableHostCapacityPercent":  26.5625
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:01.5208165Z",
+                                                 "IntervalMilliseconds":  982,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  8,
+                                                 "HostCpuPercent":  70.520576477050781,
+                                                 "BackendJvmHostCapacityPercent":  10.143520875763748,
+                                                 "LoadGeneratorHostCapacityPercent":  0.59667769857433806,
+                                                 "DockerWslHostCapacityPercent":  6.5634546843177191,
+                                                 "OtherReadableHostCapacityPercent":  18.298116089613035
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:02.3987989Z",
+                                                 "IntervalMilliseconds":  877,
+                                                 "MatchedProcessCount":  152,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  51.063201904296875,
+                                                 "BackendJvmHostCapacityPercent":  5.7903363740022806,
+                                                 "LoadGeneratorHostCapacityPercent":  0.22270524515393386,
+                                                 "DockerWslHostCapacityPercent":  0.89082098061573545,
+                                                 "OtherReadableHostCapacityPercent":  14.030430444697833
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:03.4098086Z",
+                                                 "IntervalMilliseconds":  1011,
+                                                 "MatchedProcessCount":  148,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  52.669506072998047,
+                                                 "BackendJvmHostCapacityPercent":  5.2160608308605347,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.1591246290801187,
+                                                 "OtherReadableHostCapacityPercent":  19.705118694362021
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:04.4659662Z",
+                                                 "IntervalMilliseconds":  1057,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  60.630367279052734,
+                                                 "BackendJvmHostCapacityPercent":  8.49988174077578,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  8.6846617786187323,
+                                                 "OtherReadableHostCapacityPercent":  18.108443708609272
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:05.5499128Z",
+                                                 "IntervalMilliseconds":  1083,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  81.972396850585938,
+                                                 "BackendJvmHostCapacityPercent":  6.8530701754385968,
+                                                 "LoadGeneratorHostCapacityPercent":  0.54103185595567871,
+                                                 "DockerWslHostCapacityPercent":  1.44275161588181,
+                                                 "OtherReadableHostCapacityPercent":  28.674688365650969
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:06.8113990Z",
+                                                 "IntervalMilliseconds":  1262,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  48.907203674316406,
+                                                 "BackendJvmHostCapacityPercent":  0.46429278922345485,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0.30952852614896986,
+                                                 "OtherReadableHostCapacityPercent":  10.833498415213946
+                                             }
+                                         ],
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:00:54.3087001Z",
+                                            "HostCpuPercent":  65.944564819335938,
+                                            "BackendProcessCpuPercent":  12.582330719536989
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:00:56.4510590Z",
+                                            "HostCpuPercent":  70.168807983398438,
+                                            "BackendProcessCpuPercent":  5.6630891298818309
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:00:57.4114572Z",
+                                            "HostCpuPercent":  50.610488891601563,
+                                            "BackendProcessCpuPercent":  8.245306176453477
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:00:58.5091449Z",
+                                            "HostCpuPercent":  62.593536376953125,
+                                            "BackendProcessCpuPercent":  14.09486447945072
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:00:59.4142352Z",
+                                            "HostCpuPercent":  52.990615844726563,
+                                            "BackendProcessCpuPercent":  7.3964971662145578
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:00.5396627Z",
+                                            "HostCpuPercent":  70.51190185546875,
+                                            "BackendProcessCpuPercent":  8.6678230585333758
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:01.5208165Z",
+                                            "HostCpuPercent":  70.520576477050781,
+                                            "BackendProcessCpuPercent":  9.9746724922809129
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:02.3987989Z",
+                                            "HostCpuPercent":  51.063201904296875,
+                                            "BackendProcessCpuPercent":  6.83097862351803
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:03.4098086Z",
+                                            "HostCpuPercent":  52.669506072998047,
+                                            "BackendProcessCpuPercent":  4.8781363185250619
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:04.4659662Z",
+                                            "HostCpuPercent":  60.630367279052734,
+                                            "BackendProcessCpuPercent":  9.4105381066746556
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:05.5499128Z",
+                                            "HostCpuPercent":  81.972396850585938,
+                                            "BackendProcessCpuPercent":  6.8333241331481887
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:06.8113990Z",
+                                            "HostCpuPercent":  48.907203674316406,
+                                            "BackendProcessCpuPercent":  0.86593689661517048
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  2,
+                        "Round":  1,
+                        "TargetRps":  30,
+                        "HostCpuPeakPercent":  81.04327392578125,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  9.0561480562901178,
+                                            "BackendProcessCpuAveragePercent":  5.1550695082901381,
+                                            "MariaDbProcessCpuSeconds":  0.73,
+                                            "MariaDbCoreAveragePercent":  6.1984152808835669,
+                                            "K6ProcessCpuSeconds":  0.46875,
+                                            "K6CoreAveragePercent":  4.2466804684008386,
+                                            "K6ElapsedSeconds":  11.0380332,
+                                            "MariaDbElapsedSeconds":  11.777203799999999
+                                        },
+                        "GroupSamples":  [
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:11.4899139Z",
+                                                 "IntervalMilliseconds":  1880,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  10,
+                                                 "HostCpuPercent":  73.822479248046875,
+                                                 "BackendJvmHostCapacityPercent":  4.2594747340425538,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  2.7011303191489362,
+                                                 "OtherReadableHostCapacityPercent":  19.53125
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:12.3847920Z",
+                                                 "IntervalMilliseconds":  895,
+                                                 "MatchedProcessCount":  152,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  51.299137115478516,
+                                                 "BackendJvmHostCapacityPercent":  6.5467877094972069,
+                                                 "LoadGeneratorHostCapacityPercent":  0.21822625698324022,
+                                                 "DockerWslHostCapacityPercent":  2.4004888268156424,
+                                                 "OtherReadableHostCapacityPercent":  10.911312849162011
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:13.4234940Z",
+                                                 "IntervalMilliseconds":  1038,
+                                                 "MatchedProcessCount":  148,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  62.95684814453125,
+                                                 "BackendJvmHostCapacityPercent":  7.9028179190751446,
+                                                 "LoadGeneratorHostCapacityPercent":  0.5644869942196532,
+                                                 "DockerWslHostCapacityPercent":  1.8816233140655105,
+                                                 "OtherReadableHostCapacityPercent":  25.590077071290942
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:14.4336966Z",
+                                                 "IntervalMilliseconds":  1011,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  81.04327392578125,
+                                                 "BackendJvmHostCapacityPercent":  9.46618447082097,
+                                                 "LoadGeneratorHostCapacityPercent":  0.38637487636003959,
+                                                 "DockerWslHostCapacityPercent":  10.432121661721069,
+                                                 "OtherReadableHostCapacityPercent":  23.762054896142434
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:15.3884965Z",
+                                                 "IntervalMilliseconds":  955,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  52.799121856689453,
+                                                 "BackendJvmHostCapacityPercent":  6.3399869109947646,
+                                                 "LoadGeneratorHostCapacityPercent":  0.20451570680628273,
+                                                 "DockerWslHostCapacityPercent":  0.61354712041884818,
+                                                 "OtherReadableHostCapacityPercent":  12.884489528795813
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:16.4754318Z",
+                                                 "IntervalMilliseconds":  1087,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  6,
+                                                 "HostCpuPercent":  68.511886596679688,
+                                                 "BackendJvmHostCapacityPercent":  7.0075321987120516,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0.89840156393744253,
+                                                 "OtherReadableHostCapacityPercent":  18.686752529898804
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:17.4495939Z",
+                                                 "IntervalMilliseconds":  974,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  65.547737121582031,
+                                                 "BackendJvmHostCapacityPercent":  6.0157854209445585,
+                                                 "LoadGeneratorHostCapacityPercent":  0.20052618069815195,
+                                                 "DockerWslHostCapacityPercent":  1.0026309034907597,
+                                                 "OtherReadableHostCapacityPercent":  22.859984599589321
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:18.3599240Z",
+                                                 "IntervalMilliseconds":  910,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  43.143131256103516,
+                                                 "BackendJvmHostCapacityPercent":  5.1510989010989006,
+                                                 "LoadGeneratorHostCapacityPercent":  0.42925824175824173,
+                                                 "DockerWslHostCapacityPercent":  0.21462912087912087,
+                                                 "OtherReadableHostCapacityPercent":  9.4436813186813175
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:19.4241551Z",
+                                                 "IntervalMilliseconds":  1064,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  56.30279541015625,
+                                                 "BackendJvmHostCapacityPercent":  6.0576245300751879,
+                                                 "LoadGeneratorHostCapacityPercent":  0.73425751879699241,
+                                                 "DockerWslHostCapacityPercent":  2.5699013157894735,
+                                                 "OtherReadableHostCapacityPercent":  21.293468045112782
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:20.3835115Z",
+                                                 "IntervalMilliseconds":  959,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  65.610237121582031,
+                                                 "BackendJvmHostCapacityPercent":  4.4805787278415021,
+                                                 "LoadGeneratorHostCapacityPercent":  0.814650677789364,
+                                                 "DockerWslHostCapacityPercent":  1.8329640250260688,
+                                                 "OtherReadableHostCapacityPercent":  19.958941605839417
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:21.3791614Z",
+                                                 "IntervalMilliseconds":  996,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  8,
+                                                 "HostCpuPercent":  50.592945098876953,
+                                                 "BackendJvmHostCapacityPercent":  1.960968875502008,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  2.9414533132530121,
+                                                 "OtherReadableHostCapacityPercent":  11.961910140562249
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:22.2040051Z",
+                                                 "IntervalMilliseconds":  825,
+                                                 "MatchedProcessCount":  150,
+                                                 "ExcludedOrShortLivedProcessCount":  6,
+                                                 "HostCpuPercent":  70.383316040039063,
+                                                 "BackendJvmHostCapacityPercent":  0.946969696969697,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0.71022727272727282,
+                                                 "OtherReadableHostCapacityPercent":  20.833333333333336
+                                             }
+                                         ],
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:09.6102611Z",
+                                            "HostCpuPercent":  59.456111907958984,
+                                            "BackendProcessCpuPercent":  0.35008012073675226
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:11.4899139Z",
+                                            "HostCpuPercent":  73.822479248046875,
+                                            "BackendProcessCpuPercent":  3.8122461105086338
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:12.3847920Z",
+                                            "HostCpuPercent":  51.299137115478516,
+                                            "BackendProcessCpuPercent":  6.6530163437435
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:13.4234940Z",
+                                            "HostCpuPercent":  62.95684814453125,
+                                            "BackendProcessCpuPercent":  6.9974335031095221
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:14.4336966Z",
+                                            "HostCpuPercent":  81.04327392578125,
+                                            "BackendProcessCpuPercent":  9.0561480562901178
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:15.3884965Z",
+                                            "HostCpuPercent":  52.799121856689453,
+                                            "BackendProcessCpuPercent":  7.3722349129866513
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:16.4754318Z",
+                                            "HostCpuPercent":  68.511886596679688,
+                                            "BackendProcessCpuPercent":  8.0054738532989749
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:17.4495939Z",
+                                            "HostCpuPercent":  65.547737121582031,
+                                            "BackendProcessCpuPercent":  5.2056947135103417
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:18.3599240Z",
+                                            "HostCpuPercent":  43.143131256103516,
+                                            "BackendProcessCpuPercent":  5.5160095147192605
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:19.4241551Z",
+                                            "HostCpuPercent":  56.30279541015625,
+                                            "BackendProcessCpuPercent":  4.9821058699888781
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:20.3835115Z",
+                                            "HostCpuPercent":  65.610237121582031,
+                                            "BackendProcessCpuPercent":  6.0915560337385992
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:21.3791614Z",
+                                            "HostCpuPercent":  50.592945098876953,
+                                            "BackendProcessCpuPercent":  1.9291844003470136
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:22.2040051Z",
+                                            "HostCpuPercent":  70.383316040039063,
+                                            "BackendProcessCpuPercent":  1.0447201747935533
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  3,
+                        "Round":  2,
+                        "TargetRps":  30,
+                        "HostCpuPeakPercent":  90.5511474609375,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  11.629559556868335,
+                                            "BackendProcessCpuAveragePercent":  5.1841046023611126,
+                                            "MariaDbProcessCpuSeconds":  0.72,
+                                            "MariaDbCoreAveragePercent":  6.1235279910461777,
+                                            "K6ProcessCpuSeconds":  0.6875,
+                                            "K6CoreAveragePercent":  6.2429283512870271,
+                                            "K6ElapsedSeconds":  11.0124602,
+                                            "MariaDbElapsedSeconds":  11.7579278
+                                        },
+                        "GroupSamples":  [
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:26.4733730Z",
+                                                 "IntervalMilliseconds":  1863,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  2,
+                                                 "HostCpuPercent":  61.718914031982422,
+                                                 "BackendJvmHostCapacityPercent":  2.9354535695115405,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0.8387010198604401,
+                                                 "OtherReadableHostCapacityPercent":  17.822396672034355
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:27.6802770Z",
+                                                 "IntervalMilliseconds":  1207,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  1,
+                                                 "HostCpuPercent":  60.045982360839844,
+                                                 "BackendJvmHostCapacityPercent":  10.356255178127588,
+                                                 "LoadGeneratorHostCapacityPercent":  0.32363297431648713,
+                                                 "DockerWslHostCapacityPercent":  0.97089892294946145,
+                                                 "OtherReadableHostCapacityPercent":  20.227060894780447
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:28.5043818Z",
+                                                 "IntervalMilliseconds":  824,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  80.078765869140625,
+                                                 "BackendJvmHostCapacityPercent":  6.8738622572815542,
+                                                 "LoadGeneratorHostCapacityPercent":  0.23702973300970875,
+                                                 "DockerWslHostCapacityPercent":  1.89623786407767,
+                                                 "OtherReadableHostCapacityPercent":  27.969508495145632
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:29.4838013Z",
+                                                 "IntervalMilliseconds":  979,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  51.142303466796875,
+                                                 "BackendJvmHostCapacityPercent":  6.3840653728294177,
+                                                 "LoadGeneratorHostCapacityPercent":  0.79800817160367721,
+                                                 "DockerWslHostCapacityPercent":  1.5960163432073544,
+                                                 "OtherReadableHostCapacityPercent":  12.169624616956078
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:30.5248367Z",
+                                                 "IntervalMilliseconds":  1041,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  48.434043884277344,
+                                                 "BackendJvmHostCapacityPercent":  5.0657420749279547,
+                                                 "LoadGeneratorHostCapacityPercent":  1.125720461095101,
+                                                 "DockerWslHostCapacityPercent":  2.0638208453410183,
+                                                 "OtherReadableHostCapacityPercent":  12.195304995196928
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:31.5008784Z",
+                                                 "IntervalMilliseconds":  976,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  8,
+                                                 "HostCpuPercent":  80.378410339355469,
+                                                 "BackendJvmHostCapacityPercent":  7.0040343237704921,
+                                                 "LoadGeneratorHostCapacityPercent":  0.60034579918032793,
+                                                 "DockerWslHostCapacityPercent":  5.803342725409836,
+                                                 "OtherReadableHostCapacityPercent":  25.014408299180328
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:32.5043588Z",
+                                                 "IntervalMilliseconds":  1004,
+                                                 "MatchedProcessCount":  152,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  60.292285919189453,
+                                                 "BackendJvmHostCapacityPercent":  4.86335906374502,
+                                                 "LoadGeneratorHostCapacityPercent":  0.38906872509960161,
+                                                 "DockerWslHostCapacityPercent":  1.5562749003984064,
+                                                 "OtherReadableHostCapacityPercent":  24.5113296812749
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:33.5332468Z",
+                                                 "IntervalMilliseconds":  1029,
+                                                 "MatchedProcessCount":  148,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  61.815071105957031,
+                                                 "BackendJvmHostCapacityPercent":  5.8840500485908658,
+                                                 "LoadGeneratorHostCapacityPercent":  0.94904033041788149,
+                                                 "DockerWslHostCapacityPercent":  2.0878887269193394,
+                                                 "OtherReadableHostCapacityPercent":  13.476372691933918
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:34.5659925Z",
+                                                 "IntervalMilliseconds":  1032,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  90.5511474609375,
+                                                 "BackendJvmHostCapacityPercent":  7.1917393410852712,
+                                                 "LoadGeneratorHostCapacityPercent":  0.946281492248062,
+                                                 "DockerWslHostCapacityPercent":  10.21984011627907,
+                                                 "OtherReadableHostCapacityPercent":  26.685138081395348
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:35.4932614Z",
+                                                 "IntervalMilliseconds":  928,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  74.516021728515625,
+                                                 "BackendJvmHostCapacityPercent":  6.5244477370689653,
+                                                 "LoadGeneratorHostCapacityPercent":  0.42093211206896547,
+                                                 "DockerWslHostCapacityPercent":  3.5779229525862069,
+                                                 "OtherReadableHostCapacityPercent":  20.204741379310345
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:36.4727724Z",
+                                                 "IntervalMilliseconds":  979,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  36.625690460205078,
+                                                 "BackendJvmHostCapacityPercent":  1.5960163432073544,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0,
+                                                 "OtherReadableHostCapacityPercent":  9.576098059244126
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:37.2491808Z",
+                                                 "IntervalMilliseconds":  776,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  68.782661437988281,
+                                                 "BackendJvmHostCapacityPercent":  1.0067654639175256,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.5101481958762886,
+                                                 "OtherReadableHostCapacityPercent":  28.944507087628864
+                                             }
+                                         ],
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:24.6111011Z",
+                                            "HostCpuPercent":  62.188446044921875,
+                                            "BackendProcessCpuPercent":  0.86703049780217423
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:26.4733730Z",
+                                            "HostCpuPercent":  61.718914031982422,
+                                            "BackendProcessCpuPercent":  2.6270223212933472
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:27.6802770Z",
+                                            "HostCpuPercent":  60.045982360839844,
+                                            "BackendProcessCpuPercent":  6.2299921348350447
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:28.5043818Z",
+                                            "HostCpuPercent":  80.078765869140625,
+                                            "BackendProcessCpuPercent":  11.629559556868335
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:29.4838013Z",
+                                            "HostCpuPercent":  51.142303466796875,
+                                            "BackendProcessCpuPercent":  6.2222860183617783
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:30.5248367Z",
+                                            "HostCpuPercent":  48.434043884277344,
+                                            "BackendProcessCpuPercent":  5.445251561411883
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:31.5008784Z",
+                                            "HostCpuPercent":  80.378410339355469,
+                                            "BackendProcessCpuPercent":  7.0385885465579152
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:32.5043588Z",
+                                            "HostCpuPercent":  60.292285919189453,
+                                            "BackendProcessCpuPercent":  4.9709089365368806
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:33.5332468Z",
+                                            "HostCpuPercent":  61.815071105957031,
+                                            "BackendProcessCpuPercent":  4.197051078044467
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:34.5659925Z",
+                                            "HostCpuPercent":  90.5511474609375,
+                                            "BackendProcessCpuPercent":  7.9867594022157595
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:35.4932614Z",
+                                            "HostCpuPercent":  74.516021728515625,
+                                            "BackendProcessCpuPercent":  7.3578875485439221
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:36.4727724Z",
+                                            "HostCpuPercent":  36.625690460205078,
+                                            "BackendProcessCpuPercent":  1.781837550241167
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:37.2491808Z",
+                                            "HostCpuPercent":  68.782661437988281,
+                                            "BackendProcessCpuPercent":  1.0391846779817751
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  4,
+                        "Round":  2,
+                        "TargetRps":  20,
+                        "HostCpuPeakPercent":  79.574028015136719,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  5.5893529724293209,
+                                            "BackendProcessCpuAveragePercent":  3.6071506729294143,
+                                            "MariaDbProcessCpuSeconds":  0.55,
+                                            "MariaDbCoreAveragePercent":  4.6337066674287293,
+                                            "K6ProcessCpuSeconds":  0.9375,
+                                            "K6CoreAveragePercent":  8.3491747234866889,
+                                            "K6ElapsedSeconds":  11.2286547,
+                                            "MariaDbElapsedSeconds":  11.8695472
+                                        },
+                        "GroupSamples":  [
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:41.4860454Z",
+                                                 "IntervalMilliseconds":  1824,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  10,
+                                                 "HostCpuPercent":  63.616226196289063,
+                                                 "BackendJvmHostCapacityPercent":  2.891138980263158,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  2.3557428728070176,
+                                                 "OtherReadableHostCapacityPercent":  18.953022203947366
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:42.4749148Z",
+                                                 "IntervalMilliseconds":  989,
+                                                 "MatchedProcessCount":  152,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  47.067073822021484,
+                                                 "BackendJvmHostCapacityPercent":  3.5547269969666329,
+                                                 "LoadGeneratorHostCapacityPercent":  0.59245449949443885,
+                                                 "DockerWslHostCapacityPercent":  1.5798786653185035,
+                                                 "OtherReadableHostCapacityPercent":  14.218907987866531
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:43.4691984Z",
+                                                 "IntervalMilliseconds":  995,
+                                                 "MatchedProcessCount":  148,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  57.177085876464844,
+                                                 "BackendJvmHostCapacityPercent":  4.5147613065326633,
+                                                 "LoadGeneratorHostCapacityPercent":  0.39258793969849248,
+                                                 "DockerWslHostCapacityPercent":  1.3740577889447236,
+                                                 "OtherReadableHostCapacityPercent":  19.040515075376884
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:44.5597973Z",
+                                                 "IntervalMilliseconds":  1090,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  79.574028015136719,
+                                                 "BackendJvmHostCapacityPercent":  5.1963876146788985,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  10.751146788990825,
+                                                 "OtherReadableHostCapacityPercent":  18.993692660550458
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:45.5523481Z",
+                                                 "IntervalMilliseconds":  993,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  60.249446868896484,
+                                                 "BackendJvmHostCapacityPercent":  4.7205438066465257,
+                                                 "LoadGeneratorHostCapacityPercent":  0.78675730110775433,
+                                                 "DockerWslHostCapacityPercent":  1.1801359516616314,
+                                                 "OtherReadableHostCapacityPercent":  19.472243202416919
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:46.5193798Z",
+                                                 "IntervalMilliseconds":  967,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  60.59814453125,
+                                                 "BackendJvmHostCapacityPercent":  5.0494441571871773,
+                                                 "LoadGeneratorHostCapacityPercent":  1.6158221302998967,
+                                                 "DockerWslHostCapacityPercent":  2.221755429162358,
+                                                 "OtherReadableHostCapacityPercent":  22.823487590486039
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:47.5364552Z",
+                                                 "IntervalMilliseconds":  1017,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  62.378273010253906,
+                                                 "BackendJvmHostCapacityPercent":  5.3773352999016719,
+                                                 "LoadGeneratorHostCapacityPercent":  1.5363815142576207,
+                                                 "DockerWslHostCapacityPercent":  1.344333824975418,
+                                                 "OtherReadableHostCapacityPercent":  26.694628810226156
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:48.5185112Z",
+                                                 "IntervalMilliseconds":  982,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  51.897266387939453,
+                                                 "BackendJvmHostCapacityPercent":  4.3756364562118124,
+                                                 "LoadGeneratorHostCapacityPercent":  0.9944628309572302,
+                                                 "DockerWslHostCapacityPercent":  1.1933553971486761,
+                                                 "OtherReadableHostCapacityPercent":  12.729124236252545
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:49.7384128Z",
+                                                 "IntervalMilliseconds":  1220,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  3,
+                                                 "HostCpuPercent":  67.803215026855469,
+                                                 "BackendJvmHostCapacityPercent":  4.6426741803278686,
+                                                 "LoadGeneratorHostCapacityPercent":  0.16009221311475411,
+                                                 "DockerWslHostCapacityPercent":  2.4013831967213117,
+                                                 "OtherReadableHostCapacityPercent":  28.176229508196723
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:50.5361051Z",
+                                                 "IntervalMilliseconds":  797,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  62.273689270019531,
+                                                 "BackendJvmHostCapacityPercent":  3.4308343789209532,
+                                                 "LoadGeneratorHostCapacityPercent":  0.24505959849435383,
+                                                 "DockerWslHostCapacityPercent":  0.49011919698870765,
+                                                 "OtherReadableHostCapacityPercent":  17.154171894604765
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:51.5374735Z",
+                                                 "IntervalMilliseconds":  1002,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  8,
+                                                 "HostCpuPercent":  61.983295440673828,
+                                                 "BackendJvmHostCapacityPercent":  0.97461327345309379,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  3.7035304391217565,
+                                                 "OtherReadableHostCapacityPercent":  13.254740518962075
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:52.3594855Z",
+                                                 "IntervalMilliseconds":  821,
+                                                 "MatchedProcessCount":  150,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  55.569839477539063,
+                                                 "BackendJvmHostCapacityPercent":  0.9515834348355664,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.6652710109622413,
+                                                 "OtherReadableHostCapacityPercent":  11.894792935444581
+                                             }
+                                         ],
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:39.6614286Z",
+                                            "HostCpuPercent":  61.865375518798828,
+                                            "BackendProcessCpuPercent":  0.48275956676523096
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:41.4860454Z",
+                                            "HostCpuPercent":  63.616226196289063,
+                                            "BackendProcessCpuPercent":  2.5833457609486739
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:42.4749148Z",
+                                            "HostCpuPercent":  47.067073822021484,
+                                            "BackendProcessCpuPercent":  3.5067945406671464
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:43.4691984Z",
+                                            "HostCpuPercent":  57.177085876464844,
+                                            "BackendProcessCpuPercent":  4.6544783379833436
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:44.5597973Z",
+                                            "HostCpuPercent":  79.574028015136719,
+                                            "BackendProcessCpuPercent":  5.0576747977228873
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:45.5523481Z",
+                                            "HostCpuPercent":  60.249446868896484,
+                                            "BackendProcessCpuPercent":  4.88282128907832
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:46.5193798Z",
+                                            "HostCpuPercent":  60.59814453125,
+                                            "BackendProcessCpuPercent":  5.2874921829715564
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:47.5364552Z",
+                                            "HostCpuPercent":  62.378273010253906,
+                                            "BackendProcessCpuPercent":  4.0781543021212538
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:48.5185112Z",
+                                            "HostCpuPercent":  51.897266387939453,
+                                            "BackendProcessCpuPercent":  4.7579896161634618
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:49.7384128Z",
+                                            "HostCpuPercent":  67.803215026855469,
+                                            "BackendProcessCpuPercent":  5.5893529724293209
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:50.5361051Z",
+                                            "HostCpuPercent":  62.273689270019531,
+                                            "BackendProcessCpuPercent":  3.5239535117296219
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:51.5374735Z",
+                                            "HostCpuPercent":  61.983295440673828,
+                                            "BackendProcessCpuPercent":  1.5521642931880897
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:52.3594855Z",
+                                            "HostCpuPercent":  55.569839477539063,
+                                            "BackendProcessCpuPercent":  0.93597757631347156
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  5,
+                        "Round":  3,
+                        "TargetRps":  20,
+                        "HostCpuPeakPercent":  82.733970642089844,
+                        "Attribution":  {
+                                            "SampleCount":  12,
+                                            "BackendProcessCpuPeakPercent":  10.584560671297423,
+                                            "BackendProcessCpuAveragePercent":  4.1029239875211383,
+                                            "MariaDbProcessCpuSeconds":  0.59,
+                                            "MariaDbCoreAveragePercent":  5.0314914654861056,
+                                            "K6ProcessCpuSeconds":  0.84375,
+                                            "K6CoreAveragePercent":  7.8209544517623559,
+                                            "K6ElapsedSeconds":  10.7883252,
+                                            "MariaDbElapsedSeconds":  11.726145299999999
+                                        },
+                        "GroupSamples":  [
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:57.5520178Z",
+                                                 "IntervalMilliseconds":  1881,
+                                                 "MatchedProcessCount":  142,
+                                                 "ExcludedOrShortLivedProcessCount":  2,
+                                                 "HostCpuPercent":  69.376213073730469,
+                                                 "BackendJvmHostCapacityPercent":  2.9073631047315258,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.2460127591706538,
+                                                 "OtherReadableHostCapacityPercent":  28.035287081339714
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:58.6174367Z",
+                                                 "IntervalMilliseconds":  1066,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  68.691581726074219,
+                                                 "BackendJvmHostCapacityPercent":  4.5804995309568479,
+                                                 "LoadGeneratorHostCapacityPercent":  0.91609990619136961,
+                                                 "DockerWslHostCapacityPercent":  1.2825398686679175,
+                                                 "OtherReadableHostCapacityPercent":  23.085717636022512
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:01:59.5427474Z",
+                                                 "IntervalMilliseconds":  925,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  47.653282165527344,
+                                                 "BackendJvmHostCapacityPercent":  4.2229729729729728,
+                                                 "LoadGeneratorHostCapacityPercent":  0.21114864864864863,
+                                                 "DockerWslHostCapacityPercent":  1.4780405405405406,
+                                                 "OtherReadableHostCapacityPercent":  11.190878378378377
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:00.5678977Z",
+                                                 "IntervalMilliseconds":  1025,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  59.037590026855469,
+                                                 "BackendJvmHostCapacityPercent":  4.1920731707317076,
+                                                 "LoadGeneratorHostCapacityPercent":  1.3338414634146343,
+                                                 "DockerWslHostCapacityPercent":  0.95274390243902451,
+                                                 "OtherReadableHostCapacityPercent":  18.864329268292686
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:01.7220391Z",
+                                                 "IntervalMilliseconds":  1160,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  8,
+                                                 "HostCpuPercent":  82.733970642089844,
+                                                 "BackendJvmHostCapacityPercent":  10.607489224137932,
+                                                 "LoadGeneratorHostCapacityPercent":  1.0102370689655173,
+                                                 "DockerWslHostCapacityPercent":  3.3674568965517242,
+                                                 "OtherReadableHostCapacityPercent":  15.321928879310345
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:02.5595487Z",
+                                                 "IntervalMilliseconds":  832,
+                                                 "MatchedProcessCount":  152,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  49.180370330810547,
+                                                 "BackendJvmHostCapacityPercent":  5.1645132211538467,
+                                                 "LoadGeneratorHostCapacityPercent":  0.93900240384615385,
+                                                 "DockerWslHostCapacityPercent":  1.4085036057692308,
+                                                 "OtherReadableHostCapacityPercent":  10.094275841346155
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:03.5308535Z",
+                                                 "IntervalMilliseconds":  971,
+                                                 "MatchedProcessCount":  148,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  48.096866607666016,
+                                                 "BackendJvmHostCapacityPercent":  4.2240602471678681,
+                                                 "LoadGeneratorHostCapacityPercent":  0.20114572605561279,
+                                                 "DockerWslHostCapacityPercent":  1.810311534500515,
+                                                 "OtherReadableHostCapacityPercent":  11.66645211122554
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:04.5869382Z",
+                                                 "IntervalMilliseconds":  1057,
+                                                 "MatchedProcessCount":  144,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  81.143630981445313,
+                                                 "BackendJvmHostCapacityPercent":  4.8042809839167457,
+                                                 "LoadGeneratorHostCapacityPercent":  0.9239001892147588,
+                                                 "DockerWslHostCapacityPercent":  9.9781220435193951,
+                                                 "OtherReadableHostCapacityPercent":  25.684425260170293
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:05.5585857Z",
+                                                 "IntervalMilliseconds":  971,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  73.251922607421875,
+                                                 "BackendJvmHostCapacityPercent":  3.4194773429454171,
+                                                 "LoadGeneratorHostCapacityPercent":  0.40229145211122558,
+                                                 "DockerWslHostCapacityPercent":  4.0229145211122557,
+                                                 "OtherReadableHostCapacityPercent":  15.689366632337796
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:06.5954056Z",
+                                                 "IntervalMilliseconds":  1037,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  3,
+                                                 "HostCpuPercent":  73.4521255493164,
+                                                 "BackendJvmHostCapacityPercent":  3.201844262295082,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.5067502410800386,
+                                                 "OtherReadableHostCapacityPercent":  12.995720829315333
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:08.2725447Z",
+                                                 "IntervalMilliseconds":  1677,
+                                                 "MatchedProcessCount":  141,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  80.092620849609375,
+                                                 "BackendJvmHostCapacityPercent":  0.58232707215265356,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0.23293082886106142,
+                                                 "OtherReadableHostCapacityPercent":  23.642479129397735
+                                             }
+                                         ],
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:55.6698283Z",
+                                            "HostCpuPercent":  73.799919128417969,
+                                            "BackendProcessCpuPercent":  0.24300143427611356
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:57.5520178Z",
+                                            "HostCpuPercent":  69.376213073730469,
+                                            "BackendProcessCpuPercent":  2.2966779673980438
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:58.6174367Z",
+                                            "HostCpuPercent":  68.691581726074219,
+                                            "BackendProcessCpuPercent":  4.9888171901881284
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:01:59.5427474Z",
+                                            "HostCpuPercent":  47.653282165527344,
+                                            "BackendProcessCpuPercent":  4.333471601017755
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:00.5678977Z",
+                                            "HostCpuPercent":  59.037590026855469,
+                                            "BackendProcessCpuPercent":  4.0575366048230279
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:01.7220391Z",
+                                            "HostCpuPercent":  82.733970642089844,
+                                            "BackendProcessCpuPercent":  10.584560671297423
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:02.5595487Z",
+                                            "HostCpuPercent":  49.180370330810547,
+                                            "BackendProcessCpuPercent":  5.6791729492622585
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:03.5308535Z",
+                                            "HostCpuPercent":  48.096866607666016,
+                                            "BackendProcessCpuPercent":  3.9861630013865978
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:04.5869382Z",
+                                            "HostCpuPercent":  81.143630981445313,
+                                            "BackendProcessCpuPercent":  4.1730838073228149
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:05.5585857Z",
+                                            "HostCpuPercent":  73.251922607421875,
+                                            "BackendProcessCpuPercent":  4.6282506643302463
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:06.5954056Z",
+                                            "HostCpuPercent":  73.4521255493164,
+                                            "BackendProcessCpuPercent":  3.4632229731926221
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:08.2725447Z",
+                                            "HostCpuPercent":  80.092620849609375,
+                                            "BackendProcessCpuPercent":  0.80112898575861835
+                                        }
+                                    ]
+                    },
+                    {
+                        "Sequence":  6,
+                        "Round":  3,
+                        "TargetRps":  30,
+                        "HostCpuPeakPercent":  91.214691162109375,
+                        "Attribution":  {
+                                            "SampleCount":  13,
+                                            "BackendProcessCpuPeakPercent":  6.7346822261973456,
+                                            "BackendProcessCpuAveragePercent":  4.1842062830582218,
+                                            "MariaDbProcessCpuSeconds":  0.72,
+                                            "MariaDbCoreAveragePercent":  5.9605263151359074,
+                                            "K6ProcessCpuSeconds":  0.640625,
+                                            "K6CoreAveragePercent":  5.8055357184333349,
+                                            "K6ElapsedSeconds":  11.0347267,
+                                            "MariaDbElapsedSeconds":  12.0794702
+                                        },
+                        "GroupSamples":  [
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:13.2321025Z",
+                                                 "IntervalMilliseconds":  1810,
+                                                 "MatchedProcessCount":  145,
+                                                 "ExcludedOrShortLivedProcessCount":  2,
+                                                 "HostCpuPercent":  62.220294952392578,
+                                                 "BackendJvmHostCapacityPercent":  2.8055939226519335,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  1.294889502762431,
+                                                 "OtherReadableHostCapacityPercent":  16.401933701657459
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:14.2408901Z",
+                                                 "IntervalMilliseconds":  1008,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  57.041728973388672,
+                                                 "BackendJvmHostCapacityPercent":  4.4565352182539684,
+                                                 "LoadGeneratorHostCapacityPercent":  0.38752480158730157,
+                                                 "DockerWslHostCapacityPercent":  9.88188244047619,
+                                                 "OtherReadableHostCapacityPercent":  12.20703125
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:15.2839539Z",
+                                                 "IntervalMilliseconds":  1043,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  87.632965087890625,
+                                                 "BackendJvmHostCapacityPercent":  6.1795901246404608,
+                                                 "LoadGeneratorHostCapacityPercent":  0.37452061361457339,
+                                                 "DockerWslHostCapacityPercent":  2.0598633748801536,
+                                                 "OtherReadableHostCapacityPercent":  37.26480105465005
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:16.2555925Z",
+                                                 "IntervalMilliseconds":  972,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  62.840263366699219,
+                                                 "BackendJvmHostCapacityPercent":  4.8225308641975309,
+                                                 "LoadGeneratorHostCapacityPercent":  0.60281635802469136,
+                                                 "DockerWslHostCapacityPercent":  2.8131430041152266,
+                                                 "OtherReadableHostCapacityPercent":  13.66383744855967
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:17.2433007Z",
+                                                 "IntervalMilliseconds":  988,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  45.1944580078125,
+                                                 "BackendJvmHostCapacityPercent":  4.744433198380567,
+                                                 "LoadGeneratorHostCapacityPercent":  0.39536943319838058,
+                                                 "DockerWslHostCapacityPercent":  0.98842358299595146,
+                                                 "OtherReadableHostCapacityPercent":  10.674974696356275
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:18.2635070Z",
+                                                 "IntervalMilliseconds":  1020,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  75.317100524902344,
+                                                 "BackendJvmHostCapacityPercent":  6.3189338235294112,
+                                                 "LoadGeneratorHostCapacityPercent":  0.38296568627450978,
+                                                 "DockerWslHostCapacityPercent":  1.7233455882352942,
+                                                 "OtherReadableHostCapacityPercent":  28.530943627450981
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:19.2295705Z",
+                                                 "IntervalMilliseconds":  966,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  53.702247619628906,
+                                                 "BackendJvmHostCapacityPercent":  5.6612318840579716,
+                                                 "LoadGeneratorHostCapacityPercent":  0.6065605590062112,
+                                                 "DockerWslHostCapacityPercent":  1.6174948240165632,
+                                                 "OtherReadableHostCapacityPercent":  14.96182712215321
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:20.2206075Z",
+                                                 "IntervalMilliseconds":  991,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  42.650043487548828,
+                                                 "BackendJvmHostCapacityPercent":  4.1388118062563066,
+                                                 "LoadGeneratorHostCapacityPercent":  0.3941725529767911,
+                                                 "DockerWslHostCapacityPercent":  2.167949041372351,
+                                                 "OtherReadableHostCapacityPercent":  11.431004036326943
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:21.3510234Z",
+                                                 "IntervalMilliseconds":  1131,
+                                                 "MatchedProcessCount":  143,
+                                                 "ExcludedOrShortLivedProcessCount":  8,
+                                                 "HostCpuPercent":  69.936393737792969,
+                                                 "BackendJvmHostCapacityPercent":  6.3895335985853228,
+                                                 "LoadGeneratorHostCapacityPercent":  0.69076038903625114,
+                                                 "DockerWslHostCapacityPercent":  2.2449712643678161,
+                                                 "OtherReadableHostCapacityPercent":  20.204741379310345
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:22.2402096Z",
+                                                 "IntervalMilliseconds":  889,
+                                                 "MatchedProcessCount":  151,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  48.128932952880859,
+                                                 "BackendJvmHostCapacityPercent":  5.93187570303712,
+                                                 "LoadGeneratorHostCapacityPercent":  0.21969910011248595,
+                                                 "DockerWslHostCapacityPercent":  1.5378937007874016,
+                                                 "OtherReadableHostCapacityPercent":  10.106158605174354
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:23.2752031Z",
+                                                 "IntervalMilliseconds":  1035,
+                                                 "MatchedProcessCount":  145,
+                                                 "ExcludedOrShortLivedProcessCount":  6,
+                                                 "HostCpuPercent":  46.435886383056641,
+                                                 "BackendJvmHostCapacityPercent":  1.5096618357487923,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  0.37741545893719808,
+                                                 "OtherReadableHostCapacityPercent":  12.454710144927537
+                                             },
+                                             {
+                                                 "TimestampUtc":  "2026-10-09T17:02:24.3208147Z",
+                                                 "IntervalMilliseconds":  1045,
+                                                 "MatchedProcessCount":  141,
+                                                 "ExcludedOrShortLivedProcessCount":  0,
+                                                 "HostCpuPercent":  91.214691162109375,
+                                                 "BackendJvmHostCapacityPercent":  0.74760765550239239,
+                                                 "LoadGeneratorHostCapacityPercent":  0,
+                                                 "DockerWslHostCapacityPercent":  7.2891746411483256,
+                                                 "OtherReadableHostCapacityPercent":  35.137559808612444
+                                             }
+                                         ],
+                        "Samples":  [
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:11.4226794Z",
+                                            "HostCpuPercent":  77.737663269042969,
+                                            "BackendProcessCpuPercent":  0.37946849962162438
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:13.2321025Z",
+                                            "HostCpuPercent":  62.220294952392578,
+                                            "BackendProcessCpuPercent":  2.2403572287565123
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:14.2408901Z",
+                                            "HostCpuPercent":  57.041728973388672,
+                                            "BackendProcessCpuPercent":  4.8389148324232227
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:15.2839539Z",
+                                            "HostCpuPercent":  87.632965087890625,
+                                            "BackendProcessCpuPercent":  5.5819283319452584
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:16.2555925Z",
+                                            "HostCpuPercent":  62.840263366699219,
+                                            "BackendProcessCpuPercent":  4.7085864627561609
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:17.2433007Z",
+                                            "HostCpuPercent":  45.1944580078125,
+                                            "BackendProcessCpuPercent":  4.7160120657470941
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:18.2635070Z",
+                                            "HostCpuPercent":  75.317100524902344,
+                                            "BackendProcessCpuPercent":  6.7346822261973456
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:19.2295705Z",
+                                            "HostCpuPercent":  53.702247619628906,
+                                            "BackendProcessCpuPercent":  5.7488645762507318
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:20.2206075Z",
+                                            "HostCpuPercent":  42.650043487548828,
+                                            "BackendProcessCpuPercent":  4.299732172028313
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:21.3510234Z",
+                                            "HostCpuPercent":  69.936393737792969,
+                                            "BackendProcessCpuPercent":  6.5750292209769228
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:22.2402096Z",
+                                            "HostCpuPercent":  48.128932952880859,
+                                            "BackendProcessCpuPercent":  5.50756899857264
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:23.2752031Z",
+                                            "HostCpuPercent":  46.435886383056641,
+                                            "BackendProcessCpuPercent":  2.3206431243465686
+                                        },
+                                        {
+                                            "TimestampUtc":  "2026-10-09T17:02:24.3208147Z",
+                                            "HostCpuPercent":  91.214691162109375,
+                                            "BackendProcessCpuPercent":  0.74289394013449206
+                                        }
+                                    ]
+                    }
+                ]
+}

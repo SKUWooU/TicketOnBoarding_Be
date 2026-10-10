@@ -22,11 +22,14 @@
 | 20석 반복 | 같은 조건, 5/10/20 RPS 교차 순서 각 3회 | 9회 완료 1,058=Hold·해제 452+정상 409 606. dropped·예상 밖 오류·pending·timeout·deadlock·종료 Hold 0. 20 RPS 전역 DB row-lock wait 1/4/2건. [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186) | [9-run manifest](../../load-test/results/smallrepeat186d/small-seat-hold-ramp.json) |
 | 20→30 RPS 탐색 | 같은 가상 20석, 각 10초 단일 순차 실행 | 완료 200/301, Hold=Release 74/97, 정상 409 126/204. 두 단계 모두 pending·dropped·deadlock·최종 Hold 0. 30 RPS 안정 구간 또는 p95 개선 주장은 불가. [#190](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/190) | [2-run manifest](../../load-test/results/probe190a/small-seat-hold-ramp.json) |
 | 20/30 RPS 교차 반복 | 같은 가상 20석, 20·30→30·20→20·30 RPS, 각 10초·각 속도 3회 | 6단계 완료 1,506=Hold·해제 516+정상 409 990. dropped·예상 밖 오류·pending·timeout·deadlock·종료 Hold 0. 한 20 RPS 단계의 호스트 CPU peak 91.5%로 **추가 증량 전 원인 확인 필요**. [#196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196) | [완료 manifest](../../load-test/results/repeat196b/small-seat-hold-ramp.json), [미완료 manifest](../../load-test/results/repeat196a/small-seat-hold-ramp.json) |
+| 20/30 RPS CPU 귀속 진단 | 동일 계획·fixture로 별도 빈 DB에서 6단계씩 2회. 두 번째에 Windows 프로세스군 표본 추가 | `attr198a` 1,501건·host peak 87.2%; `attr198b` 1,503건·host peak 91.2%. 두 실행 모두 예상 밖 오류·dropped·pending·timeout·deadlock·최종 Hold 0, 독립 SQL `20,0,0,20,0`. 높은 host peak를 JVM/DB 단독 병목으로 귀속할 수 없음. [#198](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/198) | [첫 실행](../../load-test/results/attr198a/small-seat-cpu-attribution.json), [프로세스군 포함](../../load-test/results/attr198b/small-seat-cpu-attribution.json), [부하 manifest](../../load-test/results/attr198b/small-seat-hold-ramp.json) |
 | 2,000석 지속 쓰기 경합 | 인기 20/40/200석·70%, Hold 100ms, 50/100 RPS×10초, 각 속도 6-run | Hold=Release·최종 HELD 0, dropped·예상 밖 오류·deadlock 0. 인기 집합별 성공/409 비중이 달라 혼합 p95 직접 비교 금지. [#172](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/172) | [50 RPS manifest](../../load-test/results/churn172a/controlled-seat-hold-churn-manifest.json), [100 RPS manifest](../../load-test/results/churn172b/controlled-seat-hold-churn-manifest.json) |
 
 좌석 수, 인기 분포, Hold 지속 시간이 다르므로 **20석과 2,000석 p95를 전후 개선처럼 비교하지 않는다.** DB row-lock wait는 DB 전역 counter라 특정 SQL의 잠금 원인을 단정할 수 없다. 짧은 표본에서 Hikari pending 0도 순간 최대 대기를 전부 포착했다는 뜻은 아니다.
 
 #196은 로컬 8 logical CPU·15.81GiB RAM 호스트에서 계측했다. 첫 시도 `repeat196a`는 `Complete:false`, 기록된 단계 0건이므로 측정 결과로 사용하지 않는다. 이 manifest에는 실패 원인과 당시 표본 간격이 저장되지 않아 원인을 단정하지 않는다. 별도 빈 DB의 `repeat196b`는 약 1초 간격 Windows 전체 CPU·가용 메모리 카운터로 재실행했다. 단계별 최대 표본 간격 1,201~1,379ms, 최소 가용 메모리 3.32GiB, 20 RPS Hold 성공 p95 21.95~33.61ms, 30 RPS 22.05~34.01ms였다. 호스트 CPU의 단일 peak는 Backend/DB 병목의 원인 증명이 아니며, 서로 다른 호스트·fixture 또는 단일 탐색과의 성능 개선 수치로 비교하지 않는다.
+
+#198의 두 실행도 같은 8 logical CPU·Windows 물리 RAM 15.81GiB 노트북이다. `attr198b`에서 host peak 91.2%인 표본 구간의 Windows 프로세스 CPU 증가량은 Backend JVM 0.7%, k6 0%, Docker/WSL 호스트군 7.3%, 기타 읽기 가능 프로세스군 35.1%로 환산됐다(각각 전체 8 logical CPU 용량 대비). 같은 실행의 JVM Prometheus peak는 14.1%(시점이 다름), MariaDB PID 1 CPU는 단계 평균 4.6~6.2% **한 코어 기준**, k6는 4.2~8.3% **한 코어 기준**이다. 이 수치는 서로 다른 수집 시각·창·분모를 갖고, 프로세스 시작/종료·접근 제한·Windows 커널 사용량도 빠질 수 있어 **서로 합하거나 host peak에서 빼서 잔여 CPU 원인을 특정하지 않는다.** 다만 Backend 또는 MariaDB 단독 포화라는 근거는 없고, 부하 도중 기타 로컬 프로세스 사용량도 유의미했다. 프로세스군 집계에는 개인 앱 이름을 저장하지 않았다. 추가 계측 시 최대 표본 간격은 `attr198a` 1,694~2,038ms, `attr198b` 1,810~2,134ms로 기존 #196의 1,201~1,379ms보다 길었다. 따라서 p95를 #196과 전후 성능 개선으로 비교하지 않는다.
 
 ## 3. 결과를 믿기 위한 관측 경계
 
@@ -37,4 +40,4 @@
 
 ## 4. 다음 실험의 중단 기준
 
-다음은 20 RPS 한 단계에서 관측한 전체 호스트 CPU peak 91.5%의 원인을 분리해 보는 것이다. Backend JVM·MariaDB·다른 로컬 프로세스의 CPU와 표본 시각을 교차하지 않은 상태에서 40 RPS 등으로 자동 증량하지 않는다. dropped, 예상 밖 오류, timeout, deadlock, 재고 불일치, 샘플 단절 또는 메모리 부족이 나오면 중단한다. 별도 장비에서 재실행하면 **새 기준선**으로 기록하고 이 호스트의 수치를 직접 전후 비교하지 않는다.
+호스트 CPU의 미설명분이 있고 추가 계측으로 표본 간격도 늘어났으므로 40 RPS 등으로 자동 증량하지 않는다. 상위 부하 전에는 OS/가상화 CPU를 같은 시계열에서 분리하고 계측 오버헤드를 낮춘 별도 기준선이 필요하다. dropped, 예상 밖 오류, timeout, deadlock, 재고 불일치, 샘플 단절 또는 메모리 부족이 나오면 중단한다. 별도 장비에서 재실행하면 **새 기준선**으로 기록하고 이 호스트의 수치를 직접 전후 비교하지 않는다.

@@ -9,6 +9,7 @@
 | 잠금 조회의 넓은 탐색·pool 대기 | `(concert_time_id, seat_number)` unique index, 동일 fixture A/B·k6·Performance Schema | p95 **3,064.39→143.41ms**, Hikari pending peak **189→0** ([상세 A/B](archive/load-testing/seat-composite-index-high-contention-ab.md), [#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)) |
 | 예약 재시도·결제 검증 중복 | Idempotency-Key·fingerprint·DB unique; Checkout claim·PG I/O transaction 분리, Mock PG 지연 검증 | [#35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35), [#82](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/82), [checkout 기록](archive/checkout/) |
 | 인기 좌석 Hold의 정상 충돌과 시스템 포화 구분 | 20석 5/10/20 RPS 9-run, 20/30 RPS 6단계 교차 반복·호스트 자원, 2,000석 별도 50/100 RPS 6-run | [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186), [#196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196), [실험 요약](EXPERIMENTS.md) |
+| 호스트 CPU peak의 원인 단정 방지 | 같은 가상 20석 20/30 RPS 반복에서 JVM·MariaDB PID 1·k6 CPU와 Windows 프로세스군을 별도로 계측. 표본 창 차이와 미수집 CPU를 명시 | [#198](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/198), [실험 요약](EXPERIMENTS.md), [ADR-0004](adr/0004-defer-hold-admission-infrastructure.md) |
 | AI 분석의 근거 범위 | read-only MCP로 허용된 요약·불변식·동일 조건 판정만 제공 | [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188), [MCP 사용법](../../tools/ticketon-evidence-mcp/README.md) |
 | 다중 인스턴스·DB schema 변경 경계 | 로컬 2-instance 상태 수렴 smoke; Flyway fresh/baseline 검증 | [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150), [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152). 운영 확장성·기존 DB 무중단 migration 증명 아님. |
 
