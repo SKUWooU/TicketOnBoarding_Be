@@ -42,6 +42,7 @@ $runner = Join-Path $PSScriptRoot 'Run-ControlledSmallSeatHoldRamp.ps1'
 Assert-Throws { & $runner -RunId 'invalidprobe' -ComposeProject 'ticketon-controlled172-r13' -Probe30 -Repeats 3 }
 Assert-Throws { & $runner -RunId 'invalidrepeat' -ComposeProject 'ticketon-controlled172-r14' -Repeat30 -Probe30 }
 Assert-Throws { & $runner -RunId 'invalidrepeat' -ComposeProject 'ticketon-controlled172-r14' -Repeat30 -Repeats 3 }
+Assert-Throws { & $runner -RunId 'invalidcpu' -ComposeProject 'ticketon-controlled172-r14' -AttributeCpu }
 $hostSamples = @(1..5 | ForEach-Object { [pscustomobject]@{ HostCpuPercent = [double]($_ * 10); HostFreeMemoryKb = [long](3000000 - $_ * 100000) } })
 $hostSummary = New-ControlledSmallSeatHostSummary -Samples $hostSamples
 Assert-True ($hostSummary.SampleCount -eq 5 -and $hostSummary.HostCpuPeakPercent -eq 50 -and

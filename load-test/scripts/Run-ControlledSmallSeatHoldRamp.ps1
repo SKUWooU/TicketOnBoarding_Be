@@ -7,7 +7,8 @@ param(
     [string]$ComposeProject,
     [ValidateSet(1, 3)][int]$Repeats = 1,
     [switch]$Probe30,
-    [switch]$Repeat30
+    [switch]$Repeat30,
+    [switch]$AttributeCpu
 )
 
 Set-StrictMode -Version Latest
@@ -21,11 +22,15 @@ Import-Module (Join-Path $PSScriptRoot 'SeatHoldContention.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRamp.psm1') -Force
 if ($Probe30 -and $Repeats -ne 1) { throw 'Probe30 uses one bounded 20->30 RPS pair; Repeats must be 1.' }
 if ($Repeat30 -and ($Probe30 -or $Repeats -ne 1)) { throw 'Repeat30 is a fixed six-stage plan and cannot be combined with Probe30 or Repeats.' }
+if ($AttributeCpu -and -not $Repeat30) { throw 'CPU attribution requires the fixed Repeat30 plan.' }
 $observeWaits = $Repeats -eq 3 -or $Probe30 -or $Repeat30
 if ($observeWaits) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
     Import-Module (Join-Path $PSScriptRoot 'ContentionMetrics.psm1') -Force
     $mysql = Get-Command mysql -ErrorAction Stop
+}
+if ($AttributeCpu) {
+    Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatCpuAttribution.psm1') -Force
 }
 $plan = if ($Repeat30) { @(Get-ControlledSmallSeatHoldRepeat30Plan) } `
     elseif ($Probe30) { @(Get-ControlledSmallSeatHoldProbe30Plan) } `
@@ -55,6 +60,15 @@ function Get-DeadlockCount {
     [long]$Matches[1]
 }
 
+function Get-MariaDbCpuSnapshot {
+    $lines = @(& docker compose -p $ComposeProject -f $compose exec -T mariadb `
+        sh -c 'cat /proc/1/stat; getconf CLK_TCK' 2>&1)
+    if ($LASTEXITCODE -ne 0 -or $lines.Count -ne 2) {
+        throw 'Could not read the dedicated MariaDB process CPU counters.'
+    }
+    ConvertFrom-MariaDbProcessStat -Stat ([string]$lines[0]) -ClockTicks ([string]$lines[1])
+}
+
 function Get-DatabaseCounts {
     $sql = "SELECT COUNT(*) FROM seat WHERE concert_time_id=$concertTimeId UNION ALL " +
         "SELECT COUNT(*) FROM seat WHERE concert_time_id=$concertTimeId AND " +
@@ -74,6 +88,7 @@ function Get-WaitSample {
     param(
         [Parameter(Mandatory = $true)][Diagnostics.Stopwatch]$Stopwatch,
         [switch]$IncludeHost,
+        [switch]$IncludeJvm,
         [Diagnostics.PerformanceCounter]$CpuCounter,
         [object]$HostMemory
     )
@@ -81,6 +96,7 @@ function Get-WaitSample {
         -Uri 'http://127.0.0.1:18081/actuator/prometheus'
     $hikari = ConvertFrom-PrometheusHikari -Text $prometheus.Content
     $acquire = ConvertFrom-PrometheusHikariAcquireTiming -Text $prometheus.Content
+    $jvm = if ($IncludeJvm) { ConvertFrom-PrometheusRuntimeMetrics -Text $prometheus.Content } else { $null }
     $query = "SHOW GLOBAL STATUS WHERE Variable_name IN ('Innodb_deadlocks'," +
         "'Innodb_row_lock_current_waits','Innodb_row_lock_time','Innodb_row_lock_waits'," +
         "'Threads_connected','Threads_running');"
@@ -99,6 +115,7 @@ function Get-WaitSample {
         $hostFreeMemory = [long][math]::Floor([double]$HostMemory.AvailablePhysicalMemory / 1024)
     }
     [pscustomobject]@{
+        TimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
         ElapsedMilliseconds = $Stopwatch.ElapsedMilliseconds
         HikariPending = $hikari.Pending
         HikariActive = $hikari.Active
@@ -112,20 +129,32 @@ function Get-WaitSample {
         DbDeadlocks = $db.Deadlocks
         HostCpuPercent = $hostCpu
         HostFreeMemoryKb = $hostFreeMemory
+        BackendProcessCpuPercent = if ($null -eq $jvm) { $null } else { 100 * $jvm.ProcessCpuUsage }
+        ProcessSnapshot = if ($IncludeJvm) { @(Get-ControlledHostProcessSnapshot) } else { $null }
     }
 }
 
 New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
+$cpuRecords = New-Object 'Collections.Generic.List[object]'
 $manifest = Join-Path $output 'small-seat-hold-ramp.json'
+$cpuManifest = Join-Path $output 'small-seat-cpu-attribution.json'
 $cpuCounter = $null
 $hostMemory = $null
+$backendPid = 0
+$batchCompleted = $false
 try {
     if ($Repeat30) {
         Add-Type -AssemblyName Microsoft.VisualBasic
         $hostMemory = New-Object Microsoft.VisualBasic.Devices.ComputerInfo
         $cpuCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total')
         $null = $cpuCounter.NextValue()
+    }
+    if ($AttributeCpu) {
+        $backendProcesses = @(Get-CimInstance Win32_Process -Filter "Name='java.exe'" |
+            Where-Object { $_.CommandLine -like '*com.onticket.OnticketApplication*' })
+        if ($backendProcesses.Count -ne 1) { throw 'Expected exactly one local measurement Backend JVM process.' }
+        $backendPid = [int]$backendProcesses[0].ProcessId
     }
     foreach ($stage in $plan) {
         $before = Invoke-RestMethod -Method Get -TimeoutSec 10 `
@@ -159,7 +188,9 @@ try {
             $freeKb = [long](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
             Assert-ControlledSmallSeatProbeMemory -FreePhysicalMemoryKb $freeKb | Out-Null
         }
-        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
+        $dbCpuBefore = if ($AttributeCpu) { Get-MariaDbCpuSnapshot } else { $null }
+        $dbCpuStart = if ($AttributeCpu) { [Diagnostics.Stopwatch]::StartNew() } else { $null }
         if (-not $process.Start()) { throw 'Could not start k6.' }
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
@@ -170,12 +201,14 @@ try {
                 if ($waitMilliseconds -gt 0) { Start-Sleep -Milliseconds $waitMilliseconds }
                 $process.Refresh()
                 if ($process.HasExited) { break }
-                $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -CpuCounter $cpuCounter -HostMemory $hostMemory))
+                $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory))
                 do { $nextSampleAt += 1000 } while ($nextSampleAt -le $watch.ElapsedMilliseconds)
             }
         }
         $process.WaitForExit()
-        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
+        $dbCpuAfter = if ($AttributeCpu) { Get-MariaDbCpuSnapshot } else { $null }
+        if ($AttributeCpu) { $dbCpuStart.Stop() }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
         $watch.Stop()
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -196,6 +229,25 @@ try {
         $hostSummary = if ($Repeat30) {
             New-ControlledSmallSeatHostSummary -Samples $waitSamples.ToArray()
         } else { $null }
+        $cpuSummary = if ($AttributeCpu) {
+            New-ControlledSmallSeatCpuAttribution -Samples $waitSamples.ToArray() `
+                -DatabaseBefore $dbCpuBefore -DatabaseAfter $dbCpuAfter `
+                -K6CpuSeconds $process.TotalProcessorTime.TotalSeconds `
+                -K6ElapsedSeconds ($process.ExitTime - $process.StartTime).TotalSeconds `
+                -DatabaseElapsedSeconds $dbCpuStart.Elapsed.TotalSeconds
+        } else { $null }
+        $cpuGroupSamples = if ($AttributeCpu) {
+            @(
+                for ($sampleIndex = 1; $sampleIndex -lt $waitSamples.Count; $sampleIndex++) {
+                    New-ControlledHostProcessCpuGroups -Previous $waitSamples[$sampleIndex - 1] `
+                        -Current $waitSamples[$sampleIndex] -BackendPid $backendPid `
+                        -LogicalProcessors ([Environment]::ProcessorCount)
+                }
+            )
+        } else { $null }
+        if ($AttributeCpu -and $cpuGroupSamples.Count -lt 4) {
+            throw 'Too few Windows process CPU intervals for attribution.'
+        }
         if ($null -ne $waitSummary -and
             ($waitSummary.DbDeadlocksDelta -ne 0 -or $waitSummary.HikariTimeoutDelta -ne 0)) {
             throw 'Wait metrics observed a deadlock or Hikari connection timeout.'
@@ -229,14 +281,32 @@ try {
             $record.WaitMetrics = $waitSummary
         }
         if ($Repeat30) { $record.HostMetrics = $hostSummary }
-        $records.Add([pscustomobject]$record)
-        Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
         if ($Repeat30 -and ($hostSummary.HostFreeMemoryMinimumKb -lt 2097152 -or
             $waitSummary.HikariPendingPeak -gt 0 -or
             $waitSummary.HikariActivePeak -ge $waitSummary.HikariMax)) {
             throw 'Repeat30 stopped: host free memory or Hikari pool gate failed.'
         }
+        if ($AttributeCpu) {
+            $cpuRecords.Add([pscustomobject]@{
+                Sequence = $stage.Sequence
+                Round = $stage.Round
+                TargetRps = $stage.Rate
+                HostCpuPeakPercent = $hostSummary.HostCpuPeakPercent
+                Attribution = $cpuSummary
+                GroupSamples = $cpuGroupSamples
+                Samples = @($waitSamples | ForEach-Object {
+                    [pscustomobject]@{
+                        TimestampUtc = $_.TimestampUtc
+                        HostCpuPercent = $_.HostCpuPercent
+                        BackendProcessCpuPercent = $_.BackendProcessCpuPercent
+                    }
+                })
+            })
+        }
+        $records.Add([pscustomobject]$record)
+        Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
     }
+    $batchCompleted = $true
 } finally {
     if ($null -ne $cpuCounter) { $cpuCounter.Dispose() }
     [ordered]@{
@@ -244,7 +314,7 @@ try {
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
-        Complete = $records.Count -eq $plan.Count
+        Complete = $batchCompleted -and $records.Count -eq $plan.Count
         Repeats = if ($Repeat30) { 3 } else { $Repeats }
         Probe30 = [bool]$Probe30
         Repeat30 = [bool]$Repeat30
@@ -253,4 +323,17 @@ try {
         FixedHotRequestPercent = 70
         Records = $records.ToArray()
     } | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -LiteralPath $manifest
+    if ($AttributeCpu) {
+        [ordered]@{
+            SchemaVersion = 1
+            Scope = 'local virtual 20-seat fixture; not production performance'
+            RunId = $RunId
+            ComposeProject = $ComposeProject
+            Complete = $batchCompleted -and $records.Count -eq $plan.Count -and $cpuRecords.Count -eq $plan.Count
+            LogicalProcessors = [Environment]::ProcessorCount
+            HostTotalPhysicalMemoryBytes = [long]$hostMemory.TotalPhysicalMemory
+            Method = 'JVM Prometheus gauge samples; MariaDB PID 1 and k6 cumulative process CPU; not identical peak windows'
+            Records = $cpuRecords.ToArray()
+        } | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 -LiteralPath $cpuManifest
+    }
 }

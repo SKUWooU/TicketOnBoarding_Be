@@ -4,10 +4,10 @@
 
 | 우선 | 후보 | 진행 조건 / 제외 범위 |
 | --- | --- | --- |
-| 1 | 가상 20석 Hold의 호스트 CPU peak 원인 분리 | #196의 20/30 RPS 교차 반복에서 한 20 RPS 단계 전체 호스트 CPU peak 91.5% 관측. Backend JVM·MariaDB·다른 프로세스의 기여를 표본 시각과 함께 확인한 뒤 상위 부하 판단. 단일 peak를 CPU 병목으로 단정하지 않음. |
-| 2 | 다른 로컬 장비의 별도 처리 구간 | 8GB 노트북 한계가 확인되면 16GB PC에서 환경을 명시하고 새 기준선 측정. 서로 다른 호스트의 수치를 개선 전후로 비교하지 않음. |
+| 1 | 호스트 CPU 미설명분과 계측 부담 확인 | #198에서 전체 호스트 peak와 JVM·MariaDB·k6·Docker/WSL·기타 읽기 가능 프로세스를 교차 관측. 서로 다른 표본 창·읽지 못한 프로세스/커널 CPU 때문에 정확한 합산은 불가. 필요 시 별도 시스템 프로파일러와 계측 전용 기준선으로 재검토. |
+| 2 | 다른 로컬 장비의 별도 처리 구간 | 현재 노트북은 16GB RAM(Windows 인식 15.81GiB). 다른 PC에서 재실행하면 CPU·Docker 할당·fixture를 명시하고 새 기준선으로 기록. 서로 다른 호스트의 수치를 개선 전후로 비교하지 않음. |
 | 3 | FE/BE 흐름 검증 | 가상 좌석·Hold·Checkout·결제 검증을 실제 로컬 UI/API로 점검. FE는 별도 저장소 Issue/PR. 실제 KOPIS·PG 호출 없이 fixture 사용. |
-| 보류 | 대기열·Kafka·outbox·Redis 분산 락·운영 LB | 단순 DB 잠금과 현재 경합 실험의 한계, 유실·독립 재시도·다중 인스턴스 문제를 재현한 뒤 ADR로 도입 판단. |
+| 보류 | 대기열·Kafka·outbox·Redis 분산 락·운영 LB | 로컬 Hold 경합만으로 대기열·메시지 브로커를 도입하지 않기로 [ADR-0004](docs/project-improvement/adr/0004-defer-hold-admission-infrastructure.md)에 기록. 유실·독립 재시도·다중 인스턴스 문제를 재현한 뒤 재검토. |
 | 보류 | 실제 PG 정산·환불, 운영 데이터 migration | 외부 연동 권한·운영 데이터·복구 계획이 필요한 별도 작업. 로컬 Mock PG와 Flyway fresh DB 검증을 운영 검증으로 확대 해석하지 않음. |
 
 이미 검증한 문제·수치는 [실험 요약](docs/project-improvement/EXPERIMENTS.md), 기술 판단은 [ADR](docs/project-improvement/adr/README.md)에 둔다.
