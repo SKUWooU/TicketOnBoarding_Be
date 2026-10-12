@@ -10,7 +10,8 @@ param(
     [switch]$Repeat30,
     [switch]$AttributeCpu,
     [switch]$ContrastHotspots,
-    [switch]$CompareSampling
+    [switch]$CompareSampling,
+    [switch]$DiagnoseSql
 )
 
 Set-StrictMode -Version Latest
@@ -32,6 +33,8 @@ if ($CompareSampling -and ($Probe30 -or $Repeat30 -or $AttributeCpu -or $Contras
     throw 'CompareSampling has its own fixed plan and cannot be combined with other modes.'
 }
 $boundedContrast = $ContrastHotspots -or $CompareSampling
+if ($DiagnoseSql -and -not $CompareSampling) { throw 'DiagnoseSql requires the fixed CompareSampling workload.' }
+if ($DiagnoseSql) { Import-Module (Join-Path $PSScriptRoot 'SmallSeatSqlDiagnostics.psm1') -Force }
 $observeHost = $Repeat30 -or $boundedContrast
 $observeWaits = $Repeats -eq 3 -or $Probe30 -or $observeHost
 if ($observeWaits) {
@@ -61,6 +64,17 @@ if ($fixture.Status -ne 'FIXTURE_READY' -or $fixture.RunId -cne $RunId -or
 }
 $concertTimeId = [long]$fixture.ConcertTimeId
 if ($concertTimeId -le 0) { throw 'Fixture concert time identity is invalid.' }
+
+function Get-SqlCounters {
+    $env:MYSQL_PWD = 'onticket-root'
+    $query = "SELECT REPLACE(TO_BASE64(DIGEST_TEXT),CHAR(10),'') AS normalized_text," +
+        'COUNT_STAR,SUM_TIMER_WAIT,SUM_ROWS_EXAMINED,SUM_ROWS_AFFECTED,SUM_ERRORS ' +
+        "FROM performance_schema.events_statements_summary_by_digest WHERE SCHEMA_NAME='onticket_local' AND DIGEST_TEXT IS NOT NULL;"
+    $lines = @(& $mysql.Source --protocol=tcp --host=127.0.0.1 --port=3309 --user=root `
+        --batch --skip-column-names onticket_local --execute $query 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read dedicated SQL counters.' }
+    ConvertFrom-SmallSeatSqlCounters -Lines $lines
+}
 
 function Get-DeadlockCount {
     $value = [string](& docker compose -p $ComposeProject -f $compose exec -T mariadb `
@@ -152,7 +166,7 @@ New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
 $warmupRecords = New-Object 'Collections.Generic.List[object]'
 $cpuRecords = New-Object 'Collections.Generic.List[object]'
-$manifest = Join-Path $output $(if ($CompareSampling) { 'small-seat-sampling-contrast.json' } elseif ($ContrastHotspots) { 'small-seat-hold-contrast.json' } else { 'small-seat-hold-ramp.json' })
+$manifest = Join-Path $output $(if ($DiagnoseSql) { 'small-seat-sql-diagnostics.json' } elseif ($CompareSampling) { 'small-seat-sampling-contrast.json' } elseif ($ContrastHotspots) { 'small-seat-hold-contrast.json' } else { 'small-seat-hold-ramp.json' })
 $cpuManifest = Join-Path $output 'small-seat-cpu-attribution.json'
 $cpuCounter = $null
 $hostMemory = $null
@@ -162,7 +176,14 @@ $failure = $null
 $stage = $null
 $process = $null
 $waitSamples = $null
+$sqlCoverage = $null
 try {
+    if ($DiagnoseSql) {
+        $available = @(& docker compose -p $ComposeProject -f $compose exec -T mariadb `
+            mariadb -uroot -ponticket-root -N -B onticket_local -e "SHOW VARIABLES LIKE 'performance_schema'; SELECT NAME,ENABLED FROM performance_schema.setup_consumers WHERE NAME='statements_digest';" 2>&1)
+        if ($LASTEXITCODE -ne 0 -or $available -notcontains "performance_schema`tON" -or
+            $available -notcontains "statements_digest`tYES") { throw 'SQL diagnosis requires enabled Performance Schema and digest consumer.' }
+    }
     if ($observeHost) {
         Add-Type -AssemblyName Microsoft.VisualBasic
         $hostMemory = New-Object Microsoft.VisualBasic.Devices.ComputerInfo
@@ -176,6 +197,7 @@ try {
         $backendPid = [int]$backendProcesses[0].ProcessId
     }
     foreach ($stage in $plan) {
+        $sqlCoverage = $null
         $before = Invoke-RestMethod -Method Get -TimeoutSec 10 `
             -Uri "$baseUrl/loadtest/seat-holds/snapshot?runId=$RunId"
         $beforeCounts = @(Get-DatabaseCounts)
@@ -202,6 +224,7 @@ try {
         $process = New-Object Diagnostics.Process
         $process.StartInfo = $start
         $waitSamples = New-Object 'Collections.Generic.List[object]'
+        $sqlBefore = if ($DiagnoseSql) { Get-SqlCounters } else { $null }
         $watch = [Diagnostics.Stopwatch]::StartNew()
         if ($observeHost -or ($Probe30 -and $stage.Rate -eq 30)) {
             $freeKb = [long](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
@@ -233,6 +256,7 @@ try {
         if ($AttributeCpu) { $dbCpuStart.Stop() }
         if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$observeHost -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
         $watch.Stop()
+        $sqlAfter = if ($DiagnoseSql) { Get-SqlCounters } else { $null }
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
         if ($process.ExitCode -ne 0) { throw "k6 failed at $($stage.Rate) RPS with exit code $($process.ExitCode)." }
@@ -241,6 +265,14 @@ try {
         Assert-SeatHoldRunIdentity -Result $result -Scenario $scenario `
             -Rate $stage.Rate -DurationSeconds $stage.DurationSeconds -ThresholdsEnforced $false | Out-Null
         $summary = New-SeatHoldRunSummary -Result $result -DurationSeconds $stage.DurationSeconds
+        $sqlDelta = if ($DiagnoseSql) { @(New-SmallSeatSqlDelta -Before $sqlBefore -After $sqlAfter) } else { $null }
+        if ($DiagnoseSql) {
+            $sqlCoverage = Get-SmallSeatSqlCoverage -Delta $sqlDelta -Iterations $summary.Iterations `
+                -HoldSuccess $summary.HoldSuccess -ReleaseSuccess $summary.ReleaseSuccess
+        }
+        if ($DiagnoseSql -and $sqlCoverage.Status -ne 'COUNTERS_MATCH_WORKLOAD') {
+            throw "SQL operation coverage mismatch: $($sqlCoverage | ConvertTo-Json -Compress)"
+        }
         Assert-SeatHoldFinalState -Summary $summary -Snapshot $snapshot | Out-Null
         $freshSnapshot = Invoke-RestMethod -Method Get -TimeoutSec 10 `
             -Uri "$baseUrl/loadtest/seat-holds/snapshot?runId=$RunId"
@@ -304,6 +336,7 @@ try {
             $record.WaitMetrics = $waitSummary
         }
         if ($observeHost) { $record.HostMetrics = $hostSummary }
+        if ($DiagnoseSql) { $record.SqlOperationDeltas = $sqlDelta }
         if ($CompareSampling) {
             $record.SamplingIntervalMilliseconds = $stage.SamplingIntervalMilliseconds
             $record.CollectionMetrics = New-ControlledSamplingCostSummary -Samples $waitSamples.ToArray()
@@ -367,18 +400,21 @@ try {
             }
         }
         $failure = [ordered]@{
-            Reason = if ($gap -gt 3000) { 'SAMPLING_GAP_EXCEEDED' } else { 'EXECUTION_OR_GATE_FAILED' }
+            Reason = if ($gap -gt 3000) { 'SAMPLING_GAP_EXCEEDED' } `
+                elseif ($null -ne $sqlCoverage -and $sqlCoverage.Status -eq 'SQL_COUNTER_COVERAGE_MISMATCH') { 'SQL_COUNTER_COVERAGE_MISMATCH' } `
+                else { 'EXECUTION_OR_GATE_FAILED' }
             Sequence = if ($null -ne $stage) { $stage.Sequence } else { $null }
             HotSeatCount = if ($null -ne $stage) { $stage.HotSeatCount } else { $null }
             WaitSampleCount = if ($null -ne $waitSamples) { $waitSamples.Count } else { 0 }
             MaxSampleGapMs = $gap
         }
+        if ($DiagnoseSql -and $null -ne $sqlCoverage) { $failure.SqlCoverage = $sqlCoverage }
     }
     throw
 } finally {
     if ($null -ne $cpuCounter) { $cpuCounter.Dispose() }
     $manifestData = [ordered]@{
-        SchemaVersion = if ($CompareSampling) { 6 } elseif ($ContrastHotspots) { 5 } elseif ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
+        SchemaVersion = if ($DiagnoseSql) { 7 } elseif ($CompareSampling) { 6 } elseif ($ContrastHotspots) { 5 } elseif ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
@@ -396,6 +432,13 @@ try {
         if ($CompareSampling) {
             $manifestData.CompareSampling = $true
             $manifestData.Method = 'fixed workload; 1000/2000ms collection crossover; sampled peaks not directly comparable; no CPU attribution'
+        }
+        if ($DiagnoseSql) {
+            $manifestData.SqlDiagnostics = [ordered]@{
+                Source = 'performance_schema.events_statements_summary_by_digest'
+                SqlTextIncluded = $false
+                Method = 'before/after cumulative operation counters; no reset; separate instrumented baseline, not row-lock attribution'
+            }
         }
         $manifestData.FixedTargetIterationsPerSecond = 20
         $manifestData.FixedSelectionSeed = 17

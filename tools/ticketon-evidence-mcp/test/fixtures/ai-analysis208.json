@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "batchId": "sampling202c",
+  "conclusion": "NO_CAUSAL_CONCLUSION",
+  "facts": [
+    { "sequence": 5, "metric": "globalDbRowLockWaits", "value": 4 },
+    { "sequence": 8, "metric": "globalDbRowLockWaits", "value": 0 }
+  ],
+  "hypotheses": [
+    { "kind": "VARIABLE_DB_WAIT", "certainty": "HYPOTHESIS", "factIndexes": [0, 1] }
+  ],
+  "experiments": [
+    {
+      "hypothesisIndex": 0, "method": "ATTRIBUTE_WAIT", "changedVariable": "waitAttribution",
+      "fixedConditions": {
+        "totalSeats": 20, "hotSeatCount": 1, "iterationsPerSecond": 20, "hotRequestPercent": 70,
+        "holdDwellMilliseconds": 500, "durationSecondsPerStage": 15, "warmupExcluded": 2,
+        "samplingIntervalOrderMs": [1000, 2000, 2000, 1000, 1000, 2000], "repeatsPerInterval": 3
+      },
+      "approvalRequired": true, "execute": false
+    }
+  ]
+}

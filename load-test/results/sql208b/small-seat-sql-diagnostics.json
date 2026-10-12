@@ -1,0 +1,50 @@
+﻿{
+    "SchemaVersion":  7,
+    "Scope":  "local virtual 20-seat fixture; not production performance",
+    "RunId":  "sql208b",
+    "ComposeProject":  "ticketon-controlled172-i208b",
+    "Complete":  false,
+    "Repeats":  3,
+    "Probe30":  false,
+    "Repeat30":  false,
+    "FixedHotSeatCount":  1,
+    "FixedHoldDwellMilliseconds":  500,
+    "FixedHotRequestPercent":  70,
+    "Records":  [
+
+                ],
+    "ContrastHotspots":  false,
+    "CompareSampling":  true,
+    "Method":  "fixed workload; 1000/2000ms collection crossover; sampled peaks not directly comparable; no CPU attribution",
+    "SqlDiagnostics":  {
+                           "Source":  "performance_schema.events_statements_summary_by_digest",
+                           "SqlTextIncluded":  false,
+                           "Method":  "before/after cumulative operation counters; no reset; separate instrumented baseline, not row-lock attribution"
+                       },
+    "FixedTargetIterationsPerSecond":  20,
+    "FixedSelectionSeed":  17,
+    "FixedPreAllocatedVus":  20,
+    "FixedMaxVus":  20,
+    "WarmupRecords":  [
+
+                      ],
+    "Failure":  {
+                    "Reason":  "EXECUTION_OR_GATE_FAILED",
+                    "Sequence":  1,
+                    "HotSeatCount":  1,
+                    "WaitSampleCount":  18,
+                    "MaxSampleGapMs":  1616,
+                    "SqlCoverage":  {
+                                        "ExpectedLockSelects":  408,
+                                        "ObservedLockSelects":  404,
+                                        "ExpectedSeatUpdates":  214,
+                                        "ObservedSeatUpdates":  213
+                                    }
+                },
+    "ResourceReviewRequired":  false,
+    "Environment":  {
+                        "LogicalProcessors":  8,
+                        "HostTotalPhysicalMemoryBytes":  16980230144,
+                        "Measurement":  "same-host Windows CPU/free-memory and loopback Prometheus/DB samples; not capacity proof"
+                    }
+}

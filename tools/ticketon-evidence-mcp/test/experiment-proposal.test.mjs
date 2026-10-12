@@ -9,6 +9,16 @@ const repository = new EvidenceRepository({ resultsRoot: path.resolve(import.met
 const report = await repository.assessSamplingContrast('sampling202c');
 const candidate = JSON.parse(await readFile(new URL('./fixtures/experiment-proposal.json', import.meta.url), 'utf8'));
 
+test('비맹검 Codex 실사례 제안도 동일한 계약으로 검증하고 실행 승인은 부여하지 않는다', async () => {
+  const actual = JSON.parse(await readFile(new URL('./fixtures/ai-analysis208.json', import.meta.url), 'utf8'));
+  const result = evaluateExperimentProposal(report, actual);
+  assert.equal(result.status, 'CONTRACT_ACCEPTED');
+  assert.equal(result.checkedFacts, 2);
+  assert.equal(result.checkedHypotheses, 1);
+  assert.equal(result.checkedExperiments, 1);
+  assert.equal(result.executionAuthorized, false);
+});
+
 test('수작업 평가 fixture는 실제 MCP 수치 4개·가설 2개·수동 실험 2개의 계약만 통과한다', () => {
   const result = evaluateExperimentProposal(report, candidate);
   assert.equal(result.status, 'CONTRACT_ACCEPTED');
