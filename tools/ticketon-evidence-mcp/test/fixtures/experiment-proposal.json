@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "batchId": "sampling202c",
+  "conclusion": "NO_CAUSAL_CONCLUSION",
+  "facts": [
+    { "sequence": 3, "metric": "collectionTotalWallClockMs", "value": 6324.735 },
+    { "sequence": 4, "metric": "collectionTotalWallClockMs", "value": 2915.3761 },
+    { "sequence": 3, "metric": "globalDbRowLockWaits", "value": 3 },
+    { "sequence": 7, "metric": "globalDbRowLockWaits", "value": 0 }
+  ],
+  "hypotheses": [
+    { "kind": "HOST_OR_COLLECTOR_INTERFERENCE", "certainty": "HYPOTHESIS", "factIndexes": [0, 1] },
+    { "kind": "VARIABLE_DB_WAIT", "certainty": "HYPOTHESIS", "factIndexes": [2, 3] }
+  ],
+  "experiments": [
+    {
+      "hypothesisIndex": 0, "method": "ISOLATE_COLLECTOR", "changedVariable": "collectorPlacement",
+      "fixedConditions": {
+        "totalSeats": 20, "hotSeatCount": 1, "iterationsPerSecond": 20, "hotRequestPercent": 70,
+        "holdDwellMilliseconds": 500, "durationSecondsPerStage": 15, "warmupExcluded": 2,
+        "samplingIntervalOrderMs": [1000, 2000, 2000, 1000, 1000, 2000], "repeatsPerInterval": 3
+      },
+      "approvalRequired": true, "execute": false
+    },
+    {
+      "hypothesisIndex": 1, "method": "ATTRIBUTE_WAIT", "changedVariable": "waitAttribution",
+      "fixedConditions": {
+        "totalSeats": 20, "hotSeatCount": 1, "iterationsPerSecond": 20, "hotRequestPercent": 70,
+        "holdDwellMilliseconds": 500, "durationSecondsPerStage": 15, "warmupExcluded": 2,
+        "samplingIntervalOrderMs": [1000, 2000, 2000, 1000, 1000, 2000], "repeatsPerInterval": 3
+      },
+      "approvalRequired": true, "execute": false
+    }
+  ]
+}
