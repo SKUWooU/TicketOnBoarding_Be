@@ -1,0 +1,35 @@
+﻿{
+    "SchemaVersion":  5,
+    "Scope":  "local virtual 20-seat fixture; not production performance",
+    "RunId":  "contrast200a",
+    "ComposeProject":  "ticketon-controlled172-i200a",
+    "Complete":  false,
+    "Repeats":  3,
+    "Probe30":  false,
+    "Repeat30":  false,
+    "FixedHotSeatCount":  null,
+    "FixedHoldDwellMilliseconds":  500,
+    "FixedHotRequestPercent":  70,
+    "Records":  [
+
+                ],
+    "ContrastHotspots":  true,
+    "FixedTargetIterationsPerSecond":  20,
+    "FixedSelectionSeed":  17,
+    "FixedPreAllocatedVus":  20,
+    "FixedMaxVus":  20,
+    "WarmupRecords":  [
+
+                      ],
+    "Failure":  {
+                    "Reason":  "EXECUTION_OR_GATE_FAILED",
+                    "Sequence":  1,
+                    "HotSeatCount":  10
+                },
+    "ResourceReviewRequired":  false,
+    "Environment":  {
+                        "LogicalProcessors":  8,
+                        "HostTotalPhysicalMemoryBytes":  16980230144,
+                        "Measurement":  "same-host Windows CPU/free-memory and loopback Prometheus/DB samples; not capacity proof"
+                    }
+}

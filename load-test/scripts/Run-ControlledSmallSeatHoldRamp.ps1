@@ -8,7 +8,8 @@ param(
     [ValidateSet(1, 3)][int]$Repeats = 1,
     [switch]$Probe30,
     [switch]$Repeat30,
-    [switch]$AttributeCpu
+    [switch]$AttributeCpu,
+    [switch]$ContrastHotspots
 )
 
 Set-StrictMode -Version Latest
@@ -23,7 +24,11 @@ Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRamp.psm1') -Forc
 if ($Probe30 -and $Repeats -ne 1) { throw 'Probe30 uses one bounded 20->30 RPS pair; Repeats must be 1.' }
 if ($Repeat30 -and ($Probe30 -or $Repeats -ne 1)) { throw 'Repeat30 is a fixed six-stage plan and cannot be combined with Probe30 or Repeats.' }
 if ($AttributeCpu -and -not $Repeat30) { throw 'CPU attribution requires the fixed Repeat30 plan.' }
-$observeWaits = $Repeats -eq 3 -or $Probe30 -or $Repeat30
+if ($ContrastHotspots -and ($Probe30 -or $Repeat30 -or $AttributeCpu -or $Repeats -ne 1)) {
+    throw 'ContrastHotspots has its own fixed plan and cannot be combined with other modes.'
+}
+$observeHost = $Repeat30 -or $ContrastHotspots
+$observeWaits = $Repeats -eq 3 -or $Probe30 -or $observeHost
 if ($observeWaits) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
     Import-Module (Join-Path $PSScriptRoot 'ContentionMetrics.psm1') -Force
@@ -32,7 +37,8 @@ if ($observeWaits) {
 if ($AttributeCpu) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatCpuAttribution.psm1') -Force
 }
-$plan = if ($Repeat30) { @(Get-ControlledSmallSeatHoldRepeat30Plan) } `
+$plan = if ($ContrastHotspots) { @(Get-ControlledSmallSeatHoldContrastPlan) } `
+    elseif ($Repeat30) { @(Get-ControlledSmallSeatHoldRepeat30Plan) } `
     elseif ($Probe30) { @(Get-ControlledSmallSeatHoldProbe30Plan) } `
     elseif ($Repeats -eq 3) { @(Get-ControlledSmallSeatHoldRepeatPlan) } `
     else { @(Get-ControlledSmallSeatHoldRampPlan) }
@@ -136,15 +142,20 @@ function Get-WaitSample {
 
 New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
+$warmupRecords = New-Object 'Collections.Generic.List[object]'
 $cpuRecords = New-Object 'Collections.Generic.List[object]'
-$manifest = Join-Path $output 'small-seat-hold-ramp.json'
+$manifest = Join-Path $output $(if ($ContrastHotspots) { 'small-seat-hold-contrast.json' } else { 'small-seat-hold-ramp.json' })
 $cpuManifest = Join-Path $output 'small-seat-cpu-attribution.json'
 $cpuCounter = $null
 $hostMemory = $null
 $backendPid = 0
 $batchCompleted = $false
+$failure = $null
+$stage = $null
+$process = $null
+$waitSamples = $null
 try {
-    if ($Repeat30) {
+    if ($observeHost) {
         Add-Type -AssemblyName Microsoft.VisualBasic
         $hostMemory = New-Object Microsoft.VisualBasic.Devices.ComputerInfo
         $cpuCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total')
@@ -168,7 +179,7 @@ try {
         $arguments = @('run', '-e', "BASE_URL=$baseUrl", '-e', "FIXTURE_RUN_ID=$RunId",
             '-e', 'EXPECTED_TOTAL_SEATS=20', '-e', "TEST_SCENARIO=$scenario",
             '-e', "RATE=$($stage.Rate)", '-e', "DURATION=$($stage.DurationSeconds)s",
-            '-e', 'HOT_SEAT_COUNT=1', '-e', 'HOT_REQUEST_PERCENT=70', '-e', 'SELECTION_SEED=17',
+            '-e', "HOT_SEAT_COUNT=$($stage.HotSeatCount)", '-e', 'HOT_REQUEST_PERCENT=70', '-e', 'SELECTION_SEED=17',
             '-e', 'HOLD_DWELL_MS=500', '-e', 'TOKEN_COUNT=20',
             '-e', 'PRE_ALLOCATED_VUS=20', '-e', 'MAX_VUS=20',
             '-e', 'ENFORCE_THRESHOLDS=false',
@@ -184,11 +195,11 @@ try {
         $process.StartInfo = $start
         $waitSamples = New-Object 'Collections.Generic.List[object]'
         $watch = [Diagnostics.Stopwatch]::StartNew()
-        if ($Repeat30 -or ($Probe30 -and $stage.Rate -eq 30)) {
+        if ($observeHost -or ($Probe30 -and $stage.Rate -eq 30)) {
             $freeKb = [long](Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
             Assert-ControlledSmallSeatProbeMemory -FreePhysicalMemoryKb $freeKb | Out-Null
         }
-        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$observeHost -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
         $dbCpuBefore = if ($AttributeCpu) { Get-MariaDbCpuSnapshot } else { $null }
         $dbCpuStart = if ($AttributeCpu) { [Diagnostics.Stopwatch]::StartNew() } else { $null }
         if (-not $process.Start()) { throw 'Could not start k6.' }
@@ -197,18 +208,21 @@ try {
         if ($observeWaits) {
             $nextSampleAt = $watch.ElapsedMilliseconds + 1000
             while (-not $process.HasExited) {
+                if ($ContrastHotspots -and $watch.ElapsedMilliseconds -gt 60000) {
+                    throw 'Contrast stage exceeded its 60-second execution budget.'
+                }
                 $waitMilliseconds = $nextSampleAt - $watch.ElapsedMilliseconds
                 if ($waitMilliseconds -gt 0) { Start-Sleep -Milliseconds $waitMilliseconds }
                 $process.Refresh()
                 if ($process.HasExited) { break }
-                $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory))
+                $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$observeHost -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory))
                 do { $nextSampleAt += 1000 } while ($nextSampleAt -le $watch.ElapsedMilliseconds)
             }
         }
         $process.WaitForExit()
         $dbCpuAfter = if ($AttributeCpu) { Get-MariaDbCpuSnapshot } else { $null }
         if ($AttributeCpu) { $dbCpuStart.Stop() }
-        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$Repeat30 -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
+        if ($observeWaits) { $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$observeHost -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory)) }
         $watch.Stop()
         $stdout = $stdoutTask.GetAwaiter().GetResult()
         $stderr = $stderrTask.GetAwaiter().GetResult()
@@ -226,7 +240,7 @@ try {
         $waitSummary = if ($observeWaits) {
             New-ControlledSmallSeatHoldWaitSummary -Samples $waitSamples.ToArray()
         } else { $null }
-        $hostSummary = if ($Repeat30) {
+        $hostSummary = if ($observeHost) {
             New-ControlledSmallSeatHostSummary -Samples $waitSamples.ToArray()
         } else { $null }
         $cpuSummary = if ($AttributeCpu) {
@@ -257,7 +271,7 @@ try {
         }
         Assert-ControlledSmallSeatHoldStage -Plan $stage -Summary $summary -Snapshot $snapshot `
             -FreshSnapshot $freshSnapshot -DatabaseCounts $databaseCounts `
-            -DeadlockDelta $deadlockDelta | Out-Null
+            -DeadlockDelta $deadlockDelta -ContrastHotspots:$ContrastHotspots | Out-Null
         $record = [ordered]@{
             TargetRps = $stage.Rate
             DurationSeconds = $stage.DurationSeconds
@@ -280,11 +294,19 @@ try {
             $record.Round = $stage.Round
             $record.WaitMetrics = $waitSummary
         }
-        if ($Repeat30) { $record.HostMetrics = $hostSummary }
-        if ($Repeat30 -and ($hostSummary.HostFreeMemoryMinimumKb -lt 2097152 -or
+        if ($observeHost) { $record.HostMetrics = $hostSummary }
+        if ($ContrastHotspots) {
+            $record.TargetIterationsPerSecond = $stage.Rate
+            $record.Measured = $stage.Measured
+            $record.HotSelections = $summary.WeightedHotspot.HotSelections
+            $record.ColdSelections = $summary.WeightedHotspot.ColdSelections
+            $record.HoldSuccessPerScheduledSecond = $summary.HoldSuccess / [double]$stage.DurationSeconds
+            $record.ResourceReviewRequired = $hostSummary.HostCpuPeakPercent -ge 90
+        }
+        if ($observeHost -and ($hostSummary.HostFreeMemoryMinimumKb -lt 2097152 -or
             $waitSummary.HikariPendingPeak -gt 0 -or
             $waitSummary.HikariActivePeak -ge $waitSummary.HikariMax)) {
-            throw 'Repeat30 stopped: host free memory or Hikari pool gate failed.'
+            throw 'Controlled Hold run stopped: host free memory or Hikari pool gate failed.'
         }
         if ($AttributeCpu) {
             $cpuRecords.Add([pscustomobject]@{
@@ -303,26 +325,74 @@ try {
                 })
             })
         }
-        $records.Add([pscustomobject]$record)
-        Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
+        if ($ContrastHotspots -and -not $stage.Measured) {
+            $warmupRecords.Add([pscustomobject]$record)
+        } else { $records.Add([pscustomobject]$record) }
+        if ($ContrastHotspots) {
+            Write-Output "SMALL_SEAT_HOLD_CONTRAST_STAGE_PASS iterations_per_second=$($stage.Rate) hot_seats=$($stage.HotSeatCount) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
+        } else {
+            Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
+        }
     }
     $batchCompleted = $true
+} catch {
+    # Start() itself can fail; querying HasExited on an unstarted Process also throws.
+    try {
+        if ($null -ne $process -and -not $process.HasExited) {
+            $process.Kill()
+            $process.WaitForExit()
+        }
+    } catch { }
+    if ($ContrastHotspots) {
+        $gap = 0L
+        if ($null -ne $waitSamples -and $waitSamples.Count -gt 1) {
+            foreach ($index in 1..($waitSamples.Count - 1)) {
+                $gap = [math]::Max($gap, [long]$waitSamples[$index].ElapsedMilliseconds -
+                    [long]$waitSamples[$index - 1].ElapsedMilliseconds)
+            }
+        }
+        $failure = [ordered]@{
+            Reason = if ($gap -gt 3000) { 'SAMPLING_GAP_EXCEEDED' } else { 'EXECUTION_OR_GATE_FAILED' }
+            Sequence = if ($null -ne $stage) { $stage.Sequence } else { $null }
+            HotSeatCount = if ($null -ne $stage) { $stage.HotSeatCount } else { $null }
+            WaitSampleCount = if ($null -ne $waitSamples) { $waitSamples.Count } else { 0 }
+            MaxSampleGapMs = $gap
+        }
+    }
+    throw
 } finally {
     if ($null -ne $cpuCounter) { $cpuCounter.Dispose() }
-    [ordered]@{
-        SchemaVersion = if ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
+    $manifestData = [ordered]@{
+        SchemaVersion = if ($ContrastHotspots) { 5 } elseif ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
-        Complete = $batchCompleted -and $records.Count -eq $plan.Count
-        Repeats = if ($Repeat30) { 3 } else { $Repeats }
+        Complete = $batchCompleted -and ($records.Count + $warmupRecords.Count) -eq $plan.Count
+        Repeats = if ($observeHost) { 3 } else { $Repeats }
         Probe30 = [bool]$Probe30
         Repeat30 = [bool]$Repeat30
-        FixedHotSeatCount = 1
+        FixedHotSeatCount = if ($ContrastHotspots) { $null } else { 1 }
         FixedHoldDwellMilliseconds = 500
         FixedHotRequestPercent = 70
         Records = $records.ToArray()
-    } | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -LiteralPath $manifest
+    }
+    if ($ContrastHotspots) {
+        $manifestData.ContrastHotspots = $true
+        $manifestData.FixedTargetIterationsPerSecond = 20
+        $manifestData.FixedSelectionSeed = 17
+        $manifestData.FixedPreAllocatedVus = 20
+        $manifestData.FixedMaxVus = 20
+        $manifestData.WarmupRecords = $warmupRecords.ToArray()
+        $manifestData.Failure = $failure
+        $manifestData.ResourceReviewRequired = @($records.ToArray() + $warmupRecords.ToArray() |
+            Where-Object ResourceReviewRequired).Count -gt 0
+        $manifestData.Environment = [ordered]@{
+            LogicalProcessors = [Environment]::ProcessorCount
+            HostTotalPhysicalMemoryBytes = if ($null -ne $hostMemory) { [long]$hostMemory.TotalPhysicalMemory } else { $null }
+            Measurement = 'same-host Windows CPU/free-memory and loopback Prometheus/DB samples; not capacity proof'
+        }
+    }
+    $manifestData | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -LiteralPath $manifest
     if ($AttributeCpu) {
         [ordered]@{
             SchemaVersion = 1

@@ -10,6 +10,7 @@
 | 예약 재시도·결제 검증 중복 | Idempotency-Key·fingerprint·DB unique; Checkout claim·PG I/O transaction 분리, Mock PG 지연 검증 | [#35](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/35), [#82](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/82), [checkout 기록](archive/checkout/) |
 | 인기 좌석 Hold의 정상 충돌과 시스템 포화 구분 | 20석 5/10/20 RPS 9-run, 20/30 RPS 6단계 교차 반복·호스트 자원, 2,000석 별도 50/100 RPS 6-run | [#186](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/186), [#196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196), [실험 요약](EXPERIMENTS.md) |
 | 호스트 CPU peak의 원인 단정 방지 | 같은 가상 20석 20/30 RPS 반복에서 JVM·MariaDB PID 1·k6 CPU와 Windows 프로세스군을 별도로 계측. 표본 창 차이와 미수집 CPU를 명시 | [#198](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/198), [실험 요약](EXPERIMENTS.md), [ADR-0004](adr/0004-defer-hold-admission-infrastructure.md) |
+| 좌석 충돌과 서버 병목의 구분 | 같은 20 iterations/s에서 인기 1석/10석 교차 반복. 1,206건 중 정상 409 589, 예상 밖 오류·pending 0; 호스트 자원 재검토 필요 | [#200](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/200), [실험 요약](EXPERIMENTS.md#5-동일-유입량에서-정상-충돌과-시스템-대기-구분), [ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md) |
 | AI 분석의 근거 범위 | read-only MCP로 허용된 요약·불변식·동일 조건 판정만 제공 | [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188), [MCP 사용법](../../tools/ticketon-evidence-mcp/README.md) |
 | 다중 인스턴스·DB schema 변경 경계 | 로컬 2-instance 상태 수렴 smoke; Flyway fresh/baseline 검증 | [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150), [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152). 운영 확장성·기존 DB 무중단 migration 증명 아님. |
 
