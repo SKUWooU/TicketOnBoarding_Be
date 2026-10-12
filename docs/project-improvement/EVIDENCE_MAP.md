@@ -12,6 +12,7 @@
 | 호스트 CPU peak의 원인 단정 방지 | 같은 가상 20석 20/30 RPS 반복에서 JVM·MariaDB PID 1·k6 CPU와 Windows 프로세스군을 별도로 계측. 표본 창 차이와 미수집 CPU를 명시 | [#198](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/198), [실험 요약](EXPERIMENTS.md), [ADR-0004](adr/0004-defer-hold-admission-infrastructure.md) |
 | 좌석 충돌과 서버 병목의 구분 | 같은 20 iterations/s에서 인기 1석/10석 교차 반복. 1,206건 중 정상 409 589, 예상 밖 오류·pending 0; 호스트 자원 재검토 필요 | [#200](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/200), [실험 요약](EXPERIMENTS.md#5-동일-유입량에서-정상-충돌과-시스템-대기-구분), [ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md) |
 | AI 분석의 근거 범위 | read-only MCP로 허용된 요약·불변식·동일 조건 판정만 제공 | [#188](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/188), [MCP 사용법](../../tools/ticketon-evidence-mcp/README.md) |
+| DB 대기 반복성과 계측 부담 구분 | 같은 인기 1석·20 iterations/s에서 1초/2초 수집 교차 3회. 1,804건·예상 밖 오류 0; 실패 배치도 보존, p95 개선·CPU 귀속 단정 제외 | [#202](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/202), [계측 비교](EXPERIMENTS.md#6-같은-경합에서-계측-빈도-교차-검증) |
 | 다중 인스턴스·DB schema 변경 경계 | 로컬 2-instance 상태 수렴 smoke; Flyway fresh/baseline 검증 | [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150), [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152). 운영 확장성·기존 DB 무중단 migration 증명 아님. |
 
 위 수치는 **가상 좌석 fixture와 제한된 로컬 환경**의 결과다. 0건은 해당 반복에서 관측하지 않았다는 뜻이며, 실제 예매처의 운영 처리량이나 모든 경합 조건의 안전성을 뜻하지 않는다. 과거 Issue별 긴 기록은 [아카이브](archive/)와 [정리 전 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 보존된다.

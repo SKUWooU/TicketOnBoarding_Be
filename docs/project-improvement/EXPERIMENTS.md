@@ -61,3 +61,27 @@
 첫 시도 `contrast200a`는 warm-up에서 표본 간격 4,592ms 오류로 중단됐으며 `Complete:false`, 완료된 측정 0건이다. 초기 manifest에는 실패 단계만 있고 간격 수치는 실행 오류에서 확인했다. 실패 이후 runner는 이후 실패의 표본 수·최대 간격도 보존하도록 보완했다. 실패 DB와 JSON은 삭제하지 않았고 재시도는 별도 빈 DB를 사용했다.
 
 다음 판단의 입력은 **관측 사실 → 병목 가설 → 가설을 구분할 실험**이다. 예를 들어 정상 409 비중만으로 서버 증설을 제안하지 않고, 늘어난 DB wait가 반복되는지 및 호스트/계측 간섭을 별도로 확인한다. 이 흐름을 향후 AI가 보조할 조건은 [ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md)에 기록했다. 이번 결과는 AI 분석 품질이나 RAG 도입 효과를 검증한 것이 아니며, 현재 MCP도 새 manifest를 자동으로 조회하지 않는다.
+
+## 6. 같은 경합에서 계측 빈도 교차 검증
+
+#202는 #200과 같은 Windows 8 logical CPU·15.81GiB RAM, Java 21 `-Xms256m -Xmx768m`·Hikari max 24, MariaDB 10.11.8 전용 빈 DB에서 실행했다. `-CompareSampling`은 가상 20석·인기 1석·가중치 70%·seed 17·Hold 500ms·20/20 VU·20 iterations/s를 고정한다. 각 단계는 15초다. 1초/2초 수집 warm-up을 각 1회 제외하고 `1초,2초 → 2초,1초 → 1초,2초`를 측정한다. 실제 KOPIS·PG·LLM 호출이나 부하 자동 증량은 없다.
+
+| 측정 3회 합계 / 범위 | 1초 수집 | 2초 수집 |
+| --- | --- | --- |
+| 완료 / Hold·해제 / 정상 409 | 902 / 324 / 578 | 902 / 324 / 578 |
+| 수집 횟수 (단계별) | 17회 | 9회 |
+| 수집 함수 누적 경과 시간 (단계별) | 5,139.54~6,324.74ms | 2,814.30~3,925.08ms |
+| Hold 성공 p95 범위 | 32.80~80.39ms | 34.21~93.43ms |
+| 정상 409 p95 범위 | 28.64~72.74ms | 27.29~72.51ms |
+| DB 전역 row-lock wait 증분 / 대기 ms (순서별) | 3/29, 5/25, 0/0 | 2/4, 4/63, 0/0 |
+| 최대 표본 간격 (단계별 범위) | 1,298~1,613ms | 2,298~2,848ms |
+
+[완료 manifest sampling202c](../../load-test/results/sampling202c/small-seat-sampling-contrast.json)의 측정 1,804건은 Hold·해제 648건과 정상 409 1,156건이다. dropped·예상 밖 오류·SQL deadlock·Hikari timeout·관측 pending·종료 Hold는 0이다. 단계별 독립 SQL은 `20,0,0,20,0`, API snapshot의 Booking·Payment도 0이다. 각 단계의 300/301 iterations 차이는 스케줄 경계에 있으며 선택 횟수도 인기 206/207, 비인기 94로 기록했다.
+
+**말할 수 있는 결론:** 수집 빈도를 낮추면 이 실행의 수집 호출 수와 누적 경과 시간이 줄었다. 여기서 시간은 Prometheus HTTP·mysql 프로세스·DB 상태 조회·호스트 counter를 순차 수집하는 함수의 wall-clock이며, CPU 사용 시간이나 요청 경로 지연이 아니다. 두 조건의 p95 범위가 겹치므로 서버 성능 개선 또는 계측이 응답 지연의 원인이라는 결론은 내리지 않는다. DB wait는 앞선 두 쌍에 존재했으나 마지막 쌍에서는 모두 0으로, 지속적인 DB 포화가 반복됐다는 근거는 없다. DB 전역 counter만으로 특정 SQL에 귀속하지 않는다.
+
+측정 host CPU peak는 앞선 단계에서 95~98%, 마지막 쌍에서는 73.01%/66.59%였고 최소 가용 메모리는 약 2.98GiB였다. 다른 표본 간격의 CPU·pending peak는 직접 비교할 수 없고, 관측 pending 0도 순간 대기를 모두 포착한 뜻은 아니다. `ResourceReviewRequired:true`를 유지하며 높은 CPU를 Backend/DB 단독 병목으로 단정하거나 상위 부하를 제안하지 않는다. 같은 호스트의 배경 작업과 시간에 따른 변화는 통제되지 않았다.
+
+실패도 보존했다. [sampling202a](../../load-test/results/sampling202a/small-seat-sampling-contrast.json)는 새 15초 계획에 기존 10초 검증 조건이 적용돼 첫 warm-up 뒤 중단된 개발 과정의 실패다. 조건을 모드별로 분리하고 계약 테스트를 추가했다. [sampling202b](../../load-test/results/sampling202b/small-seat-sampling-contrast.json)는 warm-up 2회·측정 2회 후 sequence 5에서 표본 간격 3,420ms로 중단됐다. 모두 `Complete:false`이며 완료 배치의 비교에 포함하지 않는다. 2초 모드도 기존 3초 간격 상한을 완화하지 않았다. 재시도는 별도 빈 DB를 사용했으며 성공한 배치만 남기지 않았다.
+
+실행은 전용 DB와 `local,loadtest` Backend를 준비한 뒤 `powershell -NoProfile -ExecutionPolicy Bypass -File load-test/scripts/Run-ControlledSmallSeatHoldRamp.ps1 -RunId <새 ID> -ComposeProject <전용 project> -CompareSampling`으로 재현한다. DB 포트 3309·2행×10석 설정 및 fresh DB 검증은 기존 fixture runner를 따른다. 현재 read-only MCP의 allowlist·판정 도구는 schema 6을 자동 수용하지 않는다. 후속 도구에서는 불완전 배치 차단, 샘플링 조건 차이와 관측/가설 분리를 유지해야 한다([ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md)).

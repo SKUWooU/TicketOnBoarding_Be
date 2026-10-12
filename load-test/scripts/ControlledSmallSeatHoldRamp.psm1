@@ -56,17 +56,19 @@ function Assert-ControlledSmallSeatHoldStage {
         [Parameter(Mandatory = $true)][object]$FreshSnapshot,
         [Parameter(Mandatory = $true)][object[]]$DatabaseCounts,
         [Parameter(Mandatory = $true)][long]$DeadlockDelta,
-        [switch]$ContrastHotspots
+        [switch]$ContrastHotspots,
+        [switch]$CompareSampling
     )
     $validHotSeats = if ($ContrastHotspots) { @(1, 10) } else { @(1) }
-    if ([int]$Plan.Rate -notin @(5, 10, 20, 30) -or [int]$Plan.DurationSeconds -ne 10 -or
+    $duration = if ($CompareSampling) { 15 } else { 10 }
+    if ([int]$Plan.Rate -notin @(5, 10, 20, 30) -or [int]$Plan.DurationSeconds -ne $duration -or
         [int]$Plan.HotSeatCount -notin $validHotSeats -or
-        ($ContrastHotspots -and [int]$Plan.Rate -ne 20) -or
+        (($ContrastHotspots -or $CompareSampling) -and [int]$Plan.Rate -ne 20) -or
         [int]$Plan.HoldDwellMilliseconds -ne 500 -or
         [string]$Summary.Scenario -ne 'weighted-hotspot-churn' -or
         [int]$Summary.TargetRatePerSecond -ne [int]$Plan.Rate -or
-        [int]$Summary.DurationSeconds -ne 10 -or
-        [long]$Summary.Iterations -lt ([int]$Plan.Rate * 10 * 0.95) -or
+        [int]$Summary.DurationSeconds -ne $duration -or
+        [long]$Summary.Iterations -lt ([int]$Plan.Rate * $duration * 0.95) -or
         [long]$Summary.DroppedIterations -ne 0 -or
         [long]$Summary.HoldSuccess -le 0 -or
         [long]$Summary.HoldSuccess -ne [long]$Summary.ReleaseSuccess -or
@@ -89,7 +91,7 @@ function Assert-ControlledSmallSeatHoldStage {
         $DeadlockDelta -ne 0) {
         throw 'Controlled small-seat Hold ramp stage failed its completion or inventory gate.'
     }
-    if ($ContrastHotspots -and (
+    if (($ContrastHotspots -or $CompareSampling) -and (
         [long]$Summary.WeightedHotspot.Seed -ne 17 -or
         [long]$Summary.WeightedHotspot.HotSelections -lt 0 -or
         [long]$Summary.WeightedHotspot.ColdSelections -lt 0 -or

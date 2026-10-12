@@ -55,6 +55,44 @@ function Get-ControlledSmallSeatHoldContrastPlan {
     }
 }
 
+function Get-ControlledSmallSeatSamplingPlan {
+    $sequence = 0
+    $order = @(@(1000, 2000), @(1000, 2000), @(2000, 1000), @(1000, 2000))
+    foreach ($round in 0..3) {
+        foreach ($interval in $order[$round]) {
+            $sequence++
+            [pscustomobject]@{
+                Sequence = $sequence
+                Round = $round
+                Measured = $round -gt 0
+                Rate = 20
+                DurationSeconds = 15
+                HotSeatCount = 1
+                HoldDwellMilliseconds = 500
+                SamplingIntervalMilliseconds = $interval
+            }
+        }
+    }
+}
+
+function New-ControlledSamplingCostSummary {
+    param([Parameter(Mandatory = $true)][object[]]$Samples)
+    if ($Samples.Count -lt 5) { throw 'At least five collection samples are required.' }
+    foreach ($sample in $Samples) {
+        if ($null -eq $sample.CollectionDurationMs) { throw 'Collection duration is missing.' }
+        $cost = [double]$sample.CollectionDurationMs
+        if ([double]::IsNaN($cost) -or [double]::IsInfinity($cost) -or $cost -lt 0) {
+            throw 'Collection duration must be finite and nonnegative.'
+        }
+    }
+    [pscustomobject]@{
+        SampleCount = $Samples.Count
+        CollectionTotalMs = [double](($Samples | Measure-Object CollectionDurationMs -Sum).Sum)
+        CollectionMaxMs = [double](($Samples | Measure-Object CollectionDurationMs -Maximum).Maximum)
+        CollectionAverageMs = [double](($Samples | Measure-Object CollectionDurationMs -Average).Average)
+    }
+}
+
 function New-ControlledSmallSeatHostSummary {
     param([Parameter(Mandatory = $true)][object[]]$Samples)
     if ($Samples.Count -lt 5) { throw 'At least five host samples are required.' }
@@ -117,6 +155,7 @@ function New-ControlledSmallSeatHoldWaitSummary {
 }
 
 Export-ModuleMember -Function 'Get-ControlledSmallSeatHoldRepeatPlan',
+    'Get-ControlledSmallSeatSamplingPlan', 'New-ControlledSamplingCostSummary',
     'Get-ControlledSmallSeatHoldRepeat30Plan', 'Get-ControlledSmallSeatHoldContrastPlan',
     'New-ControlledSmallSeatHoldWaitSummary',
     'New-ControlledSmallSeatHostSummary'

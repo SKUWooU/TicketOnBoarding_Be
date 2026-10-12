@@ -46,6 +46,9 @@ Assert-Throws { & $runner -RunId 'invalidcpu' -ComposeProject 'ticketon-controll
 Assert-Throws { & $runner -RunId 'invalidcontrast' -ComposeProject 'ticketon-controlled172-r14' -ContrastHotspots -Repeat30 }
 Assert-Throws { & $runner -RunId 'invalidcontrast' -ComposeProject 'ticketon-controlled172-r14' -ContrastHotspots -Probe30 }
 Assert-Throws { & $runner -RunId 'invalidcontrast' -ComposeProject 'ticketon-controlled172-r14' -ContrastHotspots -Repeats 3 }
+Assert-Throws { & $runner -RunId 'invalidsampling' -ComposeProject 'ticketon-controlled172-r14' -CompareSampling -Repeat30 }
+Assert-Throws { & $runner -RunId 'invalidsampling' -ComposeProject 'ticketon-controlled172-r14' -CompareSampling -ContrastHotspots }
+Assert-Throws { & $runner -RunId 'invalidsampling' -ComposeProject 'ticketon-controlled172-r14' -CompareSampling -Repeats 3 }
 $hostSamples = @(1..5 | ForEach-Object { [pscustomobject]@{ HostCpuPercent = [double]($_ * 10); HostFreeMemoryKb = [long](3000000 - $_ * 100000) } })
 $hostSummary = New-ControlledSmallSeatHostSummary -Samples $hostSamples
 Assert-True ($hostSummary.SampleCount -eq 5 -and $hostSummary.HostCpuPeakPercent -eq 50 -and
@@ -114,6 +117,15 @@ $contrastSummary.WeightedHotspot = [pscustomobject]@{ HotSeatCount = 10; HotRequ
 $contrastSummary | Add-Member -NotePropertyName PreAllocatedVus -NotePropertyValue 20
 $contrastSummary | Add-Member -NotePropertyName ConfiguredMaxVus -NotePropertyValue 20
 Assert-True (Assert-ControlledSmallSeatHoldStage $contrast[3] $contrastSummary $snapshot $fresh $counts 0 -ContrastHotspots)
+$sampling = @(Get-ControlledSmallSeatSamplingPlan)
+$samplingSummary = $contrastSummary.PSObject.Copy()
+$samplingSummary.DurationSeconds = 15
+$samplingSummary.Iterations = 300; $samplingSummary.ExpectedContention = 210
+$samplingSummary.WeightedHotspot = [pscustomobject]@{ HotSeatCount = 1; HotRequestPercent = 70; Seed = 17; HotSelections = 210; ColdSelections = 90 }
+Assert-True (Assert-ControlledSmallSeatHoldStage $sampling[0] $samplingSummary $snapshot $fresh $counts 0 -CompareSampling)
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $sampling[0] $samplingSummary $snapshot $fresh $counts 0 }
+$badSampling = $samplingSummary.PSObject.Copy(); $badSampling.DurationSeconds = 10
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $sampling[0] $badSampling $snapshot $fresh $counts 0 -CompareSampling }
 # Ten-seat plans are allowed only in the new fixed contrast mode, never in legacy modes.
 Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $contrastSummary $snapshot $fresh $counts 0 }
 $badContrast = $contrastSummary.PSObject.Copy(); $badContrast.WeightedHotspot = $contrastSummary.WeightedHotspot.PSObject.Copy()
