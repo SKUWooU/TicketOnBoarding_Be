@@ -24,6 +24,19 @@
 
 ## 실행
 
+### 실험 제안의 offline 평가
+
+내부 `evaluateExperimentProposal`은 검증된 계측 교차 보고서와 구조화된 후보를 받아 출처·수치 일치, 가설/확정 구분, 고정 workload·수동 승인 계약을 점검한다. MCP 도구로 노출하지 않으며 모델이나 실험을 실행하지 않는다. [평가 fixture](test/fixtures/experiment-proposal.json)는 수작업 후보이고, 정상·정책 위반 사례는 `test/experiment-proposal.test.mjs`에 있다.
+
+```powershell
+npm run build
+node --test test/experiment-proposal.test.mjs
+```
+
+`CONTRACT_ACCEPTED`는 AI 정확도·자연어 품질·원인 확정·실행 승인이 아니다. 원본 측정의 진위를 인증하거나 부하를 재실행하지도 않는다. 실제 모델 도입 전 사람이 검토할 평가 기준을 준비한 단계이며, 효과 검증의 남은 조건은 [ADR-0005](../../docs/project-improvement/adr/0005-evidence-grounded-experiment-assistance.md)를 따른다.
+
+### 서버 실행
+
 ```powershell
 npm install
 npm test
