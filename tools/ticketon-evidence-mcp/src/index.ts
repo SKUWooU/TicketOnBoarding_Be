@@ -77,6 +77,11 @@ server.tool("assess_small_seat_repeat_30", "가상 20석 20/30 RPS 6단계 반�
 }, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () =>
   success(await repository.assessSmallSeatRepeat30(batchId))));
 
+server.tool("assess_sampling_contrast", "저장된 schema 6의 1초/2초 계측 교차 배치를 검증합니다. warm-up 제외 관측값만 반환하며 미완료·변조 근거는 차단합니다. 다른 주기의 peak 비교·성능 개선 판정·부하 실행은 하지 않습니다.", {
+  batchId: z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
+}, { readOnlyHint: true, openWorldHint: false }, async ({ batchId }) => withEvidenceError(async () =>
+  success(await repository.assessSamplingContrast(batchId))));
+
 await server.connect(new StdioServerTransport());
 
 function success(payload: unknown) {
