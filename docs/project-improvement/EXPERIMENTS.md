@@ -2,6 +2,8 @@
 
 최근 실사례는 [7. MCP 근거에서 선택한 SQL 진단](#7-mcp-근거에서-선택한-sql-진단-208)을 참고한다. 실측은 계측 횟수 불일치로 중단됐으며 성능 개선 결과가 아니다.
 
+#210에서 [제한된 SQL 대조와 기존 예매 경합 복귀](#8-제한된-sql-대조와-예매-경합-복귀-210)를 마치고 MCP 분석·실험 연결 단계를 종료했다. 추가 계측·AI 비교·증량은 필수 후속 단계가 아니다.
+
 이 문서는 **결론을 재현 조건과 함께** 읽기 위한 요약이다. 기존 표의 RPS는 k6 목표 도착률(iterations/s)이며 TPS나 실제 예매처 처리량이 아니다. Hold 성공 iteration에는 POST와 DELETE가 포함되고 충돌 iteration에는 POST만 있으므로 전체 HTTP RPS와도 다르다. 각 run의 원 수치는 추적된 `load-test/results/` JSON에, 정리 전 긴 상세 기록은 [이전 문서 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 남아 있다.
 
 ## 1. 문제를 재현하고 고친 순서
@@ -115,3 +117,39 @@
 - `SmallSeatSqlDiagnostics.psm1`: 누락·음수·카운터 감소·SQL 횟수 불일치를 검증. statement 시간은 CPU 시간이나 InnoDB row-lock wait 귀속 시간이 아니다.
 - 기존 MCP 판정은 schema 7을 자동 허용하지 않는다. 실패 manifest를 보존하고 부분 측정치를 정상 근거로 반환하지 않는 회귀 테스트를 추가했다.
 - 실 KOPIS·PG·LLM 호출은 없었다. Docker 네트워크 주소 풀 부족 시 이번 실험의 컨테이너·네트워크만 정리했으며 두 DB 볼륨과 실패 JSON은 보존했다.
+
+## 8. 제한된 SQL 대조와 예매 경합 복귀 (#210)
+
+**목적과 종료 기준:** #208의 SQL 집계 부족이 실제 DB 반영 누락인지, 계측의 불일치인지를 제한된 실험으로 구분한다. 직렬/병렬 대조 1배치 → 기존 예매 경합 1배치 → MCP 조회로 종료한다. 성공할 때까지 재시도·계측 심화·상위 부하·인프라 도입은 하지 않는다.
+
+### 독립 SQL 대조
+
+[sqlprobe210a](../../load-test/results/sqlprobe210a/sql-counter-probe.json)는 Performance Schema가 켜진 MariaDB 10.11.8 fresh DB의 별도 `onticket_sql_probe` schema에서 실행했다. Windows mysql CLI의 text protocol이며 JDBC·예매 API 테스트가 아니다. 4개 연결은 각기 다른 행을 다루고, 연결당 25회 `잠금 SELECT → counter+1 UPDATE → COMMIT → 완료 표시`를 수행한다. 직렬은 앞 연결 종료 후 다음 연결을 시작하고, 병렬은 앞 연결 종료를 기다리지 않고 4개 클라이언트를 시작한다. 각 조건 3회, 순서는 직렬·병렬·병렬·직렬·직렬·병렬이다. 단계별 client deadline은 30초다.
+
+| 실행 순서 | 방식 | 완료 표시 / 독립 DB 증가 | 잠금 SELECT 집계 / 기대 | UPDATE 집계 / 기대 |
+| --- | --- | --- | --- | --- |
+| 1 | 직렬 | 100 / 100 | 100 / 100 | 100 / 100 |
+| 2 | 병렬 | 100 / 100 | 97 / 100 | 100 / 100 |
+| 3 | 병렬 | 100 / 100 | 95 / 100 | 98 / 100 |
+| 4 | 직렬 | 100 / 100 | 100 / 100 | 100 / 100 |
+| 5 | 직렬 | 100 / 100 | 100 / 100 | 100 / 100 |
+| 6 | 병렬 | 100 / 100 | 94 / 100 | 100 / 100 |
+
+총 600개 transaction의 완료 표시와 DB 누적 값이 일치했다. 최종 값은 각 행 150, 합계 600이다. 직렬 3회는 집계가 일치했고 병렬 3회는 일부 집계가 부족했다. 정상적인 DB 반영과 집계 부족이 함께 관측되어 **digest 횟수 부족을 업무 처리 누락으로 해석하지 않는다.** 이 probe의 `Complete:true`는 6단계 대조 실행 완료이지 모든 digest 횟수의 일치나 서비스 성능 통과가 아니다.
+
+backtick·별칭을 포함한 정규화 SQL 분류 fixture를 보강했다. 다만 CLI 실험이 #208의 JDBC 실행 경로·내부 집계 구현의 원인을 완전히 설명하지는 않는다. 결과는 이번 text-protocol 조건에서 병렬 집계 부족이 재현됐다는 범위로 한정한다. digest 시간을 모든 요청의 정확한 합계 또는 특정 row-lock 병목의 증거로 사용하지 않고, #208의 엄격한 커버리지 게이트도 완화하지 않았다.
+
+재현은 전용 포트 3309 fresh DB와 기존 Performance Schema override를 준비한 뒤 `powershell -NoProfile -ExecutionPolicy Bypass -File load-test/scripts/Run-SqlCounterProbe.ps1 -RunId <새 ID> -ComposeProject <전용 project>`로 수행한다. 컨테이너 label·포트·DB hostname·빈 application schema·probe schema 부재·digest consumer·최소 가용 메모리·미사용 결과 경로를 먼저 확인한다. 임의 SQL·원시 stderr는 출력하지 않으며 별도 SQL probe 파일은 새 MCP 도구나 허용 artifact로 추가하지 않았다.
+
+### 예매 경합 복귀와 실제 MCP 조회
+
+[return210a](../../load-test/results/return210a/small-seat-sampling-contrast.json)는 probe DB와 분리된 fresh DB에서 기존 `-CompareSampling` runner를 **한 번만** 실행했다. SQL 진단 옵션 없이 원래 schema 6 계약을 사용하며, SQL probe와 성능 전후로 비교하지 않는다. Windows 8 logical CPU·15.81GiB RAM, Java 21 `-Xms256m -Xmx768m`, 가상 20석·인기 1석·70% 가중치·seed 17·Hold 500ms·20 iterations/s·20/20 VU·단계당 15초다. 1초/2초 warm-up 각 1회를 제외하고 기존 교차 6단계를 측정했다.
+
+- 측정 1,804건 = Hold·해제 647건 + 예상 좌석 충돌 1,157건. 각 단계의 Hold/Release 수 일치.
+- dropped·예상 밖 오류·SQL deadlock·Hikari timeout·관측 pending·종료 Hold 0. 독립 재고 SQL은 매 단계 `20,0,0,20,0`, API snapshot의 Booking·Payment도 0.
+- 성공 p95 39.30~139.31ms, 정상 409 p95 32.32~65.96ms. DB 전역 wait 수는 측정 순서대로 4/0/7/3/4/1이며 특정 SQL 원인으로 귀속하지 않는다.
+- 최대 표본 간격 1,320~2,486ms, 최소 가용 메모리 약 2.89GiB. 일부 측정 host CPU peak가 90%를 넘어 `ResourceReviewRequired:true`를 유지했다. 서로 다른 표본 주기의 peak를 직접 비교하거나 Backend/DB 단독 원인으로 결론 내리지 않는다.
+
+기존 stdio MCP `assess_sampling_contrast(return210a)`를 실제 호출했다. 결과는 `RESOURCE_REVIEW_REQUIRED / MANUAL_REVIEW_ONLY`이며 warm-up을 제외한 6개 관측을 반환한다. 실행 권한·자동 증량·새 SQL probe 입력 권한은 추가하지 않았다. API snapshot·독립 SQL·실측 artifact·MCP 판정의 연결을 회귀 테스트로 남겼다.
+
+**단계 마무리:** 근거 조회 → 가설·실험 제안 → 제한된 실측 → 근거 부족의 보류 → 서비스 경합 복귀까지 완료했다. AI 정확도·분석 시간 절감·운영 용량·Kafka/RAG 도입 효과는 검증하지 않았다. 현 MCP 구현의 성과는 허용된 근거 조회와 판정 경계를 실제 사례에 연결한 것이며 서비스 처리 성능 개선과 구분한다. 두 실험 DB 데이터와 #208 실패 근거는 보존하고 실행 프로세스는 종료했다. 이후는 서비스 흐름 학습·기존 문제 해결 근거 정리를 우선하며 계측 심화는 선택 과제로 남긴다.

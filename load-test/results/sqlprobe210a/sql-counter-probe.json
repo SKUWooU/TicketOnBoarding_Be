@@ -1,0 +1,227 @@
+﻿{
+    "SchemaVersion":  1,
+    "RunId":  "sqlprobe210a",
+    "ComposeProject":  "ticketon-controlled172-i210p",
+    "Complete":  true,
+    "Failure":  null,
+    "Scope":  "isolated local text-protocol SQL counter probe; not JDBC, reservation workload or capacity proof",
+    "SqlTextIncluded":  false,
+    "Records":  [
+                    {
+                        "Sequence":  1,
+                        "Mode":  "serial",
+                        "Workers":  4,
+                        "CyclesPerWorker":  25,
+                        "CompletedTransactions":  100,
+                        "DurableCounters":  [
+                                                25,
+                                                25,
+                                                25,
+                                                25
+                                            ],
+                        "ExpectedLockSelects":  100,
+                        "ExpectedSeatUpdates":  100,
+                        "SqlOperationDeltas":  [
+                                                   {
+                                                       "Operation":  "seat-lock-select",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  48.807841,
+                                                       "StatementAverageMs":  0.48807841,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  0,
+                                                       "SqlErrors":  0
+                                                   },
+                                                   {
+                                                       "Operation":  "seat-update",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  53.610451,
+                                                       "StatementAverageMs":  0.53610451,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  100,
+                                                       "SqlErrors":  0
+                                                   }
+                                               ],
+                        "Coverage":  "COUNTERS_MATCH_WORKLOAD"
+                    },
+                    {
+                        "Sequence":  2,
+                        "Mode":  "parallel",
+                        "Workers":  4,
+                        "CyclesPerWorker":  25,
+                        "CompletedTransactions":  100,
+                        "DurableCounters":  [
+                                                50,
+                                                50,
+                                                50,
+                                                50
+                                            ],
+                        "ExpectedLockSelects":  100,
+                        "ExpectedSeatUpdates":  100,
+                        "SqlOperationDeltas":  [
+                                                   {
+                                                       "Operation":  "seat-lock-select",
+                                                       "Executions":  97,
+                                                       "StatementTotalMs":  41.34976,
+                                                       "StatementAverageMs":  0.42628618556701037,
+                                                       "RowsExamined":  97,
+                                                       "RowsAffected":  0,
+                                                       "SqlErrors":  0
+                                                   },
+                                                   {
+                                                       "Operation":  "seat-update",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  54.814273,
+                                                       "StatementAverageMs":  0.54814273,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  99,
+                                                       "SqlErrors":  0
+                                                   }
+                                               ],
+                        "Coverage":  "SQL_COUNTER_COVERAGE_MISMATCH"
+                    },
+                    {
+                        "Sequence":  3,
+                        "Mode":  "parallel",
+                        "Workers":  4,
+                        "CyclesPerWorker":  25,
+                        "CompletedTransactions":  100,
+                        "DurableCounters":  [
+                                                75,
+                                                75,
+                                                75,
+                                                75
+                                            ],
+                        "ExpectedLockSelects":  100,
+                        "ExpectedSeatUpdates":  100,
+                        "SqlOperationDeltas":  [
+                                                   {
+                                                       "Operation":  "seat-lock-select",
+                                                       "Executions":  95,
+                                                       "StatementTotalMs":  40.779846,
+                                                       "StatementAverageMs":  0.42926153684210527,
+                                                       "RowsExamined":  98,
+                                                       "RowsAffected":  0,
+                                                       "SqlErrors":  0
+                                                   },
+                                                   {
+                                                       "Operation":  "seat-update",
+                                                       "Executions":  98,
+                                                       "StatementTotalMs":  46.73209,
+                                                       "StatementAverageMs":  0.47685806122448982,
+                                                       "RowsExamined":  99,
+                                                       "RowsAffected":  99,
+                                                       "SqlErrors":  0
+                                                   }
+                                               ],
+                        "Coverage":  "SQL_COUNTER_COVERAGE_MISMATCH"
+                    },
+                    {
+                        "Sequence":  4,
+                        "Mode":  "serial",
+                        "Workers":  4,
+                        "CyclesPerWorker":  25,
+                        "CompletedTransactions":  100,
+                        "DurableCounters":  [
+                                                100,
+                                                100,
+                                                100,
+                                                100
+                                            ],
+                        "ExpectedLockSelects":  100,
+                        "ExpectedSeatUpdates":  100,
+                        "SqlOperationDeltas":  [
+                                                   {
+                                                       "Operation":  "seat-lock-select",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  46.556693,
+                                                       "StatementAverageMs":  0.46556693,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  0,
+                                                       "SqlErrors":  0
+                                                   },
+                                                   {
+                                                       "Operation":  "seat-update",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  50.260881,
+                                                       "StatementAverageMs":  0.50260881,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  100,
+                                                       "SqlErrors":  0
+                                                   }
+                                               ],
+                        "Coverage":  "COUNTERS_MATCH_WORKLOAD"
+                    },
+                    {
+                        "Sequence":  5,
+                        "Mode":  "serial",
+                        "Workers":  4,
+                        "CyclesPerWorker":  25,
+                        "CompletedTransactions":  100,
+                        "DurableCounters":  [
+                                                125,
+                                                125,
+                                                125,
+                                                125
+                                            ],
+                        "ExpectedLockSelects":  100,
+                        "ExpectedSeatUpdates":  100,
+                        "SqlOperationDeltas":  [
+                                                   {
+                                                       "Operation":  "seat-lock-select",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  48.188523,
+                                                       "StatementAverageMs":  0.48188523,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  0,
+                                                       "SqlErrors":  0
+                                                   },
+                                                   {
+                                                       "Operation":  "seat-update",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  51.01712,
+                                                       "StatementAverageMs":  0.5101712,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  100,
+                                                       "SqlErrors":  0
+                                                   }
+                                               ],
+                        "Coverage":  "COUNTERS_MATCH_WORKLOAD"
+                    },
+                    {
+                        "Sequence":  6,
+                        "Mode":  "parallel",
+                        "Workers":  4,
+                        "CyclesPerWorker":  25,
+                        "CompletedTransactions":  100,
+                        "DurableCounters":  [
+                                                150,
+                                                150,
+                                                150,
+                                                150
+                                            ],
+                        "ExpectedLockSelects":  100,
+                        "ExpectedSeatUpdates":  100,
+                        "SqlOperationDeltas":  [
+                                                   {
+                                                       "Operation":  "seat-lock-select",
+                                                       "Executions":  94,
+                                                       "StatementTotalMs":  36.359213,
+                                                       "StatementAverageMs":  0.38680013829787235,
+                                                       "RowsExamined":  94,
+                                                       "RowsAffected":  0,
+                                                       "SqlErrors":  0
+                                                   },
+                                                   {
+                                                       "Operation":  "seat-update",
+                                                       "Executions":  100,
+                                                       "StatementTotalMs":  43.938318,
+                                                       "StatementAverageMs":  0.43938318,
+                                                       "RowsExamined":  100,
+                                                       "RowsAffected":  99,
+                                                       "SqlErrors":  0
+                                                   }
+                                               ],
+                        "Coverage":  "SQL_COUNTER_COVERAGE_MISMATCH"
+                    }
+                ]
+}

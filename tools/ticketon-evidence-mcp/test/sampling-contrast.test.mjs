@@ -118,7 +118,7 @@ test('stdio 도구는 read-only로 실제 완료와 실패 배치를 판정한�
     const tool = listing.tools.find(t => t.name === 'assess_sampling_contrast');
     assert.equal(tool.annotations.readOnlyHint, true);
     assert.equal(tool.annotations.openWorldHint, false);
-    for (const [id, status] of [['sampling202c', 'RESOURCE_REVIEW_REQUIRED'], ['sampling202b', 'INSUFFICIENT_EVIDENCE']]) {
+    for (const [id, status] of [['sampling202c', 'RESOURCE_REVIEW_REQUIRED'], ['sampling202b', 'INSUFFICIENT_EVIDENCE'], ['return210a', 'RESOURCE_REVIEW_REQUIRED']]) {
       const result = await client.callTool({ name: tool.name, arguments: { batchId: id } });
       assert.equal(JSON.parse(result.content[0].text).status, status);
     }
