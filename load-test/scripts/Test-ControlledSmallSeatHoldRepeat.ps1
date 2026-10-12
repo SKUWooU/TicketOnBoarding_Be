@@ -53,4 +53,21 @@ Assert-Throws { New-ControlledSmallSeatHoldWaitSummary $bad }
 $bad = @($samples | ForEach-Object { $_.PSObject.Copy() }); foreach ($sample in $bad) { $sample.HikariAcquireCount = 0 }
 Assert-Throws { New-ControlledSmallSeatHoldWaitSummary $bad }
 
+$samplingPlan = @(Get-ControlledSmallSeatSamplingPlan)
+Assert-True ($samplingPlan.Count -eq 8)
+Assert-True ((@($samplingPlan | ForEach-Object SamplingIntervalMilliseconds) -join ',') -eq '1000,2000,1000,2000,2000,1000,1000,2000')
+Assert-True (@($samplingPlan | Where-Object Measured).Count -eq 6)
+Assert-True (@($samplingPlan | Where-Object { $_.Rate -ne 20 -or $_.HotSeatCount -ne 1 -or $_.DurationSeconds -ne 15 }).Count -eq 0)
+$costs = @(1..5 | ForEach-Object { [pscustomobject]@{ CollectionDurationMs = $_ * 10 } })
+$cost = New-ControlledSamplingCostSummary $costs
+Assert-True ($cost.SampleCount -eq 5 -and $cost.CollectionTotalMs -eq 150 -and $cost.CollectionMaxMs -eq 50 -and $cost.CollectionAverageMs -eq 30)
+Assert-Throws { New-ControlledSamplingCostSummary @($costs | Select-Object -First 4) }
+$badCosts = @($costs | ForEach-Object { $_.PSObject.Copy() }); $badCosts[0].CollectionDurationMs = -1
+Assert-Throws { New-ControlledSamplingCostSummary $badCosts }
+$badCosts[0].CollectionDurationMs = [double]::NaN
+Assert-Throws { New-ControlledSamplingCostSummary $badCosts }
+$badCosts[0].CollectionDurationMs = [double]::PositiveInfinity
+Assert-Throws { New-ControlledSamplingCostSummary $badCosts }
+$badCosts[0].CollectionDurationMs = $null
+Assert-Throws { New-ControlledSamplingCostSummary $badCosts }
 Write-Output "CONTROLLED_SMALL_SEAT_HOLD_REPEAT_TESTS_PASSED assertions=$assertions"

@@ -9,7 +9,8 @@ param(
     [switch]$Probe30,
     [switch]$Repeat30,
     [switch]$AttributeCpu,
-    [switch]$ContrastHotspots
+    [switch]$ContrastHotspots,
+    [switch]$CompareSampling
 )
 
 Set-StrictMode -Version Latest
@@ -27,7 +28,11 @@ if ($AttributeCpu -and -not $Repeat30) { throw 'CPU attribution requires the fix
 if ($ContrastHotspots -and ($Probe30 -or $Repeat30 -or $AttributeCpu -or $Repeats -ne 1)) {
     throw 'ContrastHotspots has its own fixed plan and cannot be combined with other modes.'
 }
-$observeHost = $Repeat30 -or $ContrastHotspots
+if ($CompareSampling -and ($Probe30 -or $Repeat30 -or $AttributeCpu -or $ContrastHotspots -or $Repeats -ne 1)) {
+    throw 'CompareSampling has its own fixed plan and cannot be combined with other modes.'
+}
+$boundedContrast = $ContrastHotspots -or $CompareSampling
+$observeHost = $Repeat30 -or $boundedContrast
 $observeWaits = $Repeats -eq 3 -or $Probe30 -or $observeHost
 if ($observeWaits) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatHoldRepeat.psm1') -Force
@@ -37,7 +42,8 @@ if ($observeWaits) {
 if ($AttributeCpu) {
     Import-Module (Join-Path $PSScriptRoot 'ControlledSmallSeatCpuAttribution.psm1') -Force
 }
-$plan = if ($ContrastHotspots) { @(Get-ControlledSmallSeatHoldContrastPlan) } `
+$plan = if ($CompareSampling) { @(Get-ControlledSmallSeatSamplingPlan) } `
+    elseif ($ContrastHotspots) { @(Get-ControlledSmallSeatHoldContrastPlan) } `
     elseif ($Repeat30) { @(Get-ControlledSmallSeatHoldRepeat30Plan) } `
     elseif ($Probe30) { @(Get-ControlledSmallSeatHoldProbe30Plan) } `
     elseif ($Repeats -eq 3) { @(Get-ControlledSmallSeatHoldRepeatPlan) } `
@@ -98,6 +104,7 @@ function Get-WaitSample {
         [Diagnostics.PerformanceCounter]$CpuCounter,
         [object]$HostMemory
     )
+    $collectionWatch = [Diagnostics.Stopwatch]::StartNew()
     $prometheus = Invoke-WebRequest -UseBasicParsing -Method Get -TimeoutSec 10 `
         -Uri 'http://127.0.0.1:18081/actuator/prometheus'
     $hikari = ConvertFrom-PrometheusHikari -Text $prometheus.Content
@@ -121,6 +128,7 @@ function Get-WaitSample {
         $hostFreeMemory = [long][math]::Floor([double]$HostMemory.AvailablePhysicalMemory / 1024)
     }
     [pscustomobject]@{
+        CollectionDurationMs = $collectionWatch.Elapsed.TotalMilliseconds
         TimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
         ElapsedMilliseconds = $Stopwatch.ElapsedMilliseconds
         HikariPending = $hikari.Pending
@@ -144,7 +152,7 @@ New-Item -ItemType Directory -Path $output -ErrorAction Stop | Out-Null
 $records = New-Object 'Collections.Generic.List[object]'
 $warmupRecords = New-Object 'Collections.Generic.List[object]'
 $cpuRecords = New-Object 'Collections.Generic.List[object]'
-$manifest = Join-Path $output $(if ($ContrastHotspots) { 'small-seat-hold-contrast.json' } else { 'small-seat-hold-ramp.json' })
+$manifest = Join-Path $output $(if ($CompareSampling) { 'small-seat-sampling-contrast.json' } elseif ($ContrastHotspots) { 'small-seat-hold-contrast.json' } else { 'small-seat-hold-ramp.json' })
 $cpuManifest = Join-Path $output 'small-seat-cpu-attribution.json'
 $cpuCounter = $null
 $hostMemory = $null
@@ -206,9 +214,10 @@ try {
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
         if ($observeWaits) {
-            $nextSampleAt = $watch.ElapsedMilliseconds + 1000
+            $samplingInterval = if ($CompareSampling) { $stage.SamplingIntervalMilliseconds } else { 1000 }
+            $nextSampleAt = $watch.ElapsedMilliseconds + $samplingInterval
             while (-not $process.HasExited) {
-                if ($ContrastHotspots -and $watch.ElapsedMilliseconds -gt 60000) {
+                if ($boundedContrast -and $watch.ElapsedMilliseconds -gt 60000) {
                     throw 'Contrast stage exceeded its 60-second execution budget.'
                 }
                 $waitMilliseconds = $nextSampleAt - $watch.ElapsedMilliseconds
@@ -216,7 +225,7 @@ try {
                 $process.Refresh()
                 if ($process.HasExited) { break }
                 $waitSamples.Add((Get-WaitSample -Stopwatch $watch -IncludeHost:$observeHost -IncludeJvm:$AttributeCpu -CpuCounter $cpuCounter -HostMemory $hostMemory))
-                do { $nextSampleAt += 1000 } while ($nextSampleAt -le $watch.ElapsedMilliseconds)
+                do { $nextSampleAt += $samplingInterval } while ($nextSampleAt -le $watch.ElapsedMilliseconds)
             }
         }
         $process.WaitForExit()
@@ -271,7 +280,7 @@ try {
         }
         Assert-ControlledSmallSeatHoldStage -Plan $stage -Summary $summary -Snapshot $snapshot `
             -FreshSnapshot $freshSnapshot -DatabaseCounts $databaseCounts `
-            -DeadlockDelta $deadlockDelta -ContrastHotspots:$ContrastHotspots | Out-Null
+            -DeadlockDelta $deadlockDelta -ContrastHotspots:$ContrastHotspots -CompareSampling:$CompareSampling | Out-Null
         $record = [ordered]@{
             TargetRps = $stage.Rate
             DurationSeconds = $stage.DurationSeconds
@@ -295,7 +304,11 @@ try {
             $record.WaitMetrics = $waitSummary
         }
         if ($observeHost) { $record.HostMetrics = $hostSummary }
-        if ($ContrastHotspots) {
+        if ($CompareSampling) {
+            $record.SamplingIntervalMilliseconds = $stage.SamplingIntervalMilliseconds
+            $record.CollectionMetrics = New-ControlledSamplingCostSummary -Samples $waitSamples.ToArray()
+        }
+        if ($boundedContrast) {
             $record.TargetIterationsPerSecond = $stage.Rate
             $record.Measured = $stage.Measured
             $record.HotSelections = $summary.WeightedHotspot.HotSelections
@@ -325,10 +338,12 @@ try {
                 })
             })
         }
-        if ($ContrastHotspots -and -not $stage.Measured) {
+        if ($boundedContrast -and -not $stage.Measured) {
             $warmupRecords.Add([pscustomobject]$record)
         } else { $records.Add([pscustomobject]$record) }
-        if ($ContrastHotspots) {
+        if ($CompareSampling) {
+            Write-Output "SMALL_SEAT_SAMPLING_STAGE_PASS iterations_per_second=$($stage.Rate) sample_interval_ms=$($stage.SamplingIntervalMilliseconds) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
+        } elseif ($ContrastHotspots) {
             Write-Output "SMALL_SEAT_HOLD_CONTRAST_STAGE_PASS iterations_per_second=$($stage.Rate) hot_seats=$($stage.HotSeatCount) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
         } else {
             Write-Output "SMALL_SEAT_HOLD_RAMP_STAGE_PASS rps=$($stage.Rate) success=$($summary.HoldSuccess) conflict=$($summary.ExpectedContention)"
@@ -343,7 +358,7 @@ try {
             $process.WaitForExit()
         }
     } catch { }
-    if ($ContrastHotspots) {
+    if ($boundedContrast) {
         $gap = 0L
         if ($null -ne $waitSamples -and $waitSamples.Count -gt 1) {
             foreach ($index in 1..($waitSamples.Count - 1)) {
@@ -363,7 +378,7 @@ try {
 } finally {
     if ($null -ne $cpuCounter) { $cpuCounter.Dispose() }
     $manifestData = [ordered]@{
-        SchemaVersion = if ($ContrastHotspots) { 5 } elseif ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
+        SchemaVersion = if ($CompareSampling) { 6 } elseif ($ContrastHotspots) { 5 } elseif ($Repeat30) { 4 } elseif ($Probe30) { 3 } elseif ($Repeats -eq 3) { 2 } else { 1 }
         Scope = 'local virtual 20-seat fixture; not production performance'
         RunId = $RunId
         ComposeProject = $ComposeProject
@@ -376,8 +391,12 @@ try {
         FixedHotRequestPercent = 70
         Records = $records.ToArray()
     }
-    if ($ContrastHotspots) {
-        $manifestData.ContrastHotspots = $true
+    if ($boundedContrast) {
+        $manifestData.ContrastHotspots = [bool]$ContrastHotspots
+        if ($CompareSampling) {
+            $manifestData.CompareSampling = $true
+            $manifestData.Method = 'fixed workload; 1000/2000ms collection crossover; sampled peaks not directly comparable; no CPU attribution'
+        }
         $manifestData.FixedTargetIterationsPerSecond = 20
         $manifestData.FixedSelectionSeed = 17
         $manifestData.FixedPreAllocatedVus = 20
