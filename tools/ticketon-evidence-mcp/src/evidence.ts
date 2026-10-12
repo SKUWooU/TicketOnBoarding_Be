@@ -5,6 +5,7 @@ import { assessSeatHoldChurnBatch, insufficientSeatHoldChurnEvidence } from "./s
 import { assessSmallSeatHold, insufficientSmallSeatHold } from "./smallSeatHold.js";
 import { assessSmallSeatProbe, insufficientSmallSeatProbe } from "./smallSeatProbe.js";
 import { assessSmallSeatRepeat30, insufficientSmallSeatRepeat30 } from "./smallSeatRepeat30.js";
+import { assessSamplingContrast, insufficientSamplingContrast } from "./samplingContrast.js";
 
 const RUN_ID = /^[A-Za-z0-9-]{1,64}$/;
 const SUMMARY_FILE = /^[A-Za-z0-9-]+-summary\.json$/;
@@ -56,7 +57,8 @@ export class EvidenceRepository {
           runId: entry.name,
           summaryArtifacts: files.filter((file) => SUMMARY_FILE.test(file)).sort(),
           aggregateArtifacts: files.filter((file) => file.endsWith("-aggregate.json")).sort(),
-          manifestAvailable: files.some((file) => file.endsWith("-manifest.json"))
+          manifestAvailable: files.some((file) => file.endsWith("-manifest.json")),
+          samplingContrastAvailable: files.includes("small-seat-sampling-contrast.json")
         };
       }));
     return candidates.filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== undefined).slice(0, boundedLimit);
@@ -200,6 +202,23 @@ export class EvidenceRepository {
     } catch (error) {
       if (error instanceof EvidenceError) throw error;
       return insufficientSmallSeatRepeat30("The allowed 20/30 RPS repeat manifest is missing or malformed.");
+    }
+  }
+
+  async assessSamplingContrast(batchId: string) {
+    const canonicalRoot = await this.canonicalRootOrThrow();
+    const directory = await this.resolveCanonicalRunDirectory(batchId, canonicalRoot);
+    if (!directory) throw new EvidenceError("RUN_NOT_FOUND", "The requested sampling batch was not found.");
+    try {
+      const manifestPath = await realpath(path.join(directory, "small-seat-sampling-contrast.json"));
+      if (!isDescendant(directory, manifestPath)) {
+        throw new EvidenceError("UNSUPPORTED_ARTIFACT", "The evidence artifact points outside its run directory.");
+      }
+      const manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, ""));
+      return assessSamplingContrast(batchId, manifest);
+    } catch (error) {
+      if (error instanceof EvidenceError) throw error;
+      return insufficientSamplingContrast("The allowed sampling crossover manifest is missing or malformed.");
     }
   }
 

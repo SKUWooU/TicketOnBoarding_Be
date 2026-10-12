@@ -12,10 +12,13 @@
 - `assess_controlled_hold_evidence`: `small-seat-repeat`(20석·9회) 또는 `large-seat-churn`(2,000석·6회)을 명시해 각각의 저장된 배치를 검증. 조건과 재고 게이트를 통과한 해당 시나리오의 관측값만 제공하며 시나리오 사이 p95 비교는 제공하지 않음
 - `assess_small_seat_probe`: 가상 20석 20→30 RPS 단일 탐색의 완료·Hold/Release·재고·자원 게이트를 확인하고 `REPEAT_REQUIRED` 또는 `STOP_ESCALATION`/`INSUFFICIENT_EVIDENCE`를 반환. 30 RPS 안정성이나 p95 개선을 판정하지 않음
 - `assess_small_seat_repeat_30`: 같은 fixture의 20/30 RPS 6단계 교차 반복 manifest를 읽어 완료·재고·wait·호스트 자원 조건을 fail-closed로 확인. 관측값이 유효해도 전체 호스트 CPU 순간 peak가 90% 이상이면 `RESOURCE_REVIEW_REQUIRED`로 **상위 부하 실행 전 원인 확인**을 요구. 이 임계값은 로컬 실험의 보수적 중단 정책이며 Backend 또는 DB CPU 병목의 증명이 아님
+- `assess_sampling_contrast`: 고정된 `small-seat-sampling-contrast.json`(schema 6)의 warm-up 2회·1초/2초 교차 6회와 재고·계측 비용을 검증. 완료 배치의 측정 관측만 반환하며 미완료/누락/모순에는 `INSUFFICIENT_EVIDENCE`, 재고·pool·표본·메모리 게이트 위반에는 `STOP_ESCALATION`. 높은 CPU 신호는 warm-up도 포함해 `RESOURCE_REVIEW_REQUIRED`로 유지하고 자동 실행하지 않음
 - `list_controlled_experiments`: 고정된 Hold→Release 50/100 RPS 실험 조건 목록
 - `preflight_controlled_experiment`: 새 배치 ID와 전용 Compose 프로젝트를 받아 기존 runner의 `-CheckOnly`로 로컬 준비 상태만 확인. 부하·fixture·결과 디렉터리를 생성하지 않음
 
 `verify_domain_invariants`의 `PASS`는 선택한 로컬 fixture 요약의 불변식만 뜻합니다. 실제 공연장이나 운영 환경의 성능·정합성을 보장하지 않습니다.
+
+계측 교차 예: `assess_sampling_contrast({"batchId":"sampling202c"})`는 검증된 측정 6단계·총 1,804건을 반환한다. `sampling202a`/`sampling202b`는 미완료여서 부분 수치도 반환하지 않는다. `list_evidence_runs`의 `samplingContrastAvailable`은 파일 존재를 알리는 표시이며 유효성 판정이 아니다. 입력은 batchId뿐이고 임의 파일·경로는 받을 수 없다. 수집 시간은 HTTP·DB 조회를 포함한 **수집 함수 wall-clock**으로 CPU 사용 시간이나 요청 지연이 아니다. 다른 주기의 peak·호스트 CPU 귀속·p95 개선 차이는 계산하지 않는다. 낮은 CPU에서도 `SAMPLING_OBSERVATION`은 수동 검토용 관측일 뿐 증량 승인이나 처리 용량 보증이 아니다.
 
 비교 예: `batchId=c166-repeat`, `firstArtifact=c166-repeat-r1-h20-summary.json`, `secondArtifact=c166-repeat-r2-h20-summary.json`. 조건이 같으면 `SAME_CONDITION_REPEAT`, 인기 좌석 수만 다르면 `HOT_SEAT_COUNT_ONLY`로 표시합니다. manifest·초기 재고·재고 불변식·dropped iteration·SQL digest 관측 조건이 빠지거나 맞지 않으면 비교 수치를 제공하지 않습니다. 목표 RPS × 지속 시간 대비 완료 건수가 99% 미만이거나, raw SQL 실행 건수와 기록된 관측률·예약 성공 건수가 불일치해도 비교를 차단합니다. 0 RPS·0 완료 건수처럼 유효한 부하 측정이 아닌 요약에서도 p95 차이를 제공하지 않습니다. `COMPARABLE`은 인과적 성능 개선 판정이 아닙니다.
 
