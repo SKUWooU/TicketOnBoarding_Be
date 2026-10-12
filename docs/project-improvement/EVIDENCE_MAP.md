@@ -15,6 +15,7 @@
 | 계측 교차 결과의 재사용 계약 | schema 6 전용 MCP 판정: 완료·순서·재고·수집 비용 검증 후 측정 6단계만 반환. 미완료 2배치와 변조는 수치 차단 | [#204](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/204), [MCP 사용법](../../tools/ticketon-evidence-mcp/README.md) |
 | 근거→가설→실험 제안의 평가 경계 | 실제 MCP 보고서와 수작업 후보를 대조하는 offline 계약. 오인용·확정 단정·조건 변경·자동 실행은 거절. LLM 품질/효용 검증 아님 | [#206](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/206), [ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md) |
 | MCP 실사례→SQL 진단 실험 | 실제 MCP 조회·Codex 제안·계약 검증 후 전용 DB 실측. 기대/집계 횟수 불일치로 두 시도 중단, 원인 확정·증량 제외 | [#208](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/208), [실측·한계](EXPERIMENTS.md#7-mcp-근거에서-선택한-sql-진단-208) |
+| MCP 단계 종료·업무 결과와 집계 구분 | 독립 SQL 600 transactions의 DB 반영 일치, 병렬 digest 집계 부족 재현. 예매 경합 1,804건 복귀 후 실제 MCP 자원 재검토 판정 | [#210](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/210), [대조·복귀·한계](EXPERIMENTS.md#8-제한된-sql-대조와-예매-경합-복귀-210) |
 | DB 대기 반복성과 계측 부담 구분 | 같은 인기 1석·20 iterations/s에서 1초/2초 수집 교차 3회. 1,804건·예상 밖 오류 0; 실패 배치도 보존, p95 개선·CPU 귀속 단정 제외 | [#202](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/202), [계측 비교](EXPERIMENTS.md#6-같은-경합에서-계측-빈도-교차-검증) |
 | 다중 인스턴스·DB schema 변경 경계 | 로컬 2-instance 상태 수렴 smoke; Flyway fresh/baseline 검증 | [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150), [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152). 운영 확장성·기존 DB 무중단 migration 증명 아님. |
 

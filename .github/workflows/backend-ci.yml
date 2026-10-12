@@ -48,6 +48,7 @@ jobs:
           ./load-test/scripts/Test-ControlledSmallSeatHoldRamp.ps1
           ./load-test/scripts/Test-ControlledSmallSeatHoldRepeat.ps1
           ./load-test/scripts/Test-SmallSeatSqlDiagnostics.ps1
+          ./load-test/scripts/Test-SqlCounterProbe.ps1
 
       - name: Set up Node.js for workload contract
         uses: actions/setup-node@v4
