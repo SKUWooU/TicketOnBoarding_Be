@@ -37,7 +37,7 @@ test('미완료 실측 두 배치는 부분 관측값도 노출하지 않는다'
 
 test('누락·조건 변경·계측 모순은 fail-closed 처리한다', () => {
   const mutations = [
-    d => d.SchemaVersion = 5, d => d.RunId = 'other', d => d.Failure = {},
+    d => d.SchemaVersion = 5, d => d.SchemaVersion = 7, d => d.RunId = 'other', d => d.Failure = {},
     d => d.FixedSelectionSeed = 18, d => d.FixedTargetIterationsPerSecond = 30,
     d => d.FixedHotSeatCount = 10, d => d.FixedMaxVus = 21,
     d => d.WarmupRecords.pop(), d => d.Records.reverse(),

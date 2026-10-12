@@ -1,5 +1,7 @@
 # 가상 좌석 경합 실험 요약
 
+최근 실사례는 [7. MCP 근거에서 선택한 SQL 진단](#7-mcp-근거에서-선택한-sql-진단-208)을 참고한다. 실측은 계측 횟수 불일치로 중단됐으며 성능 개선 결과가 아니다.
+
 이 문서는 **결론을 재현 조건과 함께** 읽기 위한 요약이다. 기존 표의 RPS는 k6 목표 도착률(iterations/s)이며 TPS나 실제 예매처 처리량이 아니다. Hold 성공 iteration에는 POST와 DELETE가 포함되고 충돌 iteration에는 POST만 있으므로 전체 HTTP RPS와도 다르다. 각 run의 원 수치는 추적된 `load-test/results/` JSON에, 정리 전 긴 상세 기록은 [이전 문서 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 남아 있다.
 
 ## 1. 문제를 재현하고 고친 순서
@@ -85,3 +87,31 @@
 실패도 보존했다. [sampling202a](../../load-test/results/sampling202a/small-seat-sampling-contrast.json)는 새 15초 계획에 기존 10초 검증 조건이 적용돼 첫 warm-up 뒤 중단된 개발 과정의 실패다. 조건을 모드별로 분리하고 계약 테스트를 추가했다. [sampling202b](../../load-test/results/sampling202b/small-seat-sampling-contrast.json)는 warm-up 2회·측정 2회 후 sequence 5에서 표본 간격 3,420ms로 중단됐다. 모두 `Complete:false`이며 완료 배치의 비교에 포함하지 않는다. 2초 모드도 기존 3초 간격 상한을 완화하지 않았다. 재시도는 별도 빈 DB를 사용했으며 성공한 배치만 남기지 않았다.
 
 실행은 전용 DB와 `local,loadtest` Backend를 준비한 뒤 `powershell -NoProfile -ExecutionPolicy Bypass -File load-test/scripts/Run-ControlledSmallSeatHoldRamp.ps1 -RunId <새 ID> -ComposeProject <전용 project> -CompareSampling`으로 재현한다. DB 포트 3309·2행×10석 설정 및 fresh DB 검증은 기존 fixture runner를 따른다. #204의 read-only MCP `assess_sampling_contrast`는 이 고정 schema 6만 별도로 검증한다. 완료 `sampling202c`는 warm-up 제외 관측과 자원 재검토 판정을 제공하고, 미완료 `sampling202a/b`는 부분 관측을 숨긴다. 순서·조건·재고·계측 평균/합계 모순도 차단한다. 이 판정은 결정적 계약 검증이며 AI의 병목 추론이나 RAG 성능을 평가한 결과가 아니다([ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md)).
+
+## 7. MCP 근거에서 선택한 SQL 진단 (#208)
+
+**흐름:** 실제 stdio MCP `assess_sampling_contrast(sampling202c)` 조회 → 이번 Codex 세션의 가설·제안 → offline 계약 검증 → 사용자 승인 범위의 수동 실험 → 근거 부족 판정. #202의 sequence 5/8에서 전역 row-lock wait 4/0을 확인하고, 시간별 변동의 확인을 위해 좌석 잠금 조회와 UPDATE 집계를 추가했다. [구조화된 제안](../../tools/ticketon-evidence-mcp/test/fixtures/ai-analysis208.json)은 사실 2개·가설 1개·실험 1개의 계약을 통과했다. 계약 통과가 실행 권한을 부여하지는 않는다.
+
+이번 분석은 기존 문서·사람 fixture를 이미 본 **단일 비맹검 Codex 사례**다. 외부 LLM API·RAG·별도 모델 비교를 수행하지 않았으며 AI 정확도·시간 절감 성과를 주장하지 않는다. MCP는 여전히 조회 전용이고 실행은 승인된 Implementer가 기존 runner로 수행한다.
+
+실험은 Windows 8 logical CPU·15.81GiB 물리 RAM, Java 21 `-Xms256m -Xmx768m`, MariaDB 10.11.8 전용 fresh DB에서 수행했다. 가상 20석·인기 1석·20 iterations/s·15초·Hold 500ms·가중치 70%·seed 17·20/20 VU·기존 1초/2초 교차 순서를 유지했다. `compose.statement-diagnostics.yml`로 Performance Schema를 켜고 단계 시작·종료의 누적 digest 차이만 읽었다. 계측 조건이 달라져 schema 7의 별도 기준선으로 분리했으며 기존 schema 6과 성능 전후로 비교하지 않는다.
+
+### 실측 결과와 중단 이유
+
+| 시도 | 관측 | 판단 |
+| --- | --- | --- |
+| [sql208a](../../load-test/results/sql208a/small-seat-sql-diagnostics.json) | 첫 warm-up의 SQL 횟수 대조 실패. 초기 manifest에는 기대/관측 횟수가 없어 원인을 복원하지 않음 | `Complete:false`, 통과 단계 0. 성공 배치로 사용하지 않음 |
+| [sql208b](../../load-test/results/sql208b/small-seat-sql-diagnostics.json) | 별도 fresh DB 재시도. 잠금 SELECT 기대 408 / 집계 404, 좌석 UPDATE 기대 214 / 집계 213. 최대 표본 간격 1,616ms | 역시 첫 warm-up 중단. `Complete:false`, 통과 단계 0. DB 병목 원인 판정 보류 |
+
+단일 좌석 Hold 요청은 잠금 SELECT 1회, 성공한 해제는 추가 SELECT 1회이며, 재사용 없는 Hold·해제는 각각 좌석 UPDATE 1회를 예상한다. 따라서 k6 완료 iteration+해제 성공 수와 잠금 SELECT, Hold 성공×2와 UPDATE를 대조한다. 이는 **이번 경로의 전체 SQL 계측 근거를 채택할지 정하는 보수적 기준**이지 Performance Schema가 모든 실행을 정확하게 집계한다는 보증이 아니다. 재사용 Hold·추가 DB 작성자·계측 방식 변경이 있다면 예상식도 재검토해야 한다.
+
+재시도에서도 횟수가 일치하지 않아 SQL 평균 시간·행 수를 전체 요청의 병목 근거로 채택하지 않았다. 이 불일치만으로 SQL 실행 실패나 재고 손상을 뜻하지는 않는다. 두 manifest의 통과 단계가 없으므로 오류 0·재고 정합성 통과·용량 한계도 선언하지 않는다. `ResourceReviewRequired:false` 역시 통과 기록이 없어서 나온 값이며 안전 판정이 아니다. 수집 게이트를 완화하거나 성공할 때까지 재시도하지 않았다.
+
+집계 횟수 불일치의 원인은 아직 미확정이다. DB 재조회에서도 부족한 횟수가 유지됐고 digest/statement lost 카운터는 0이었다(파일 인스턴스 lost는 1). [MariaDB digest 설명](https://mariadb.com/docs/server/reference/system-tables/performance-schema/performance-schema-tables/performance-schema-events_statements_summary_by_digest-table)과 [10.11.8 집계 구현](https://github.com/MariaDB/server/blob/mariadb-10.11.8/storage/perfschema/pfs_stat.h)을 확인했으나 이것만으로 해당 실행의 누락 원인을 확정하지 않는다. 다음 실험은 **고정된 직렬/병렬 SQL 실행 수와 집계 수를 독립적으로 대조**해 계측의 정확도·분류·드라이버 경로를 분리하는 것이다. 서버 부하 증량이나 Kafka 도입으로 넘어가지 않는다.
+
+### 코드와 재현 경계
+
+- `Run-ControlledSmallSeatHoldRamp.ps1 -CompareSampling -DiagnoseSql`: 기존 fixture·메모리·pool·재고·표본 게이트 유지. Performance Schema/digest consumer 확인, 원문 SQL 없이 operation 증분만 출력. SQL 횟수 불일치는 이후 실패 기록에 기대/관측 값과 별도 이유를 남긴다.
+- `SmallSeatSqlDiagnostics.psm1`: 누락·음수·카운터 감소·SQL 횟수 불일치를 검증. statement 시간은 CPU 시간이나 InnoDB row-lock wait 귀속 시간이 아니다.
+- 기존 MCP 판정은 schema 7을 자동 허용하지 않는다. 실패 manifest를 보존하고 부분 측정치를 정상 근거로 반환하지 않는 회귀 테스트를 추가했다.
+- 실 KOPIS·PG·LLM 호출은 없었다. Docker 네트워크 주소 풀 부족 시 이번 실험의 컨테이너·네트워크만 정리했으며 두 DB 볼륨과 실패 JSON은 보존했다.
