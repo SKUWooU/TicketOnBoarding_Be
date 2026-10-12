@@ -4,10 +4,12 @@
 
 | 우선 | 후보 | 진행 조건 / 제외 범위 |
 | --- | --- | --- |
-| 1 | 호스트 CPU 미설명분과 계측 부담 확인 | #198에서 전체 호스트 peak와 JVM·MariaDB·k6·Docker/WSL·기타 읽기 가능 프로세스를 교차 관측. 서로 다른 표본 창·읽지 못한 프로세스/커널 CPU 때문에 정확한 합산은 불가. 필요 시 별도 시스템 프로파일러와 계측 전용 기준선으로 재검토. |
-| 2 | 다른 로컬 장비의 별도 처리 구간 | 현재 노트북은 16GB RAM(Windows 인식 15.81GiB). 다른 PC에서 재실행하면 CPU·Docker 할당·fixture를 명시하고 새 기준선으로 기록. 서로 다른 호스트의 수치를 개선 전후로 비교하지 않음. |
-| 3 | FE/BE 흐름 검증 | 가상 좌석·Hold·Checkout·결제 검증을 실제 로컬 UI/API로 점검. FE는 별도 저장소 Issue/PR. 실제 KOPIS·PG 호출 없이 fixture 사용. |
+| 1 | 동일 유입량의 인기 좌석 집중도 대비 | #200: 20 iterations/s·Hold 500ms·인기 요청 70% 고정, 인기 1석/10석 교차 반복. warm-up 제외 후 성공/정상 409·DB wait·Hikari·재고를 비교. 서버 코드 개선·처리 용량 증명 아님. |
+| 2 | 호스트 CPU 미설명분과 계측 부담 확인 | #198에서 전체 호스트 peak와 JVM·MariaDB·k6·Docker/WSL·기타 읽기 가능 프로세스를 교차 관측. 서로 다른 표본 창·읽지 못한 프로세스/커널 CPU 때문에 정확한 합산은 불가. 필요 시 별도 시스템 프로파일러와 계측 전용 기준선으로 재검토. |
+| 3 | 다른 로컬 장비의 별도 처리 구간 | 현재 노트북은 16GB RAM(Windows 인식 15.81GiB). 다른 PC에서 재실행하면 CPU·Docker 할당·fixture를 명시하고 새 기준선으로 기록. 서로 다른 호스트의 수치를 개선 전후로 비교하지 않음. |
+| 4 | FE/BE 흐름 검증 | 가상 좌석·Hold·Checkout·결제 검증을 실제 로컬 UI/API로 점검. FE는 별도 저장소 Issue/PR. 실제 KOPIS·PG 호출 없이 fixture 사용. |
 | 보류 | 대기열·Kafka·outbox·Redis 분산 락·운영 LB | 로컬 Hold 경합만으로 대기열·메시지 브로커를 도입하지 않기로 [ADR-0004](docs/project-improvement/adr/0004-defer-hold-admission-infrastructure.md)에 기록. 유실·독립 재시도·다중 인스턴스 문제를 재현한 뒤 재검토. |
 | 보류 | 실제 PG 정산·환불, 운영 데이터 migration | 외부 연동 권한·운영 데이터·복구 계획이 필요한 별도 작업. 로컬 Mock PG와 Flyway fresh DB 검증을 운영 검증으로 확대 해석하지 않음. |
+| 후속 후보 | AI의 근거 기반 병목 가설·실험 제안 | [ADR-0005](docs/project-improvement/adr/0005-evidence-grounded-experiment-assistance.md): 검증된 MCP 지표 + 관련 문서 근거로 가설·검증 계획 제안. 반복 분석의 실제 부담과 평가 사례 확보 후 검토. RAG는 기존 검색의 한계가 있을 때만 검토. AI의 자동 부하·DB·결제 변경 제외. |
 
 이미 검증한 문제·수치는 [실험 요약](docs/project-improvement/EXPERIMENTS.md), 기술 판단은 [ADR](docs/project-improvement/adr/README.md)에 둔다.

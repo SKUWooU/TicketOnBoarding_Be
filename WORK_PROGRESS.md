@@ -4,8 +4,8 @@
 
 | 구분 | 상태 |
 | --- | --- |
-| 마지막 병합 | [BE #196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196) / [PR #197](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/197), `138833b`: 가상 20석 20/30 RPS 6단계 교차 반복과 MCP 자원 재검토 게이트. |
-| 현재 | [BE #198](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/198): 같은 20/30 RPS fixture에서 호스트·JVM·MariaDB·k6·Windows 프로세스군 CPU를 분리 측정, PR 검증 예정. |
-| 다음 후보 | 계측 부담과 미설명 호스트 CPU를 별도 기준선으로 재검토. 상위 RPS 증량·운영 용량 및 대기열 도입 주장은 보류. |
+| 최근 구현·검증 | [BE #200](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/200) / [PR #201](https://github.com/SKUWooU/TicketOnBoarding_Be/pull/201): 인기 1석/10석 대비 1,206건·예상 밖 오류 0, 자원 재검토 신호 유지. ADR-0005와 실패·완료 근거 보존. |
+| 현재 | 후속 구현은 미착수. #200의 최신 HEAD·CI·Reviewer·병합 상태는 연결된 PR #201에서 확인. |
+| 다음 후보 | DB wait의 반복성과 호스트·계측 간섭을 구분하는 후속 검증. 상위 부하 증량과 AI/RAG 구현은 별도 조건 충족 후 검토. |
 
 실측 수치와 제한은 [실험 요약](docs/project-improvement/EXPERIMENTS.md), 공부 순서는 [학습 가이드](docs/project-improvement/STUDY_GUIDE.md), 보류할 기술은 [BACKLOG](BACKLOG.md)에 둔다. 로컬 fixture 결과를 운영 성능으로 일반화하지 않는다.

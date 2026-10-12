@@ -55,10 +55,14 @@ function Assert-ControlledSmallSeatHoldStage {
         [Parameter(Mandatory = $true)][object]$Snapshot,
         [Parameter(Mandatory = $true)][object]$FreshSnapshot,
         [Parameter(Mandatory = $true)][object[]]$DatabaseCounts,
-        [Parameter(Mandatory = $true)][long]$DeadlockDelta
+        [Parameter(Mandatory = $true)][long]$DeadlockDelta,
+        [switch]$ContrastHotspots
     )
+    $validHotSeats = if ($ContrastHotspots) { @(1, 10) } else { @(1) }
     if ([int]$Plan.Rate -notin @(5, 10, 20, 30) -or [int]$Plan.DurationSeconds -ne 10 -or
-        [int]$Plan.HotSeatCount -ne 1 -or [int]$Plan.HoldDwellMilliseconds -ne 500 -or
+        [int]$Plan.HotSeatCount -notin $validHotSeats -or
+        ($ContrastHotspots -and [int]$Plan.Rate -ne 20) -or
+        [int]$Plan.HoldDwellMilliseconds -ne 500 -or
         [string]$Summary.Scenario -ne 'weighted-hotspot-churn' -or
         [int]$Summary.TargetRatePerSecond -ne [int]$Plan.Rate -or
         [int]$Summary.DurationSeconds -ne 10 -or
@@ -68,7 +72,7 @@ function Assert-ControlledSmallSeatHoldStage {
         [long]$Summary.HoldSuccess -ne [long]$Summary.ReleaseSuccess -or
         ([long]$Summary.HoldSuccess + [long]$Summary.ExpectedContention) -ne [long]$Summary.Iterations -or
         [long]$Summary.UnexpectedNonSuccessful -ne 0 -or [long]$Summary.UnexpectedRelease -ne 0 -or
-        [int]$Summary.WeightedHotspot.HotSeatCount -ne 1 -or
+        [int]$Summary.WeightedHotspot.HotSeatCount -ne [int]$Plan.HotSeatCount -or
         [int]$Summary.WeightedHotspot.HotRequestPercent -ne 70 -or
         [int]$Summary.HoldDwellMilliseconds -ne 500 -or
         -not [bool]$Snapshot.invariantSatisfied -or
@@ -84,6 +88,15 @@ function Assert-ControlledSmallSeatHoldStage {
         (@($DatabaseCounts | ForEach-Object { [long]$_ }) -join ',') -ne '20,0,0,20,0' -or
         $DeadlockDelta -ne 0) {
         throw 'Controlled small-seat Hold ramp stage failed its completion or inventory gate.'
+    }
+    if ($ContrastHotspots -and (
+        [long]$Summary.WeightedHotspot.Seed -ne 17 -or
+        [long]$Summary.WeightedHotspot.HotSelections -lt 0 -or
+        [long]$Summary.WeightedHotspot.ColdSelections -lt 0 -or
+        ([long]$Summary.WeightedHotspot.HotSelections +
+            [long]$Summary.WeightedHotspot.ColdSelections) -ne [long]$Summary.Iterations -or
+        [int]$Summary.PreAllocatedVus -ne 20 -or [int]$Summary.ConfiguredMaxVus -ne 20)) {
+        throw 'Contrast workload seed, selection counts or VU budget changed.'
     }
     $true
 }

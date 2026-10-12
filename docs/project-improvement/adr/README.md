@@ -40,5 +40,6 @@ ADR은 기술을 도입하거나 보류한 이유와 재검토 조건을 기록�
 - [ADR-0002: bounded Checkout 결제 검증 claim](0002-bounded-checkout-payment-verification-claim.md) — 승인
 - [ADR-0003: 서버 소유 가상 좌석 레이아웃](0003-server-owned-virtual-seat-layout.md) — 승인
 - [ADR-0004: Hold 경합의 대기열·메시지 인프라 도입 보류](0004-defer-hold-admission-infrastructure.md) — 보류
+- [ADR-0005: 측정 근거를 바탕으로 한 AI 가설·실험 제안](0005-evidence-grounded-experiment-assistance.md) — 방향 승인 / AI·RAG 구현 보류
 
 대기열·메시지 브로커는 #198의 로컬 측정만으로 도입하지 않기로 기록했습니다. outbox는 여전히 별도 실패·재시도 근거가 생기기 전까지 BACKLOG 후보입니다.

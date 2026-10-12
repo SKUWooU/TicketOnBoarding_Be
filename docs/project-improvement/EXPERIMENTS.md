@@ -1,6 +1,6 @@
 # 가상 좌석 경합 실험 요약
 
-이 문서는 **결론을 재현 조건과 함께** 읽기 위한 요약이다. 아래 RPS는 k6 목표 도착률이며 TPS나 실제 예매처 처리량이 아니다. 각 run의 원 수치는 추적된 `load-test/results/` JSON에, 정리 전 긴 상세 기록은 [이전 문서 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 남아 있다.
+이 문서는 **결론을 재현 조건과 함께** 읽기 위한 요약이다. 기존 표의 RPS는 k6 목표 도착률(iterations/s)이며 TPS나 실제 예매처 처리량이 아니다. Hold 성공 iteration에는 POST와 DELETE가 포함되고 충돌 iteration에는 POST만 있으므로 전체 HTTP RPS와도 다르다. 각 run의 원 수치는 추적된 `load-test/results/` JSON에, 정리 전 긴 상세 기록은 [이전 문서 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 남아 있다.
 
 ## 1. 문제를 재현하고 고친 순서
 
@@ -23,6 +23,7 @@
 | 20→30 RPS 탐색 | 같은 가상 20석, 각 10초 단일 순차 실행 | 완료 200/301, Hold=Release 74/97, 정상 409 126/204. 두 단계 모두 pending·dropped·deadlock·최종 Hold 0. 30 RPS 안정 구간 또는 p95 개선 주장은 불가. [#190](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/190) | [2-run manifest](../../load-test/results/probe190a/small-seat-hold-ramp.json) |
 | 20/30 RPS 교차 반복 | 같은 가상 20석, 20·30→30·20→20·30 RPS, 각 10초·각 속도 3회 | 6단계 완료 1,506=Hold·해제 516+정상 409 990. dropped·예상 밖 오류·pending·timeout·deadlock·종료 Hold 0. 한 20 RPS 단계의 호스트 CPU peak 91.5%로 **추가 증량 전 원인 확인 필요**. [#196](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/196) | [완료 manifest](../../load-test/results/repeat196b/small-seat-hold-ramp.json), [미완료 manifest](../../load-test/results/repeat196a/small-seat-hold-ramp.json) |
 | 20/30 RPS CPU 귀속 진단 | 동일 계획·fixture로 별도 빈 DB에서 6단계씩 2회. 두 번째에 Windows 프로세스군 표본 추가 | `attr198a` 1,501건·host peak 87.2%; `attr198b` 1,503건·host peak 91.2%. 두 실행 모두 예상 밖 오류·dropped·pending·timeout·deadlock·최종 Hold 0, 독립 SQL `20,0,0,20,0`. 높은 host peak를 JVM/DB 단독 병목으로 귀속할 수 없음. [#198](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/198) | [첫 실행](../../load-test/results/attr198a/small-seat-cpu-attribution.json), [프로세스군 포함](../../load-test/results/attr198b/small-seat-cpu-attribution.json), [부하 manifest](../../load-test/results/attr198b/small-seat-hold-ramp.json) |
+| 동일 유입량·인기 집합 대비 | 가상 20석, 20 iterations/s·10초·Hold 500ms·인기 요청 가중치 70%·seed 17. 인기 1석/10석 각각 warm-up 1회 제외 후 교차 3회 | 측정 1,206건=Hold·해제 617+정상 409 589. 인기 1석 성공/409 225/378, 10석 392/211. dropped·예상 밖 오류·pending·timeout·deadlock·최종 Hold 0. 자원 재검토는 여전히 필요. [#200](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/200) | [완료 manifest](../../load-test/results/contrast200b/small-seat-hold-contrast.json), [미완료 첫 시도](../../load-test/results/contrast200a/small-seat-hold-contrast.json) |
 | 2,000석 지속 쓰기 경합 | 인기 20/40/200석·70%, Hold 100ms, 50/100 RPS×10초, 각 속도 6-run | Hold=Release·최종 HELD 0, dropped·예상 밖 오류·deadlock 0. 인기 집합별 성공/409 비중이 달라 혼합 p95 직접 비교 금지. [#172](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/172) | [50 RPS manifest](../../load-test/results/churn172a/controlled-seat-hold-churn-manifest.json), [100 RPS manifest](../../load-test/results/churn172b/controlled-seat-hold-churn-manifest.json) |
 
 좌석 수, 인기 분포, Hold 지속 시간이 다르므로 **20석과 2,000석 p95를 전후 개선처럼 비교하지 않는다.** DB row-lock wait는 DB 전역 counter라 특정 SQL의 잠금 원인을 단정할 수 없다. 짧은 표본에서 Hikari pending 0도 순간 최대 대기를 전부 포착했다는 뜻은 아니다.
@@ -41,3 +42,22 @@
 ## 4. 다음 실험의 중단 기준
 
 호스트 CPU의 미설명분이 있고 추가 계측으로 표본 간격도 늘어났으므로 40 RPS 등으로 자동 증량하지 않는다. 상위 부하 전에는 OS/가상화 CPU를 같은 시계열에서 분리하고 계측 오버헤드를 낮춘 별도 기준선이 필요하다. dropped, 예상 밖 오류, timeout, deadlock, 재고 불일치, 샘플 단절 또는 메모리 부족이 나오면 중단한다. 별도 장비에서 재실행하면 **새 기준선**으로 기록하고 이 호스트의 수치를 직접 전후 비교하지 않는다.
+
+## 5. 동일 유입량에서 정상 충돌과 시스템 대기 구분
+
+#200의 `contrast200b`는 같은 Windows 8 logical CPU·15.81GiB RAM 호스트, MariaDB 10.11.8 전용 빈 DB(`ticketon-controlled172-i200b`, loopback 3309), Java 21 Backend(`local,loadtest`, `-Xms256m -Xmx768m`, Hikari max 24)에서 실행했다. fixture는 2행×10석, VU 예산은 20/20으로 고정했다. 기존 runner의 `-ContrastHotspots` 모드가 두 조건의 warm-up 각 10초를 별도 기록하고, 인기 집합 `1,10 → 10,1 → 1,10`을 각 10초씩 측정한다. DB 변경은 해당 가상 fixture에 한정했고 실제 KOPIS·PG·LLM은 호출하지 않았다.
+
+| 관측 | 인기 1석 (3회) | 인기 10석 (3회) |
+| --- | --- | --- |
+| 완료 / 성공·해제 / 정상 409 | 603 / 225 / 378 | 603 / 392 / 211 |
+| Hold 성공 p95 범위 | 43.06~125.51ms | 38.39~72.81ms |
+| 정상 좌석 충돌 p95 범위 | 32.00~148.36ms | 34.35~75.29ms |
+| DB 전역 row-lock wait 증분 / 대기 ms | 7/119, 10/397, 2/0 | 2/4, 3/6, 2/24 |
+
+모든 측정 단계에서 Hikari pending·timeout, SQL deadlock, dropped와 예상 밖 오류는 0이었다. API snapshot과 단계별 SQL은 `20,0,0,20,0`이고 실행 후 Booking·Payment도 0이었다. 인기 집합을 넓히자 정상 충돌이 줄고 Hold 성공이 늘었지만 **서버 코드의 개선 전후가 아니다**. 성공할 때 DELETE 호출도 늘기 때문에 동일 iterations/s가 동일 HTTP 요청량을 뜻하지 않는다. DB 전역 wait 증분도 특정 좌석 SQL의 원인 증명이 아니다.
+
+측정 단계마다 201 iterations가 완료됐다(목표 20/s×10초=200, 경계 스케줄링 포함). 각 단계의 인기/비인기 선택은 132/69로 동일했다. 70%는 설정 가중치이며 작은 표본의 정확한 할당 비율을 뜻하지 않는다. 전체 호스트 CPU peak는 측정 단계에서 95.18%, warm-up에서 100%였고 `ResourceReviewRequired:true`로 기록됐다. 최소 가용 메모리는 측정 단계에서 약 4.16GiB, 최대 표본 간격은 1,754ms였다. 처리 포화·안정 용량·p95 개선은 선언하지 않고 상위 부하는 보류한다.
+
+첫 시도 `contrast200a`는 warm-up에서 표본 간격 4,592ms 오류로 중단됐으며 `Complete:false`, 완료된 측정 0건이다. 초기 manifest에는 실패 단계만 있고 간격 수치는 실행 오류에서 확인했다. 실패 이후 runner는 이후 실패의 표본 수·최대 간격도 보존하도록 보완했다. 실패 DB와 JSON은 삭제하지 않았고 재시도는 별도 빈 DB를 사용했다.
+
+다음 판단의 입력은 **관측 사실 → 병목 가설 → 가설을 구분할 실험**이다. 예를 들어 정상 409 비중만으로 서버 증설을 제안하지 않고, 늘어난 DB wait가 반복되는지 및 호스트/계측 간섭을 별도로 확인한다. 이 흐름을 향후 AI가 보조할 조건은 [ADR-0005](adr/0005-evidence-grounded-experiment-assistance.md)에 기록했다. 이번 결과는 AI 분석 품질이나 RAG 도입 효과를 검증한 것이 아니며, 현재 MCP도 새 manifest를 자동으로 조회하지 않는다.

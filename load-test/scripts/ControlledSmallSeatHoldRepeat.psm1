@@ -36,6 +36,25 @@ function Get-ControlledSmallSeatHoldRepeat30Plan {
     }
 }
 
+function Get-ControlledSmallSeatHoldContrastPlan {
+    $order = @(@(10, 1), @(1, 10), @(10, 1), @(1, 10))
+    $sequence = 0
+    foreach ($round in 0..3) {
+        foreach ($hotSeats in $order[$round]) {
+            $sequence++
+            [pscustomobject]@{
+                Sequence = $sequence
+                Round = $round
+                Measured = $round -gt 0
+                Rate = 20
+                DurationSeconds = 10
+                HotSeatCount = $hotSeats
+                HoldDwellMilliseconds = 500
+            }
+        }
+    }
+}
+
 function New-ControlledSmallSeatHostSummary {
     param([Parameter(Mandatory = $true)][object[]]$Samples)
     if ($Samples.Count -lt 5) { throw 'At least five host samples are required.' }
@@ -98,5 +117,6 @@ function New-ControlledSmallSeatHoldWaitSummary {
 }
 
 Export-ModuleMember -Function 'Get-ControlledSmallSeatHoldRepeatPlan',
-    'Get-ControlledSmallSeatHoldRepeat30Plan', 'New-ControlledSmallSeatHoldWaitSummary',
+    'Get-ControlledSmallSeatHoldRepeat30Plan', 'Get-ControlledSmallSeatHoldContrastPlan',
+    'New-ControlledSmallSeatHoldWaitSummary',
     'New-ControlledSmallSeatHostSummary'

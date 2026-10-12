@@ -43,6 +43,9 @@ Assert-Throws { & $runner -RunId 'invalidprobe' -ComposeProject 'ticketon-contro
 Assert-Throws { & $runner -RunId 'invalidrepeat' -ComposeProject 'ticketon-controlled172-r14' -Repeat30 -Probe30 }
 Assert-Throws { & $runner -RunId 'invalidrepeat' -ComposeProject 'ticketon-controlled172-r14' -Repeat30 -Repeats 3 }
 Assert-Throws { & $runner -RunId 'invalidcpu' -ComposeProject 'ticketon-controlled172-r14' -AttributeCpu }
+Assert-Throws { & $runner -RunId 'invalidcontrast' -ComposeProject 'ticketon-controlled172-r14' -ContrastHotspots -Repeat30 }
+Assert-Throws { & $runner -RunId 'invalidcontrast' -ComposeProject 'ticketon-controlled172-r14' -ContrastHotspots -Probe30 }
+Assert-Throws { & $runner -RunId 'invalidcontrast' -ComposeProject 'ticketon-controlled172-r14' -ContrastHotspots -Repeats 3 }
 $hostSamples = @(1..5 | ForEach-Object { [pscustomobject]@{ HostCpuPercent = [double]($_ * 10); HostFreeMemoryKb = [long](3000000 - $_ * 100000) } })
 $hostSummary = New-ControlledSmallSeatHostSummary -Samples $hostSamples
 Assert-True ($hostSummary.SampleCount -eq 5 -and $hostSummary.HostCpuPeakPercent -eq 50 -and
@@ -98,5 +101,33 @@ $badFresh = $fresh.PSObject.Copy(); $badFresh.holdRows = 1
 Assert-Throws { Assert-ControlledSmallSeatHoldStage $plan[0] $summary $snapshot $badFresh $counts 0 }
 Assert-Throws { Assert-ControlledSmallSeatHoldStage $plan[0] $summary $snapshot $fresh @(20, 1, 0, 20, 0) 0 }
 Assert-Throws { Assert-ControlledSmallSeatHoldStage $plan[0] $summary $snapshot $fresh $counts 1 }
+
+$contrast = @(Get-ControlledSmallSeatHoldContrastPlan)
+Assert-True ($contrast.Count -eq 8)
+Assert-True ((@($contrast | Where-Object Measured | ForEach-Object HotSeatCount) -join ',') -eq '1,10,10,1,1,10')
+Assert-True (@($contrast | Where-Object { -not $_.Measured }).Count -eq 2)
+Assert-True (@($contrast | Where-Object { $_.Rate -ne 20 -or $_.DurationSeconds -ne 10 -or $_.HoldDwellMilliseconds -ne 500 }).Count -eq 0)
+$contrastSummary = $probeSummary.PSObject.Copy()
+$contrastSummary.TargetRatePerSecond = 20
+$contrastSummary.Iterations = 200; $contrastSummary.ExpectedContention = 110
+$contrastSummary.WeightedHotspot = [pscustomobject]@{ HotSeatCount = 10; HotRequestPercent = 70; Seed = 17; HotSelections = 140; ColdSelections = 60 }
+$contrastSummary | Add-Member -NotePropertyName PreAllocatedVus -NotePropertyValue 20
+$contrastSummary | Add-Member -NotePropertyName ConfiguredMaxVus -NotePropertyValue 20
+Assert-True (Assert-ControlledSmallSeatHoldStage $contrast[3] $contrastSummary $snapshot $fresh $counts 0 -ContrastHotspots)
+# Ten-seat plans are allowed only in the new fixed contrast mode, never in legacy modes.
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $contrastSummary $snapshot $fresh $counts 0 }
+$badContrast = $contrastSummary.PSObject.Copy(); $badContrast.WeightedHotspot = $contrastSummary.WeightedHotspot.PSObject.Copy()
+$badContrast.WeightedHotspot.HotSeatCount = 1
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $badContrast $snapshot $fresh $counts 0 -ContrastHotspots }
+$badContrast.WeightedHotspot.HotSeatCount = 10; $badContrast.WeightedHotspot.Seed = 18
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $badContrast $snapshot $fresh $counts 0 -ContrastHotspots }
+$badContrast.WeightedHotspot.Seed = 17; $badContrast.WeightedHotspot.HotSelections = 139
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $badContrast $snapshot $fresh $counts 0 -ContrastHotspots }
+$badContrast = $contrastSummary.PSObject.Copy(); $badContrast.ConfiguredMaxVus = 100
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $badContrast $snapshot $fresh $counts 0 -ContrastHotspots }
+$badPlan = $contrast[3].PSObject.Copy(); $badPlan.Rate = 30
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $badPlan $contrastSummary $snapshot $fresh $counts 0 -ContrastHotspots }
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $contrastSummary $snapshot $fresh @(20, 1, 0, 20, 0) 0 -ContrastHotspots }
+Assert-Throws { Assert-ControlledSmallSeatHoldStage $contrast[3] $contrastSummary $snapshot $fresh $counts 1 -ContrastHotspots }
 
 Write-Output "CONTROLLED_SMALL_SEAT_HOLD_RAMP_TESTS_PASSED assertions=$assertions"
