@@ -4,8 +4,8 @@
 
 | 구분 | 상태 |
 | --- | --- |
-| 최근 정리 | [BE #212](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/212): 5개 개선 주제의 전후 흐름·코드·검증·한계를 STUDY_GUIDE 7절에 통합. 상세 실측은 기존 EXPERIMENTS·아카이브 유지. |
-| 현재 | MCP 단계 종료 후 학습 근거 정리 완료. 동작 변경·추가 실측 없음. 리뷰·CI·병합 결과는 BE #212의 연결 PR에서 확인. |
-| 다음 후보 | 정리된 가이드로 서비스 흐름 학습. 계측 심화·AI 비교·부하 증량은 선택 과제로 보류. |
+| 최근 수정·검증 | [BE #214](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/214): 미검증 복구 경로 2개 일시 차단·전화번호 변경 서비스 제거. 수정 전 200 재현, 차단 10개·계정 관련 7개 로컬 테스트 통과. |
+| 현재 | 비밀번호 찾기는 일시 사용 불가. 실제 SMS·FE·전역 Security 변경 없음. 리뷰·CI·병합 결과는 BE #214의 연결 PR에서 확인. |
+| 다음 후보 | 안전한 복구 계약은 별도 BE/FE 작업으로 설계. 리뷰 소유권·예약 우회 경로와 다좌석 요청/TTL 경합 후보를 순차 검토. |
 
 실측 수치와 제한은 [실험 요약](docs/project-improvement/EXPERIMENTS.md), 공부 순서는 [학습 가이드](docs/project-improvement/STUDY_GUIDE.md), 보류할 기술은 [BACKLOG](BACKLOG.md)에 둔다. 로컬 fixture 결과를 운영 성능으로 일반화하지 않는다.
