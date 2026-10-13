@@ -24,7 +24,7 @@ KOPIS는 공연 정보를 제공하지만 실제 공연장의 좌석 재고와 �
 | 무엇을 예매하나? | `Concert` → `ConcertTime` → `Seat`, [공연 조회 Controller](../../onticket/src/main/java/com/onticket/concert/controller/ConcertController.java) | 좌석 번호는 공연 전체가 아니라 **회차 안에서** 식별된다. |
 | 결제 전에 누가 좌석을 쓸 수 있나? | [SeatHoldService](../../onticket/src/main/java/com/onticket/concert/service/SeatHoldService.java), `AVAILABLE·HELD·RESERVED` | HELD에는 소유자와 만료가 있고, 최종 예약과 다르다. |
 | 여러 좌석을 함께 예매하면? | [SeatReservationService](../../onticket/src/main/java/com/onticket/concert/service/SeatReservationService.java), [SeatRepository](../../onticket/src/main/java/com/onticket/concert/repository/SeatRepository.java), [ConcertTimeRepository](../../onticket/src/main/java/com/onticket/concert/repository/ConcertTimeRepository.java) | 한 요청의 좌석·예약·잔여 수량은 함께 commit/rollback; 재고는 조건부 원자 UPDATE. |
-| 중복 요청은 어떻게 구분하나? | [CheckoutService](../../onticket/src/main/java/com/onticket/concert/service/CheckoutService.java), `Idempotency-Key`·fingerprint·DB unique | 같은 key·같은 요청은 결과 재사용, 같은 key·다른 요청은 충돌. |
+| 중복 요청은 어떻게 구분하나? | [ReservationIdempotencyService](../../onticket/src/main/java/com/onticket/concert/service/ReservationIdempotencyService.java), [CheckoutService](../../onticket/src/main/java/com/onticket/concert/service/CheckoutService.java), `Idempotency-Key`·fingerprint·DB unique | 같은 사용자·같은 key·같은 요청은 결과 재사용, 같은 key·다른 요청은 충돌. |
 | 결제 결과는 언제 확정하나? | [CheckoutStatus](../../onticket/src/main/java/com/onticket/concert/domain/CheckoutStatus.java), [CheckoutVerifiedReservationService](../../onticket/src/main/java/com/onticket/concert/service/CheckoutVerifiedReservationService.java) | `READY → PAYMENT_VERIFYING → RESERVATION_CONFIRMED`; 불명확하면 `PAYMENT_VERIFICATION_UNKNOWN`, 취소·만료는 별도 상태. |
 
 ## 3. 요청 한 건을 따라 읽기
@@ -62,3 +62,57 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 #208의 SQL 횟수 불일치는 예매 실패와 다르다. #210에서는 독립 SQL의 commit 표시·DB 누적 값과 digest 통계를 대조했다. 직렬은 일치했지만 병렬에서는 실제 DB 반영이 정상이어도 집계 수가 부족했다. 따라서 digest 실행 수를 정확한 업무 완료 횟수로 사용하지 않으며, 이것만으로 JDBC 경로의 내부 원인을 확정하지 않는다.
 
 기존 예매 경합으로 한 번 복귀해 결과를 MCP로 조회하는 데서 이 단계를 마무리한다. 수집 방식·분류·실측 한계는 [실험 요약 8절](EXPERIMENTS.md#8-제한된-sql-대조와-예매-경합-복귀-210)을 참고한다. 더 많은 계측·AI 정확도 비교·RAG·증량은 필수 후속 작업이 아니다. 학습은 다시 좌석 잠금 → Hold → Checkout → 결제 검증의 서비스 경로로 돌아간다.
+
+## 7. 다섯 개선 주제의 전후 흐름
+
+아래 순서는 성능 근거 → DB 정합성 → 요청 재시도 → 결제 경계 → 분석 도구다. **과거 기준선, 현재 코드, 측정한 결과**를 구분해 읽는다. 과거 재현 명령을 현재 코드에서 실행한다고 과거 결함이 다시 발생하는 것은 아니다.
+
+### ① 좌석 잠금 조회·커넥션 대기 병목
+
+- **개선 전:** 회차 ID와 좌석 번호로 한 좌석을 찾지만, 적절한 복합 index가 없어 회차의 약 2,000행을 탐색·필터링했다. 기존 FK index는 회차를 좁혀도 좌석 번호까지 바로 식별하지 못한다. 모든 조건을 무조건 full scan이었다고 표현하지 않는다.
+- **원인:** 넓은 `SELECT ... FOR UPDATE` 조회가 느려지면서 transaction의 커넥션 반환도 지연됐다. Hikari pending은 **커넥션을 빌리려고 기다리는 요청 스레드 수**이지 DB lock 수가 아니다. pool 확대보다 DB 접근 경로를 먼저 고쳤다.
+- **개선 후:** `UNIQUE(concert_time_id, seat_number)`로 회차 안의 좌석 식별과 중복 방지를 결합했다. [SeatRepository](../../onticket/src/main/java/com/onticket/concert/repository/SeatRepository.java)의 잠금 조회와 [Seat](../../onticket/src/main/java/com/onticket/concert/domain/Seat.java)의 제약을 함께 읽는다.
+- **검증:** [A/B 기록](archive/load-testing/seat-composite-index-high-contention-ab.md)의 같은 가상 2,000석·distributed 100 RPS·10초·조건별 3회 중앙값에서 p95 **3,064.39→143.41ms**, Hikari pending peak **189→0**, 예상 검사 행 **2,000→1**. warm-up 제외·교차 순서·종료 재고 검증을 사용했다.
+- **한계:** 서로 다른 좌석에 분산된 예약 부하다. 인기 한 좌석을 반복 점유하는 Hold 실험과 다르며, 2,000명이 동시에 예약했거나 2,000석을 동시에 처리했다는 뜻이 아니다. 회차 잔여 수량 행의 경합은 남았고 운영 처리 용량·다중 서버 성능은 검증하지 않았다.
+
+### ② 다좌석 원자성·재고 정합성·잠금 순서
+
+- **개선 전:** checked exception 이후 첫 좌석·예약만 commit되는 부분 반영과, 다른 좌석의 동시 예약이 이전 잔여 수량을 덮어쓰는 갱신 유실을 [초기 기록](archive/foundations/reservation-atomicity-inventory-consistency.md)에서 재현했다. 둘은 각각 rollback 경계와 공유 수량 갱신 방식의 문제다.
+- **원인과 잠금 조건:** 좌석 잠금만으로 **다른 좌석 요청이 공유하는 회차 수량**까지 보호하지는 못한다. 또 [indexed 비교](archive/foundations/seat-composite-index-deadlock-comparison.md)에서 역순 요청이 서로 다른 첫 좌석을 잠근 뒤 두 번째 좌석을 기다리는 deadlock을 재현했다. 인덱스가 없던 좁은 fixture에서는 첫 잠금부터 직렬화돼 deadlock이 관측되지 않았다는 차이도 보존한다.
+- **개선 후:** [SeatReservationService](../../onticket/src/main/java/com/onticket/concert/service/SeatReservationService.java)의 `rollbackFor = Exception.class`, [정규화 코드](../../onticket/src/main/java/com/onticket/concert/service/ReservationRequestCanonicalizer.java)의 좌석 문자열 정렬, [조건부 감소 쿼리](../../onticket/src/main/java/com/onticket/concert/repository/ConcertTimeRepository.java)를 함께 읽는다. `seat_amount >= 요청 수량`일 때만 `seat_amount = seat_amount - 요청 수량`을 수행하고 영향 행이 1이 아니면 전체 rollback한다. 현재 순서는 숫자 자연 정렬이 아니라 문자열의 일관된 정렬이다.
+- **검증:** [부분 중첩 반복 기록](archive/foundations/overlapping-multi-seat-write-contention.md): JUnit·MariaDB Testcontainers에서 회차당 8개 요청·요청당 4좌석, 50회 fixture 초기화 후 **400회 시도 = 성공 100 + 정상 좌석 충돌 300**. SQL deadlock·예상 밖 오류·재고 불변식 위반은 각각 **0건**. 각 회차 좌석·예약·잔여 수량도 대조했다.
+- **한계:** 이는 반복 쓰기 경합의 정합성 결과이지 TPS·p95 개선이 아니다. canonical ordering은 이 좌석 획득 경로의 순환 대기를 막는 설계이며, 다른 테이블·다른 잠금 경로까지 모든 deadlock이 없어졌다는 증명은 아니다. FE의 선택 불가 표시는 오래될 수 있어 서버가 최종 판정한다.
+
+### ③ 네트워크 재시도와 예약 멱등성
+
+- **개선 전:** 요청이 반영됐지만 응답을 받지 못해 재시도하면 기존 성공 결과를 돌려주기 어렵고, 사전 조회만으로는 두 요청이 동시에 “없음”을 확인하는 경합을 방어할 수 없다. 모든 재시도가 실제 중복 Booking을 만들었다고 일반화하지 않는다.
+- **구분:** `Idempotency-Key`는 **같은 논리 요청의 재시도에 재사용하는 키**다. 사용자별 key로 범위를 나누며, fingerprint는 공연·회차·정렬된 좌석 payload의 SHA-256이다. 사용자 범위는 조회/제약으로 분리하고 이 예약 fingerprint 자체에 username을 넣지는 않는다. 같은 payload는 다른 key에서도 같은 fingerprint가 될 수 있다.
+- **개선 후:** [ReservationIdempotencyService](../../onticket/src/main/java/com/onticket/concert/service/ReservationIdempotencyService.java)에서 같은 key·같은 fingerprint는 기존 결과를 반환하고 다른 fingerprint는 충돌로 거절한다. [BookingRepository](../../onticket/src/main/java/com/onticket/concert/repository/BookingRepository.java)·[Booking](../../onticket/src/main/java/com/onticket/concert/domain/Booking.java)의 사용자/key unique 제약은 동시 insert의 최종 방어다. 제약 위반 뒤에는 실패한 transaction 밖에서 재조회해 결과 재사용 또는 충돌로 수렴한다.
+- **검증:** [반복 기록](archive/foundations/repeated-idempotency-contention.md): JUnit·MariaDB Testcontainers에서 같은 사용자·key·payload의 요청 8개를 50회 경합시켰다. **400회 시도 → Booking 50건·기존 결과 재사용 350회·중복 Booking 0건·예상 밖 오류 0건**. 다른 payload 거절은 별도 테스트다.
+- **한계:** 동일 key 계약의 검증이다. 다른 key로 재전송하면 같은 논리 요청인지 이 계약만으로 알 수 없다. 좌석 소유권/충돌 방어와 멱등성은 별개이며 400회는 처리 용량 수치가 아니다. 결제 검증 fingerprint는 paymentId·merchantUid까지 포함하는 별도 경로다.
+
+### ④ 지연된 PG 검증과 예약 확정 경계
+
+- **개선 전·위험:** 초기 예약 경로는 PG 근거 없이 결제 완료 상태를 만들 수 있었다. 현재는 임시 점유와 서버 주문 Checkout을 연결한다. 외부 I/O를 transaction 안에서 기다리면 lock·커넥션을 오래 점유할 수 있다는 것은 설계 위험이며, 이 항목에서 과거 PG 지연 성능을 실측한 것은 아니다.
+- **개선 후:** [CheckoutVerifiedReservationService](../../onticket/src/main/java/com/onticket/concert/service/CheckoutVerifiedReservationService.java)를 따라 **짧은 선점 transaction → commit → PG 조회 → 별도 확정 transaction**을 읽는다. [선점 서비스](../../onticket/src/main/java/com/onticket/concert/service/CheckoutPaymentVerificationTransactionService.java)가 `READY → PAYMENT_VERIFYING`과 검증 정보를 저장한다. DB lock은 풀려도 저장된 상태·선점 정보가 다른 검증 요청을 제어한다.
+- **확정 조건:** PG 응답 뒤 현재 상태·선점 정보·승인 내용을 확인해 Booking·Reservation·Payment를 확정한다. 진행 중 중복은 충돌, 완료 후 동일 요청은 결과 재사용이다. 명확한 거절과 timeout/조회 불가를 구분하고, 결과가 불명확하면 `PAYMENT_VERIFICATION_UNKNOWN`으로 보류한다. [CheckoutStatus](../../onticket/src/main/java/com/onticket/concert/domain/CheckoutStatus.java)·[통합 테스트](../../onticket/src/test/java/com/onticket/concert/service/CheckoutVerifiedReservationIntegrationTest.java)의 분기가 기준이다.
+- **검증:** [I/O 경계 기록](archive/foundations/payment-verification-io-boundary.md)의 `delayedProviderVerificationDoesNotKeepCheckoutTransactionLocked`: Mock PG 응답을 CountDownLatch로 대기시킨 동안 중복 요청이 **1초 제한 내 충돌**, 외부 검증 **1회**, 재개 후 Booking·Reservation 각각 **1건**. 1회/1건은 적은 부하를 강조하는 숫자가 아니라 동일 결제의 중복 처리 방지 기대값이다.
+- **한계:** 1초는 테스트의 완료 대기 제한이지 운영 응답시간 SLA나 p95가 아니다. Mock PG는 외부 결과를 통제하는 fixture이고 실제 PG 결제·정산·환불 검증이 아니다. 중복 요청의 반환으로 해당 Checkout lock이 외부 대기 내내 유지되지 않음을 확인한 것이지 모든 DB 자원의 보유 시간을 계측한 것은 아니다.
+
+### ⑤ MCP를 통한 제한된 근거 조회와 실험 연결
+
+- **개선 전:** 사람이 summary·manifest·문서를 찾아 조건과 수치를 대조할 수는 있지만, AI에 임의 파일을 읽게 하면 입력 범위와 비교 조건이 제각각이 될 수 있다. 기존 방식이 불가능했다거나 시간 절감 효과를 실측했다는 뜻은 아니다.
+- **개선 후:** [MCP 도구 목록](../../tools/ticketon-evidence-mcp/README.md)과 [근거 조회 코드](../../tools/ticketon-evidence-mcp/src/evidence.ts)를 먼저 읽는다. 고정된 결과 경로·허용 artifact·민감 필드 제한을 적용하고 완료·조건·재고 검증이 부족하면 수치를 차단한다. 수치 검증/판정은 코드, 자연어 해석/가설은 AI, 실행 판단은 사용자·Implementer 역할이다.
+- **실제 흐름:** 저장된 결과 → MCP 조회 → 관측 사실/가설/근거 ID를 구분한 제안 → [offline 계약](../../tools/ticketon-evidence-mcp/src/experimentProposal.ts) → 승인된 제한 실험 → 결과 재조회. `preflight`는 CheckOnly 준비 점검이고, MCP가 k6 실행·fixture 적재·RPS 증량·DB 변경을 수행하지 않는다. 이 단계에 RAG나 별도 모델 API를 도입하지 않았다.
+- **검증:** [#208~#210 실험](EXPERIMENTS.md#7-mcp-근거에서-선택한-sql-진단-208)에서 SQL 진단 중단과 독립 DB 대조를 기록했다. SQL **600 transactions**의 실제 반영은 정상이나 병렬 digest 횟수가 부족해 업무 누락으로 해석하지 않았다. 기존 Hold 경합 복귀의 **1,804 iterations = 성공·해제 647 + 정상 충돌 1,157**을 실제 MCP로 조회했고 `RESOURCE_REVIEW_REQUIRED / MANUAL_REVIEW_ONLY`를 유지했다.
+- **한계·마무리:** 이점은 임의 로그 대신 검증 계약이 있는 입력을 반복 제공하고 비교 불가 조건을 차단하는 인터페이스다. AI 정확도·분석 시간 절감·원인 확정은 미검증이다. 정상 409는 시스템 오류가 아니며 iteration에는 성공 시 Hold POST와 Release DELETE가 있어 HTTP 요청 수와 같지 않다. 호스트 CPU의 원인 단정·자동 증량 없이 이 단계를 종료했다.
+
+### 학습 후 스스로 설명할 질문
+
+1. 좌석별 잠금이 있어도 회차의 잔여 수량 UPDATE가 필요한 이유는 무엇인가?
+2. 인덱스로 탐색 범위를 줄였을 때 왜 잠금 순서 문제를 함께 검토해야 하는가?
+3. 같은 key·같은 payload, 같은 key·다른 payload, 다른 key의 차이는 무엇인가?
+4. DB lock을 풀어도 `PAYMENT_VERIFYING` 상태로 중복 검증을 제어할 수 있는 이유는 무엇인가?
+5. MCP 판정에서 정상 충돌·재고 위반·근거 부족·호스트 자원 신호를 왜 구분하는가?
+
+답은 코드 → 대표 테스트 → 해당 측정 조건으로 확인한다. 기술 이름이나 0건 수치만 외우지 않고, 보장하는 경로와 검증하지 않은 범위를 함께 설명한다.
