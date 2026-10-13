@@ -126,3 +126,13 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 수정 전 독립 MockMvc 직접 재설정 테스트는 `403` 기대에 **200 응답**으로 실패했다. 수정 후 검증은 [PasswordResetDisabledTest](../../onticket/src/test/java/com/onticket/user/controller/PasswordResetDisabledTest.java)의 직접 요청·임의 코드/증명·빈/잘못된 본문·반복·동시 요청에서 고정 차단 응답과 관련 mock의 **호출 없음**을 확인한다. 실제 DB·SMS를 사용한 OTP 만료·소비·원자성 테스트가 아니며 안전한 복구 기능을 완성한 것도 아니다.
 
 재개 조건은 번호별 인증 challenge, 만료·시도 제한, 목적이 분리된 일회용 복구 권한, 권한 소비와 저장의 원자성, 코드 미노출, FE 새 계약의 검증이다. 기존 공유 SMS 상태·회원가입의 보안 문제와 전역 Security 필터 제외는 별도 미해결 영역으로 남긴다. 현재 차단을 전체 인증 안전성 확보로 확대 해석하지 않는다.
+
+## 9. 리뷰 변경의 소유권 경계 (#216)
+
+기존 Controller는 요청의 `author`와 로그인 이름을 비교했지만, 서비스는 `reviewId`의 실제 작성자·공연 소속을 검증하지 않았다. 본문에 로그인 이름을 넣은 타인 리뷰 삭제 요청은 수정 전 MockMvc에서 `403` 기대에 **200 응답**으로 실패했다. 실제 DB를 삭제한 실험은 아니다.
+
+현재 [ReviewController](../../onticket/src/main/java/com/onticket/concert/controller/ReviewController.java)는 JWT의 사용자만 전달하고, 요청의 `author`·역할은 무시한다. [ReviewService](../../onticket/src/main/java/com/onticket/concert/service/ReviewService.java)는 DB 리뷰의 공연 소속과 작성자, DB 사용자 존재·관리자 역할을 확인한 뒤 변경한다. 작성자는 수정·삭제 가능, 관리자 권한은 타인 리뷰 삭제에만 적용한다. 없는 리뷰·다른 공연은 404, 권한 부족은 403, 유효한 요청에서 인증 없음은 401이다. 삭제·수정과 해당 공연 평점 재계산은 각각 서비스 transaction 안에서 수행한다.
+
+[ReviewAuthorizationTest](../../onticket/src/test/java/com/onticket/concert/controller/ReviewAuthorizationTest.java)는 실제 서비스와 mock Repository를 연결한 MockMvc 테스트다. 작성자·역할 위조, 다른 공연(관리자 포함), 계정 없음, 리뷰 없음과 정상 작성자/관리자 정책을 검증하고 거절 요청의 리뷰·평점 저장 미호출과 fixture 값 불변을 확인한다. 기존 FE URL과 `reviewId`·`content`·`starCount` 본문을 유지하며, 추가 author 필드는 호환을 위해 무시한다.
+
+이 검증은 실제 DB rollback·리뷰 동시 평점 갱신·입력 평점 범위·전역 Security/CSRF를 검증한 것이 아니다. 읽기/생성 API는 이번 범위에서 바꾸지 않았으며 평점 집계 성능과 경합은 별도 후속 후보다.

@@ -8,12 +8,13 @@ import com.onticket.user.domain.SiteUser;
 import com.onticket.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
 
 @RequiredArgsConstructor
 @Service
@@ -77,23 +78,39 @@ public class ReviewService {
     }
 
     //리뷰삭제+평균계산
-    public void delete(String concertDetailId,Long reviewId){
-        ConcertDetail concertDetail=concertDetailRepository.findByConcertId(concertDetailId);
-        reviewRepository.deleteById(reviewId);
+    @Transactional
+    public void delete(String concertDetailId, Long reviewId, String username){
+        Review review = requireAuthorizedReview(concertDetailId, reviewId, username, true);
+        ConcertDetail concertDetail = review.getConcertDetail();
+        reviewRepository.delete(review);
         updateAverageRating(concertDetail);
         concertDetailRepository.save(concertDetail);
     }
 
-    public void rewrite(String concertDetailId, Long reviewId, String content, float starCount) {
-        Optional<Review> _review=reviewRepository.findById(reviewId);
-        ConcertDetail concertDetail=concertDetailRepository.findByConcertId(concertDetailId);
-        if (_review.isPresent()) {
-            Review review=_review.get();
-            review.setStarCount(starCount);
-            review.setContent(content);
-            reviewRepository.save(review);
-            updateAverageRating(concertDetail);
-            concertDetailRepository.save(concertDetail);
+    @Transactional
+    public void rewrite(String concertDetailId, Long reviewId, String username, String content, float starCount) {
+        Review review = requireAuthorizedReview(concertDetailId, reviewId, username, false);
+        ConcertDetail concertDetail = review.getConcertDetail();
+        review.setStarCount(starCount);
+        review.setContent(content);
+        reviewRepository.save(review);
+        updateAverageRating(concertDetail);
+        concertDetailRepository.save(concertDetail);
+    }
+
+    private Review requireAuthorizedReview(
+            String concertDetailId, Long reviewId, String username, boolean adminDeletionAllowed) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."));
+        if (review.getConcertDetail() == null
+                || !Objects.equals(review.getConcertDetail().getConcertId(), concertDetailId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "공연에 속한 리뷰를 찾을 수 없습니다.");
         }
+        SiteUser actor = userRepository.findByUsername(username);
+        if (actor == null || (!Objects.equals(review.getAuthor(), username)
+                && !(adminDeletionAllowed && actor.getCode() == 3))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "리뷰 변경 권한이 없습니다.");
+        }
+        return review;
     }
 }
