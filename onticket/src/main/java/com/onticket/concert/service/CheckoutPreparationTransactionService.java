@@ -54,8 +54,6 @@ public class CheckoutPreparationTransactionService {
             throw new InvalidCheckoutRequestException("공연과 회차가 일치하지 않습니다.");
         }
 
-        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
-        LocalDateTime earliestExpiry = null;
         List<Seat> lockedSeats = new ArrayList<>();
         for (String seatNumber : seatNumbers) {
             Seat seat = seatRepository.findByConcertTimeIdAndSeatNumberWithLock(
@@ -63,6 +61,13 @@ public class CheckoutPreparationTransactionService {
                             seatNumber
                     )
                     .orElseThrow(() -> new InvalidCheckoutRequestException("존재하지 않는 좌석입니다."));
+            lockedSeats.add(seat);
+        }
+
+        // 앞 좌석도 마지막 좌석의 잠금 대기 중 만료될 수 있으므로 모두 재판정한다.
+        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        LocalDateTime earliestExpiry = null;
+        for (Seat seat : lockedSeats) {
             seat.clearExpiredHold(now);
             if (seat.isReserved()) {
                 throw new CheckoutConflictException("이미 예약된 좌석입니다.");
@@ -73,7 +78,6 @@ public class CheckoutPreparationTransactionService {
             if (earliestExpiry == null || seat.getHeldUntil().isBefore(earliestExpiry)) {
                 earliestExpiry = seat.getHeldUntil();
             }
-            lockedSeats.add(seat);
         }
 
         Checkout checkout = checkoutRepository

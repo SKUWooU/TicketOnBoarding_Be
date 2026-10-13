@@ -56,12 +56,17 @@ public class SeatHoldService {
             validateUsername(username);
             validateConcertTime(concertId, request);
             List<String> seatNumbers = canonicalSeatNumbers(request);
+            List<Seat> lockedSeats = new ArrayList<>();
+            for (String seatNumber : seatNumbers) {
+                lockedSeats.add(lockedSeat(request.getConcertTimeId(), seatNumber));
+            }
+            // 마지막 좌석의 잠금 대기까지 끝난 뒤 동일 시각으로 전체 점유를 판단한다.
             LocalDateTime now = LocalDateTime.now(clock);
             LocalDateTime requestedExpiry = now.plus(holdDuration);
             List<SeatHoldResponse.HeldSeat> heldSeats = new ArrayList<>();
 
-            for (String seatNumber : seatNumbers) {
-                Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
+            for (Seat seat : lockedSeats) {
+                String seatNumber = seat.getSeatNumber();
                 boolean expiredHold = hasExpiredHold(seat, now);
                 seat.clearExpiredHold(now);
                 if (seat.isReserved()) {

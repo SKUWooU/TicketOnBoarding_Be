@@ -20,6 +20,9 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -32,6 +35,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -44,6 +49,11 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.InvocationTargetException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,6 +63,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 @DataJpaTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
@@ -69,7 +80,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         VirtualTicketPricePolicy.class,
         SeatHoldService.class,
         CheckoutIntegrationTest.ClockConfiguration.class,
-        CheckoutIntegrationTest.MetricsConfiguration.class
+        CheckoutIntegrationTest.MetricsConfiguration.class,
+        CheckoutIntegrationTest.SeatWaitConfiguration.class
 })
 @Testcontainers
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -78,6 +90,7 @@ class CheckoutIntegrationTest {
     private static final String CONCERT_ID = "CHECKOUT-CONCERT";
     private static final String USERNAME = "checkout-user";
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2030, 1, 1, 12, 0);
+    private static final AtomicReference<CountDownLatch> LAST_SEAT_LOCK_ATTEMPT = new AtomicReference<>();
 
     @Container
     static final MariaDBContainer<?> MARIA_DB = new MariaDBContainer<>("mariadb:10.11.8")
@@ -131,9 +144,13 @@ class CheckoutIntegrationTest {
 
     private Long concertTimeId;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @BeforeEach
     void setUp() {
         meterRegistry.clear();
+        LAST_SEAT_LOCK_ATTEMPT.set(null);
         checkoutSeatAssignmentRepository.deleteAllInBatch();
         checkoutRequestKeyRepository.deleteAllInBatch();
         checkoutRepository.deleteAllInBatch();
@@ -863,6 +880,121 @@ class CheckoutIntegrationTest {
         assertThat(checkoutRepository.count()).isZero();
     }
 
+    @ParameterizedTest
+    @ValueSource(longs = {300, 301})
+    void checkoutRejectsHoldsThatExpireWhileWaitingForLastSeat(long elapsedSeconds) throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+
+        Throwable failure = catchThrowable(() -> afterLastSeatLockWait(() -> checkoutService.prepare(
+                USERNAME, CONCERT_ID, checkoutRequest("A2", "A1"), "expired-during-lock"
+        ), elapsedSeconds));
+
+        assertThat(List.of(checkoutRepository.count(), checkoutRequestKeyRepository.count(),
+                checkoutSeatAssignmentRepository.count())).containsExactly(0L, 0L, 0L);
+        assertThat(failure).isExactlyInstanceOf(CheckoutConflictException.class);
+        entityManager.clear();
+        for (String seatNumber : List.of("A1", "A2")) {
+            Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, seatNumber);
+            assertThat(seat.isReserved()).isFalse();
+            assertThat(seat.getHeldBy()).isEqualTo(USERNAME);
+            assertThat(seat.getHeldUntil()).isEqualTo(BASE_TIME.plusMinutes(5));
+        }
+        assertThat(concertTimeRepository.findById(concertTimeId).orElseThrow().getSeatAmount()).isEqualTo(2);
+        // Expired holds remain reclaimable; no stale checkout assignment survives the rollback.
+        seatHoldService.hold("next-owner", CONCERT_ID, holdRequest("A1", "A2"));
+    }
+
+    @Test
+    void checkoutRechecksEarlierSeatEvenIfLastSeatHoldIsStillValid() throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1"));
+        clock.advanceSeconds(60);
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A2"));
+
+        assertThatThrownBy(() -> afterLastSeatLockWait(() -> checkoutService.prepare(
+                USERNAME, CONCERT_ID, checkoutRequest("A2", "A1"), "earlier-seat-expired"
+        ), 240)).isExactlyInstanceOf(CheckoutConflictException.class);
+
+        assertThat(List.of(checkoutRepository.count(), checkoutRequestKeyRepository.count(),
+                checkoutSeatAssignmentRepository.count())).containsExactly(0L, 0L, 0L);
+        entityManager.clear();
+        Seat first = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A1");
+        Seat last = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, "A2");
+        assertThat(first.getHeldUntil()).isEqualTo(BASE_TIME.plusMinutes(5));
+        assertThat(first.isHeldAt(LocalDateTime.now(clock))).isFalse();
+        assertThat(last.isHeldBy(USERNAME, LocalDateTime.now(clock))).isTrue();
+        assertThat(last.getHeldUntil()).isEqualTo(BASE_TIME.plusMinutes(6));
+        assertThat(concertTimeRepository.findById(concertTimeId).orElseThrow().getSeatAmount()).isEqualTo(2);
+    }
+
+    @Test
+    void checkoutStillPreparesIfLastSeatLockIsObtainedBeforeExpiry() throws Exception {
+        seatHoldService.hold(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+        CheckoutResponse response = afterLastSeatLockWait(() -> checkoutService.prepare(
+                USERNAME, CONCERT_ID, checkoutRequest("A2", "A1"), "before-expiry"
+        ), 299);
+        assertThat(response.getExpiresAt()).isEqualTo(BASE_TIME.plusMinutes(5));
+        assertThat(checkoutRepository.count()).isEqualTo(1);
+        assertThat(checkoutSeatAssignmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void newMultiSeatHoldStartsItsTtlAfterLastSeatLockIsObtained() throws Exception {
+        var response = afterLastSeatLockWait(() -> seatHoldService.hold(
+                USERNAME, CONCERT_ID, holdRequest("A2", "A1")
+        ), 301);
+        LocalDateTime expectedExpiry = BASE_TIME.plusSeconds(301).plusMinutes(5);
+        assertThat(response.getSeats()).hasSize(2).allSatisfy(held ->
+                assertThat(held.getExpiresAt()).isEqualTo(expectedExpiry));
+        entityManager.clear();
+        for (String seatNumber : List.of("A1", "A2")) {
+            Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, seatNumber);
+            assertThat(seat.isHeldBy(USERNAME, LocalDateTime.now(clock))).isTrue();
+            assertThat(seat.getHeldUntil()).isEqualTo(expectedExpiry);
+        }
+    }
+
+    private <T> T afterLastSeatLockWait(Callable<T> action, long elapsedSeconds) throws Exception {
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch attempted = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<?> blocker = executor.submit(() -> new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(status -> {
+                        seatRepository.findByConcertTimeIdAndSeatNumberWithLock(concertTimeId, "A2")
+                                .orElseThrow();
+                        locked.countDown();
+                        try {
+                            if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("blocker timeout");
+                        } catch (InterruptedException exception) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(exception);
+                        }
+                    }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                LAST_SEAT_LOCK_ATTEMPT.set(attempted);
+                Future<T> waiting = executor.submit(action);
+                assertThat(attempted.await(5, TimeUnit.SECONDS)).isTrue();
+                // A real separate transaction holds A2; the operation cannot complete yet.
+                assertThatThrownBy(() -> waiting.get(200, TimeUnit.MILLISECONDS))
+                        .isExactlyInstanceOf(TimeoutException.class);
+                clock.advanceSeconds(elapsedSeconds);
+                release.countDown();
+                blocker.get(5, TimeUnit.SECONDS);
+                try {
+                    return waiting.get(5, TimeUnit.SECONDS);
+                } catch (ExecutionException exception) {
+                    if (exception.getCause() instanceof RuntimeException runtime) throw runtime;
+                    throw exception;
+                }
+            } finally {
+                LAST_SEAT_LOCK_ATTEMPT.set(null);
+                release.countDown();
+                blocker.get(5, TimeUnit.SECONDS);
+            }
+        }
+    }
+
     private SeatHoldRequest holdRequest(String... seatNumbers) {
         SeatHoldRequest request = new SeatHoldRequest();
         request.setConcertTimeId(concertTimeId);
@@ -939,6 +1071,32 @@ class CheckoutIntegrationTest {
         @Bean
         SimpleMeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
+        }
+    }
+
+    @TestConfiguration
+    static class SeatWaitConfiguration {
+        @Bean
+        static BeanPostProcessor lastSeatLockAttemptPostProcessor() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (!(bean instanceof SeatRepository repository)) return bean;
+                    return Proxy.newProxyInstance(SeatRepository.class.getClassLoader(),
+                            new Class<?>[]{SeatRepository.class}, (proxy, method, args) -> {
+                                if (method.getName().equals("findByConcertTimeIdAndSeatNumberWithLock")
+                                        && "A2".equals(args[1])) {
+                                    CountDownLatch attempted = LAST_SEAT_LOCK_ATTEMPT.get();
+                                    if (attempted != null) attempted.countDown();
+                                }
+                                try {
+                                    return method.invoke(repository, args);
+                                } catch (InvocationTargetException exception) {
+                                    throw exception.getCause();
+                                }
+                            });
+                }
+            };
         }
     }
 
