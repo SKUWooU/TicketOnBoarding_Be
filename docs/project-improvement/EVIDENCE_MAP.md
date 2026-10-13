@@ -6,6 +6,7 @@
 
 | 문제 / 개념 | 변경과 검증 | 대표 근거 |
 | --- | --- | --- |
+| 결제 claim/finalize·취소·해제의 추가 잠금 중 기한 경과 | 전체 필요 잠금 후 시각 재판정, UNKNOWN은 업무 저장 전에 결정. 좌석/귀속 대기 경계와 정상 거절 해제 회귀 | [#222](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/222), [원리·재현·한계](STUDY_GUIDE.md#12-결제-검증확정해제의-추가-잠금-후-기한-222). 실 PG·TPS·commit 기한 절대 보장 아님. |
 | 다좌석 잠금 대기 전 시각으로 Hold 만료 판정 | Hold 생성·Checkout 준비에서 전체 잠금 후 시간 판정. 실 MariaDB lock + MutableClock의 직전/정각/직후 재현 | [#220](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/220), [전후·저장 결과·한계](STUDY_GUIDE.md#11-다좌석-잠금-대기와-hold-만료-경계-220). TPS·실제 5분 대기·전체 결제 경로 보장 아님. |
 | 로그인만으로 결제 검증 없는 예약 확정 | 기존 `/reservation` API 인증 후 410, 미검증 예약 서비스 연결 제거. 빈/잘못된 본문·재시도·미인증과 유지된 검증 경로 회귀 | [#218](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/218), [범위·코드·한계](STUDY_GUIDE.md#10-결제-검증-없는-예약-진입점-폐쇄-218). 내부 서비스와 PG 검증 fixture 경로 유지. |
 | 리뷰 작성자/역할 위조·다른 공연 변경 | DB 작성자·공연 소속·관리자 삭제 정책 검증, 서비스 수정/삭제 transaction. MockMvc 거절 시 리뷰/평점 저장 미호출 | [#216](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/216), [코드·검증·한계](STUDY_GUIDE.md#9-리뷰-변경의-소유권-경계-216). 평점 동시성·실DB rollback은 별도. |

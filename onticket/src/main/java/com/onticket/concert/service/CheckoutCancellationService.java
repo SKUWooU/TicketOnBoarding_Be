@@ -54,8 +54,8 @@ public class CheckoutCancellationService {
             return response(checkout);
         }
 
-        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
-        if (checkout.expireIfNeeded(now)) {
+        LocalDateTime initialNow = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        if (checkout.expireIfNeeded(initialNow)) {
             throw new CheckoutExpiredException();
         }
         if (checkout.getStatus() != CheckoutStatus.READY) {
@@ -81,6 +81,10 @@ public class CheckoutCancellationService {
                 .toList();
         List<CheckoutSeatAssignment> lockedAssignments = assignmentRepository
                 .findByCheckoutIdWithLock(checkout.getId());
+        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        if (checkout.expireIfNeeded(now)) {
+            throw new CheckoutExpiredException();
+        }
         validateLockedState(checkout, username, now, snapshot, lockedSeats, lockedAssignments);
 
         checkout.cancel(now);

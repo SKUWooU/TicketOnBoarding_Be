@@ -4,11 +4,13 @@ import com.onticket.concert.domain.Booking;
 import com.onticket.concert.domain.Checkout;
 import com.onticket.concert.domain.CheckoutStatus;
 import com.onticket.concert.domain.Payment;
+import com.onticket.concert.domain.CheckoutSeatAssignment;
 import com.onticket.concert.dto.VerifiedReservRequest;
 import com.onticket.concert.repository.BookingRepository;
 import com.onticket.concert.repository.CheckoutRepository;
 import com.onticket.concert.repository.CheckoutSeatAssignmentRepository;
 import com.onticket.concert.repository.PaymentRepository;
+import com.onticket.concert.repository.SeatRepository;
 import lombok.RequiredArgsConstructor;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @RequiredArgsConstructor
 @Service
@@ -28,6 +31,7 @@ public class VerifiedReservationTransactionService {
     private final CheckoutRepository checkoutRepository;
     private final CheckoutSeatAssignmentRepository checkoutSeatAssignmentRepository;
     private final SeatReservationService seatReservationService;
+    private final SeatRepository seatRepository;
     private final Clock clock;
     private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
@@ -79,8 +83,8 @@ public class VerifiedReservationTransactionService {
         try {
         Checkout checkout = checkoutRepository.findByMerchantUidWithLock(request.getMerchantUid())
                 .orElseThrow(() -> new InvalidCheckoutRequestException("결제 요청을 찾을 수 없습니다."));
-        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
-        if (checkout.isPaymentVerificationTimedOut(now)) {
+        LocalDateTime initialNow = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        if (checkout.isPaymentVerificationTimedOut(initialNow)) {
             checkout.markPaymentVerificationUnknown();
             tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_UNKNOWN);
             throw new PaymentVerificationUnknownException();
@@ -104,6 +108,20 @@ public class VerifiedReservationTransactionService {
             throw new CheckoutConflictException("결제 검증 claim과 예약 확정 요청이 일치하지 않습니다.");
         }
 
+        // deadline 확인 뒤 예약 저장을 시작해야 UNKNOWN의 noRollbackFor가 부분 저장을 남기지 않는다.
+        for (String seatNumber : ReservationRequestCanonicalizer.canonicalSeatNumbers(request)) {
+            seatRepository.findByConcertTimeIdAndSeatNumberWithLock(request.getConcertTimeId(), seatNumber)
+                    .orElseThrow(() -> new CheckoutConflictException("Checkout 좌석을 찾을 수 없습니다."));
+        }
+        List<CheckoutSeatAssignment> lockedAssignments = checkoutSeatAssignmentRepository
+                .findByCheckoutIdWithLock(checkout.getId());
+        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        if (checkout.isPaymentVerificationTimedOut(now)) {
+            checkout.markPaymentVerificationUnknown();
+            tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_UNKNOWN);
+            throw new PaymentVerificationUnknownException();
+        }
+
         Booking booking = new Booking();
         booking.setUsername(username);
         booking.setIdempotencyKey(idempotencyKey);
@@ -122,11 +140,10 @@ public class VerifiedReservationTransactionService {
 
         seatReservationService.reserveSeat(username, concertId, request, booking);
         payment.confirmReservation();
-        checkoutSeatAssignmentRepository.findByCheckoutIdWithLock(checkout.getId())
-                .forEach(assignment -> {
-                    assignment.clearVerificationLease(checkout.getVerificationDeadline());
-                    assignment.deactivateActiveSeat();
-                });
+        lockedAssignments.forEach(assignment -> {
+            assignment.clearVerificationLease(checkout.getVerificationDeadline());
+            assignment.deactivateActiveSeat();
+        });
         checkout.confirmReservation(booking);
         tracker.succeed(CheckoutMetrics.Transition.RESERVATION_CONFIRMED);
         return booking.getCreatedAt();
