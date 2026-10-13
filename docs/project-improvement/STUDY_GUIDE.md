@@ -146,3 +146,15 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 현재 FE는 Hold → Checkout 준비 → `/checkouts/{merchantUid}/verified-reservation` 경로를 사용한다. 별도 `/verified-reservation`은 실제로 `PaymentVerificationPort` 승인·금액·사용자 검증을 수행하고 기존 k6 fixture도 사용하므로 유지했다. 두 검증 경로가 같은 Checkout 보장을 제공한다는 뜻은 아니며, Checkout 없는 PG 검증 경로의 통합은 이번 범위 밖이다.
 
 [LegacyReservationDisabledTest](../../onticket/src/test/java/com/onticket/concert/controller/LegacyReservationDisabledTest.java)는 수정 전 정상 본문 인증 요청의 200 응답을 재현하고, 수정 후 반복/빈/잘못된 본문·미인증 응답과 연결된 서비스 미호출을 확인한다. [ReservationControllerTest](../../onticket/src/test/java/com/onticket/concert/controller/ReservationControllerTest.java)는 유지된 PG·Checkout·Hold 계약을 회귀 검증한다. MockMvc/mock 서비스 검증이며 실제 PG·DB·부하 시험이 아니다. 기존 내부 정합성 테스트와 과거 측정은 당시 실행한 경로의 근거로 보존한다.
+
+## 11. 다좌석 잠금 대기와 Hold 만료 경계 (#220)
+
+**문제:** `SeatHoldService.hold`와 `CheckoutPreparationTransactionService.create`는 잠금 전에 읽은 `now`를 좌석별 검증에 재사용했다. A1을 얻고 A2를 기다리는 동안 A1·A2의 Hold가 만료될 수 있어, 단순히 각 좌석 잠금 직후에만 시각을 읽어도 앞 좌석의 판정은 오래될 수 있다. 새 Hold TTL도 대기 전 시각으로 계산됐다.
+
+**전후:** 정렬된 좌석을 같은 순서로 전부 잠근 뒤 현재 시각을 읽고 전체 좌석의 만료·소유권을 판정한다. 만료 Hold로 신규 Checkout을 만들지 않고, 새 Hold TTL은 이 판정 시각부터 시작한다. 동일 소유자의 아직 유효한 Hold 재시도는 기존 만료 시각을 유지한다. transaction·canonical lock ordering·기존 오류 계약은 유지하며, commit 시점까지의 절대 유효성을 새로 보장하는 것은 아니다.
+
+**재현:** [CheckoutIntegrationTest](../../onticket/src/test/java/com/onticket/concert/service/CheckoutIntegrationTest.java)의 별도 MariaDB transaction이 A2를 `PESSIMISTIC_WRITE`로 잠근다. 다좌석 요청이 A2 잠금 호출에 도달했고 아직 완료되지 않음을 latch와 bounded Future 대기로 확인한 뒤 MutableClock을 전진시키고 blocker를 해제한다. 5분 TTL에서 시계 기준 299초(유효)·300초(정각 만료)·301초(직후)를 검증한다. 실제 5분 lock wait·TPS 측정이 아니라 실제 DB lock과 제어 시계를 조합한 경계 테스트다.
+
+**수정 전 근거:** 정각·직후 요청은 바깥 `CheckoutService`에서 만료 오류를 반환했지만, 그 전에 Checkout 1건·요청 키 1건·좌석 귀속 2건이 저장됐다. 결제·예약 확정이 발생한 증거는 아니다. 새 다좌석 Hold는 시계 301초 전진 후에도 `12:05`를 반환해 이미 만료됐고, 기대한 잠금 후 TTL은 `12:10:01`이었다.
+
+**검증·한계:** 수정 후 정각·직후 신규 Checkout/키/귀속은 모두 0건, 기존 Hold 데이터·잔여 재고는 유지되고 만료 좌석은 다음 사용자가 재점유할 수 있어야 한다. 만료 직전 준비와 새 Hold의 동일 TTL도 확인한다. 추가로 A1만 만료되고 A2는 유효한 사례에서, 마지막 좌석만 재검증하는 불완전한 수정도 차단한다. 결제 claim/finalize·release의 잠금 후 시간 판단은 별도 조사 대상이며, 전 경로의 TTL 정합성 해결로 일반화하지 않는다. 요청 좌석 수 상한은 현재 없지만 이 작은 경계 테스트는 적정 상한의 성능 근거가 아니다. 임의 제한·lock timeout·대기열 대신 큰/작은 요청 혼합 시나리오를 먼저 설계한다.

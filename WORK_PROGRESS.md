@@ -4,8 +4,8 @@
 
 | 구분 | 상태 |
 | --- | --- |
-| 최근 수정·검증 | [BE #218](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/218): 기존 미검증 예약 API 폐쇄. 수정 전 정상 본문 인증 요청 200 재현, 폐쇄·예약 Controller·최근 권한 수정 58개 로컬 테스트 통과. |
-| 현재 | Checkout FE·PG 검증 경로와 내부 예약 서비스 유지. 리뷰·CI·병합 결과는 BE #218의 연결 PR에서 확인. 비밀번호 찾기는 계속 일시 중단. |
-| 다음 후보 | 다좌석 요청 크기·잠금 대기·TTL 경합 재현. 안전한 계정 복구는 별도 BE/FE 계약. |
+| 최근 수정·검증 | [BE #220](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/220): 다좌석 잠금 후 Hold 만료 판정. 실제 DB lock·제어 시계 재현 후 Checkout/Hold/API 67개 로컬 회귀 통과. |
+| 현재 | Hold 생성·Checkout 준비만 수정. 리뷰·CI·병합 결과는 BE #220의 연결 PR에서 확인. 요청 상한·k6 증량·결제 claim/finalize는 제외. |
+| 다음 후보 | 결제 claim/finalize·해제의 잠금 후 시간 경계 조사. 큰/작은 요청 혼합 측정·상한은 그 뒤 판단. 안전한 계정 복구는 별도 BE/FE 계약. |
 
 실측 수치와 제한은 [실험 요약](docs/project-improvement/EXPERIMENTS.md), 공부 순서는 [학습 가이드](docs/project-improvement/STUDY_GUIDE.md), 보류할 기술은 [BACKLOG](BACKLOG.md)에 둔다. 로컬 fixture 결과를 운영 성능으로 일반화하지 않는다.
