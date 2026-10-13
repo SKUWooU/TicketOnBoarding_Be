@@ -136,3 +136,13 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 [ReviewAuthorizationTest](../../onticket/src/test/java/com/onticket/concert/controller/ReviewAuthorizationTest.java)는 실제 서비스와 mock Repository를 연결한 MockMvc 테스트다. 작성자·역할 위조, 다른 공연(관리자 포함), 계정 없음, 리뷰 없음과 정상 작성자/관리자 정책을 검증하고 거절 요청의 리뷰·평점 저장 미호출과 fixture 값 불변을 확인한다. 기존 FE URL과 `reviewId`·`content`·`starCount` 본문을 유지하며, 추가 author 필드는 호환을 위해 무시한다.
 
 이 검증은 실제 DB rollback·리뷰 동시 평점 갱신·입력 평점 범위·전역 Security/CSRF를 검증한 것이 아니다. 읽기/생성 API는 이번 범위에서 바꾸지 않았으며 평점 집계 성능과 경합은 별도 후속 후보다.
+
+## 10. 결제 검증 없는 예약 진입점 폐쇄 (#218)
+
+기존 POST `/main/detail/{concertId}/reservation`은 JWT 인증 후 `ReservationIdempotencyService.reserve`로 바로 연결됐다. 멱등성·재고 원자성은 중복과 경합을 제어하지만 **결제 승인 증명은 아니다**. 기존 MockMvc 테스트도 이 경로의 200 응답을 정상 계약으로 검증하고 있었다.
+
+이번 수정은 내부 예약 로직을 삭제하지 않고 **HTTP 진입점만 폐쇄**한다. 유효한 토큰에는 `410 / LEGACY_RESERVATION_DISABLED`, 토큰 없음·유효하지 않은 토큰에는 기존 401을 반환한다. 본문과 멱등 키를 파싱하지 않고 Controller에서 미검증 예약 서비스 의존성을 제거해, 빈/잘못된 본문·재시도에도 예약 생성 경로로 연결되지 않는다.
+
+현재 FE는 Hold → Checkout 준비 → `/checkouts/{merchantUid}/verified-reservation` 경로를 사용한다. 별도 `/verified-reservation`은 실제로 `PaymentVerificationPort` 승인·금액·사용자 검증을 수행하고 기존 k6 fixture도 사용하므로 유지했다. 두 검증 경로가 같은 Checkout 보장을 제공한다는 뜻은 아니며, Checkout 없는 PG 검증 경로의 통합은 이번 범위 밖이다.
+
+[LegacyReservationDisabledTest](../../onticket/src/test/java/com/onticket/concert/controller/LegacyReservationDisabledTest.java)는 수정 전 정상 본문 인증 요청의 200 응답을 재현하고, 수정 후 반복/빈/잘못된 본문·미인증 응답과 연결된 서비스 미호출을 확인한다. [ReservationControllerTest](../../onticket/src/test/java/com/onticket/concert/controller/ReservationControllerTest.java)는 유지된 PG·Checkout·Hold 계약을 회귀 검증한다. MockMvc/mock 서비스 검증이며 실제 PG·DB·부하 시험이 아니다. 기존 내부 정합성 테스트와 과거 측정은 당시 실행한 경로의 근거로 보존한다.

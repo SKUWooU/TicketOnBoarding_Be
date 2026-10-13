@@ -1,12 +1,10 @@
 package com.onticket.concert.controller;
 
-import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.dto.SeatHoldRequest;
 import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.dto.VerifiedReservRequest;
-import com.onticket.concert.service.ReservationIdempotencyService;
 import com.onticket.concert.service.CheckoutService;
 import com.onticket.concert.service.CheckoutCancellationService;
 import com.onticket.concert.service.CheckoutVerifiedReservationService;
@@ -20,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 
 @RequiredArgsConstructor
@@ -35,8 +34,6 @@ public class ReservationController {
                 .build();
     }
 
-    private final ReservationIdempotencyService reservationIdempotencyService;
-
     private final VerifiedReservationService verifiedReservationService;
 
     private final SeatHoldService seatHoldService;
@@ -49,23 +46,17 @@ public class ReservationController {
 
     private final JwtUtil jwtUtil;
 
-    //공연예약
-    @PostMapping("/main/detail/{concertId}/reservation")
+    // 결제 검증 없는 기존 예약 경로는 본문을 해석하지 않고 폐쇄한다.
+    @PostMapping(value = "/main/detail/{concertId}/reservation", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> setReservation(
             @CookieValue(value = "accessToken", required = false) String token,
-            @PathVariable("concertId") String concertId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
-            @RequestBody ReservRequest reservRequest
-    ) throws Exception {
+            @PathVariable("concertId") String concertId
+    ) {
         if (token != null && jwtUtil.validateToken(token)) {
-            String username=jwtUtil.getUsernameFromToken(token);
-            LocalDateTime reservationCreatedAt = reservationIdempotencyService.reserve(
-                    username,
-                    concertId,
-                    reservRequest,
-                    idempotencyKey
-            );
-            return ResponseEntity.ok().body(reservationCreatedAt);
+            return ResponseEntity.status(HttpStatus.GONE).body(Map.of(
+                    "code", "LEGACY_RESERVATION_DISABLED",
+                    "message", "기존 예약 API는 종료되었습니다. Checkout 결제 검증 경로를 이용해주세요."
+            ));
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
         }

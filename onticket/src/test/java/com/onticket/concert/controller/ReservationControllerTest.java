@@ -1,6 +1,5 @@
 package com.onticket.concert.controller;
 
-import com.onticket.concert.dto.ReservRequest;
 import com.onticket.concert.dto.CheckoutRequest;
 import com.onticket.concert.dto.CheckoutResponse;
 import com.onticket.concert.dto.SeatHoldRequest;
@@ -20,7 +19,6 @@ import com.onticket.concert.service.InvalidSeatHoldRequestException;
 import com.onticket.concert.service.PaymentVerificationUnavailableException;
 import com.onticket.concert.service.PaymentAlreadyUsedException;
 import com.onticket.concert.service.PaymentVerificationUnknownException;
-import com.onticket.concert.service.ReservationIdempotencyService;
 import com.onticket.concert.service.SeatHoldConflictException;
 import com.onticket.concert.service.SeatHoldService;
 import com.onticket.concert.service.SeatReservationConflictException;
@@ -76,9 +74,6 @@ class ReservationControllerTest {
             """;
 
     @Mock
-    private ReservationIdempotencyService reservationIdempotencyService;
-
-    @Mock
     private VerifiedReservationService verifiedReservationService;
 
     @Mock
@@ -102,7 +97,6 @@ class ReservationControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
                 new ReservationController(
-                        reservationIdempotencyService,
                         verifiedReservationService,
                         seatHoldService,
                         checkoutService,
@@ -120,85 +114,6 @@ class ReservationControllerTest {
                 .build();
         lenient().when(jwtUtil.validateToken(TOKEN)).thenReturn(true);
         lenient().when(jwtUtil.getUsernameFromToken(TOKEN)).thenReturn(USERNAME);
-    }
-
-    @Test
-    void forwardsIdempotencyKeyWithoutChangingSuccessStatus() throws Exception {
-        String idempotencyKey = "booking-key";
-        when(reservationIdempotencyService.reserve(
-                eq(USERNAME),
-                eq(CONCERT_ID),
-                any(ReservRequest.class),
-                eq(idempotencyKey)
-        )).thenReturn(LocalDateTime.of(2030, 1, 1, 12, 0));
-
-        mockMvc.perform(post("/main/detail/{concertId}/reservation", CONCERT_ID)
-                        .cookie(new Cookie("accessToken", TOKEN))
-                        .header("Idempotency-Key", idempotencyKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(REQUEST_BODY))
-                .andExpect(status().isOk());
-
-        verify(reservationIdempotencyService).reserve(
-                eq(USERNAME),
-                eq(CONCERT_ID),
-                any(ReservRequest.class),
-                eq(idempotencyKey)
-        );
-    }
-
-    @Test
-    void payloadConflictReturnsHttp409() throws Exception {
-        when(reservationIdempotencyService.reserve(
-                eq(USERNAME),
-                eq(CONCERT_ID),
-                any(ReservRequest.class),
-                eq("reused-key")
-        )).thenThrow(new IdempotencyKeyConflictException());
-
-        mockMvc.perform(post("/main/detail/{concertId}/reservation", CONCERT_ID)
-                        .cookie(new Cookie("accessToken", TOKEN))
-                        .header("Idempotency-Key", "reused-key")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(REQUEST_BODY))
-                .andExpect(status().isConflict())
-                .andExpect(header().doesNotExist(ReservationController.SEAT_CONFLICT_HEADER));
-    }
-
-    @Test
-    void invalidIdempotencyKeyReturnsHttp400() throws Exception {
-        when(reservationIdempotencyService.reserve(
-                eq(USERNAME),
-                eq(CONCERT_ID),
-                any(ReservRequest.class),
-                eq(" ")
-        )).thenThrow(new InvalidIdempotencyKeyException("멱등 키는 비어 있을 수 없습니다."));
-
-        mockMvc.perform(post("/main/detail/{concertId}/reservation", CONCERT_ID)
-                        .cookie(new Cookie("accessToken", TOKEN))
-                        .header("Idempotency-Key", " ")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(REQUEST_BODY))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void seatContentionReturnsHttp409() throws Exception {
-        when(reservationIdempotencyService.reserve(
-                eq(USERNAME),
-                eq(CONCERT_ID),
-                any(ReservRequest.class),
-                eq("contention-key")
-        )).thenThrow(new SeatReservationConflictException("이미 예약된 좌석입니다."));
-
-        mockMvc.perform(post("/main/detail/{concertId}/reservation", CONCERT_ID)
-                        .cookie(new Cookie("accessToken", TOKEN))
-                        .header("Idempotency-Key", "contention-key")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(REQUEST_BODY))
-                .andExpect(status().isConflict())
-                .andExpect(header().string(ReservationController.SEAT_CONFLICT_HEADER,
-                        ReservationController.SEAT_UNAVAILABLE));
     }
 
     @Test
@@ -572,7 +487,6 @@ class ReservationControllerTest {
         );
         MockMvc validationMockMvc = MockMvcBuilders.standaloneSetup(
                 new ReservationController(
-                        reservationIdempotencyService,
                         verifiedReservationService,
                         seatHoldService,
                         checkoutService,
