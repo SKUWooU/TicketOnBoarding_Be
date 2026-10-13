@@ -170,3 +170,11 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 **취소·해제:** Checkout 취소는 추가 잠금 후 `EXPIRED`를 저장하고 기존 410을 반환하며, `CANCELED`·해제 시각·Hold 변경을 남기지 않는다. Hold 해제는 전체 좌석 잠금 후 만료·소유권을 확인하고, 귀속 잠금 후 현재도 활성인 귀속만 충돌로 처리한다. 대기 중 만료된 Hold의 정리는 `EXPIRED_CLEARED`로 기록한다. 명확한 PG 거절의 기존 Hold 만료 복원 로직은 수정하지 않고 회귀 검증한다.
 
 **테스트 해석:** 별도 MariaDB transaction이 좌석 또는 귀속을 잠근 상태에서 대상 요청의 잠금 호출 도달과 미완료를 확인한다. MutableClock을 Hold 만료/검증 deadline 정각으로 전진시킨 뒤 blocker를 풀고 상태·업무 데이터·PG 호출 여부를 확인한다. 실제 대규모 트래픽·5분 대기·SLA 측정이 아니다. 최종 판정 이후 SQL 실행·commit까지 기한이 절대 지나지 않는다는 보장도 아니며, 단일 인스턴스의 제어된 잠금 대기 경계 검증이다. finalized 예약 서비스의 좌석 조회는 이미 같은 transaction에서 획득한 잠금을 다시 사용하며, 추가 조회 비용의 성능 영향은 별도 측정 대상이다.
+
+## 13. 요청 크기와 좌석 경합을 나누는 대조 (#224)
+
+작은 요청을 고정하고 큰 요청을 추가하면 작업량도 늘어난다. 따라서 작은 요청 단독은 기준선이고, 같은 크기·유입량의 큰 묶음이 **분리된 범위/겹치는 범위**를 쓰는 비교가 좌석 중첩의 영향을 보는 대조다. 성공 지연과 정상 409 지연을 섞으면 빠른 거절이 전체 p95를 낮춰 성능 개선처럼 보일 수 있다.
+
+[mixed-seat-plan.mjs](../../load-test/k6/mixed-seat-plan.mjs)는 고정 좌석 묶음을 만들고 [mixed-seat-hold.js](../../load-test/k6/mixed-seat-hold.js)는 1석과 다좌석 클래스별 점유 성공·409·해제·지연을 기록한다. Hold→50ms 대기→해제는 반복 가능한 재고 쓰기이며 PG·예약 확정·운영 사용자의 행동을 재현한 것은 아니다. 큰 요청끼리는 같은 묶음을 경쟁하므로 분리 조건에서도 그들끼리 잠금 대기가 생긴다.
+
+[비교 runner](../../load-test/scripts/Run-MixedSeatHoldComparison.ps1)는 warm-up과 측정을 구분해 정순/역순 반복하고 CPU peak 90%에서 중단한다. [계측 runner](../../load-test/scripts/Measure-MixedSeatHold.ps1)는 Windows 가용 메모리 2GiB preflight, 전용 DB의 fixture 확인, 결과 합계·최종 Hold 불변식을 검증한다. 첫 두 배치는 warm-up 자원 gate에서 끝났으므로 측정 0단계이며 상한값이나 p95 개선을 결론 내리지 않는다. 원 수치·환경·표본 간격·재개 조건은 [실험 9절](EXPERIMENTS.md#9-큰작은-다좌석-hold-혼합-224)에 통합했다.
