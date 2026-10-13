@@ -1,7 +1,6 @@
 package com.onticket.user.controller;
 import com.onticket.user.domain.SiteUser;
 import com.onticket.user.dto.UserInfoDto;
-import com.onticket.user.form.UserChangePwdForm;
 import com.onticket.user.form.UserFindIdForm;
 import com.onticket.user.form.UserLoginForm;
 import com.onticket.user.form.UserCreateForm;
@@ -12,6 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -152,32 +152,22 @@ public class UserController {
         }
     }
 
-    //패스워드 변경시 사용하는 sms 인증
-    @PostMapping("/issmscode")
-    public ResponseEntity<?> CodeCheck(@RequestBody Map<String, String> requestBody){
-        Optional<SiteUser> siteUser=userRepository.findOptionalSiteUserByPhonenumber(compare_phone);
-        //코드 대조하고 해당 번호를 가진 유저가 있으면 성공
-        if(userService.GetSMSCode().equals(requestBody.get("smscode"))||siteUser.isPresent()){
-            return ResponseEntity.ok("인증에 성공하였습니다.");
-        } else return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("인증에 실패했습니다.");
+    // 인증 증명·일회용 권한 계약을 준비할 때까지 기존 복구 경로를 차단한다.
+    @PostMapping(value = "/issmscode", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, String>> CodeCheck(){
+        return passwordRecoveryDisabled();
     }
 
-    //패스워드 변경
-    //****프론트에서 번호도 전달받아야함*****
-    @PostMapping("/changepwd")
-    public ResponseEntity<String> ChangePwd(@Valid @RequestBody UserChangePwdForm userChangePwdForm, BindingResult bindingResult){
-        //의존성검사
-        if(bindingResult.hasErrors()) {
-            String errorMessage = bindingResult.getFieldError().getDefaultMessage();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
-        }
-        String phonenumber = userChangePwdForm.getPhonenumber();
-        //입력한 비밀번호 두개가 같으면 로직처리
-        if (userChangePwdForm.getPassword1().equals(userChangePwdForm.getPassword2())) {
-            String newpassword = userChangePwdForm.getPassword1();
-            userService.ChangePassword(phonenumber,newpassword);
-            return ResponseEntity.ok("비밀번호가 변경되었습니다.");
-        } else return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("비밀번호가 다릅니다.");
+    @PostMapping(value = "/changepwd", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, String>> ChangePwd(){
+        return passwordRecoveryDisabled();
+    }
+
+    private ResponseEntity<Map<String, String>> passwordRecoveryDisabled() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                "code", "PASSWORD_RECOVERY_DISABLED",
+                "message", "비밀번호 찾기는 안전한 인증 절차 준비 중으로 일시 중단되었습니다."
+        ));
     }
 
     @PostMapping("/deleteid")

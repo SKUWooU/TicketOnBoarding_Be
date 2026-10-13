@@ -79,15 +79,6 @@ public class UserService {
         return smscode;
     }
 
-    //비밀번호변경
-    @Transactional
-    public void ChangePassword(String phoneNumber,String password){
-        SiteUser siteUser= userRepository.findSiteUserByPhonenumber(phoneNumber);
-        String encodedPassword = passwordEncoder.encode(password);
-        siteUser.setPassword(encodedPassword);
-        userRepository.save(siteUser);
-    }
-
     //유저생성
     @Transactional
     public SiteUser Create(@NotNull UserCreateForm userCreateForm) {

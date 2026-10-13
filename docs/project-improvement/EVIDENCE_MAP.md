@@ -6,6 +6,7 @@
 
 | 문제 / 개념 | 변경과 검증 | 대표 근거 |
 | --- | --- | --- |
+| 미검증 비밀번호 복구 | 복구 POST 2개 고정 403·전화번호만으로 변경하는 서비스 제거. MockMvc에서 직접/임의 증명/반복/동시 요청과 서비스 미호출 확인 | [#214](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/214), [임시 차단과 재개 조건](STUDY_GUIDE.md#8-계정-복구의-임시-차단-경계-214). 안전한 OTP·FE 복구 기능은 미구현. |
 | 다좌석 예매 부분 commit·잔여 재고 갱신 유실 | 예매 transaction rollback, `seat_amount` 조건부 DB UPDATE, MariaDB Testcontainers 불변식 검증 | [#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5), [초기 재고 기록](archive/foundations/) |
 | 복수 좌석 잠금 순서·deadlock | 좌석 문자열 canonical ordering, 겹치는 좌석 묶음 반복 경합 | [#11](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/11), [indexed 재현](archive/foundations/seat-composite-index-deadlock-comparison.md), [50회·400회 시도](archive/foundations/overlapping-multi-seat-write-contention.md) |
 | 잠금 조회의 넓은 탐색·pool 대기 | `(concert_time_id, seat_number)` unique index, 동일 fixture A/B·k6·Performance Schema | p95 **3,064.39→143.41ms**, Hikari pending peak **189→0** ([상세 A/B](archive/load-testing/seat-composite-index-high-contention-ab.md), [#59](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/59)) |
