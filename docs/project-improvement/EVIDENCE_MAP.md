@@ -6,6 +6,7 @@
 
 | 문제 / 개념 | 변경과 검증 | 대표 근거 |
 | --- | --- | --- |
+| 로그인만으로 결제 검증 없는 예약 확정 | 기존 `/reservation` API 인증 후 410, 미검증 예약 서비스 연결 제거. 빈/잘못된 본문·재시도·미인증과 유지된 검증 경로 회귀 | [#218](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/218), [범위·코드·한계](STUDY_GUIDE.md#10-결제-검증-없는-예약-진입점-폐쇄-218). 내부 서비스와 PG 검증 fixture 경로 유지. |
 | 리뷰 작성자/역할 위조·다른 공연 변경 | DB 작성자·공연 소속·관리자 삭제 정책 검증, 서비스 수정/삭제 transaction. MockMvc 거절 시 리뷰/평점 저장 미호출 | [#216](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/216), [코드·검증·한계](STUDY_GUIDE.md#9-리뷰-변경의-소유권-경계-216). 평점 동시성·실DB rollback은 별도. |
 | 미검증 비밀번호 복구 | 복구 POST 2개 고정 403·전화번호만으로 변경하는 서비스 제거. MockMvc에서 직접/임의 증명/반복/동시 요청과 서비스 미호출 확인 | [#214](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/214), [임시 차단과 재개 조건](STUDY_GUIDE.md#8-계정-복구의-임시-차단-경계-214). 안전한 OTP·FE 복구 기능은 미구현. |
 | 다좌석 예매 부분 commit·잔여 재고 갱신 유실 | 예매 transaction rollback, `seat_amount` 조건부 DB UPDATE, MariaDB Testcontainers 불변식 검증 | [#5](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/5), [초기 재고 기록](archive/foundations/) |
