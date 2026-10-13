@@ -2,6 +2,7 @@ package com.onticket.concert.service;
 
 import com.onticket.concert.domain.ConcertTime;
 import com.onticket.concert.domain.Seat;
+import com.onticket.concert.domain.CheckoutSeatAssignment;
 import com.onticket.concert.dto.SeatHoldRequest;
 import com.onticket.concert.dto.SeatHoldResponse;
 import com.onticket.concert.repository.ConcertTimeRepository;
@@ -102,11 +103,14 @@ public class SeatHoldService {
             validateUsername(username);
             validateConcertTime(concertId, request);
             List<String> seatNumbers = canonicalSeatNumbers(request);
+            List<Seat> allLockedSeats = new ArrayList<>();
+            for (String seatNumber : seatNumbers) {
+                allLockedSeats.add(lockedSeat(request.getConcertTimeId(), seatNumber));
+            }
             LocalDateTime now = LocalDateTime.now(clock);
             List<Seat> lockedSeats = new ArrayList<>();
 
-            for (String seatNumber : seatNumbers) {
-                Seat seat = lockedSeat(request.getConcertTimeId(), seatNumber);
+            for (Seat seat : allLockedSeats) {
                 boolean expiredHold = hasExpiredHold(seat, now);
                 seat.clearExpiredHold(now);
                 if (!seat.isHeldAt(now)) {
@@ -121,16 +125,21 @@ public class SeatHoldService {
                 lockedSeats.add(seat);
             }
 
-            if (!lockedSeats.isEmpty() && !checkoutSeatAssignmentRepository.findByActiveSeatIdsWithLock(
-                    lockedSeats.stream().map(Seat::getId).toList(),
-                    now
-            ).isEmpty()) {
+            List<CheckoutSeatAssignment> assignments = lockedSeats.isEmpty() ? List.of()
+                    : checkoutSeatAssignmentRepository.findByActiveSeatIdsWithLock(
+                            lockedSeats.stream().map(Seat::getId).toList(),
+                            now
+                    );
+            LocalDateTime releaseNow = LocalDateTime.now(clock);
+            if (assignments.stream().anyMatch(assignment -> assignment.isActiveAt(releaseNow))) {
                 throw new SeatHoldConflictException("결제 준비 중인 좌석은 임시 점유를 해제할 수 없습니다.");
             }
 
             for (Seat seat : lockedSeats) {
+                boolean expiredHold = hasExpiredHold(seat, releaseNow);
                 seat.clearHold();
-                tracker.transition(SeatHoldMetrics.Transition.RELEASED);
+                tracker.transition(expiredHold ? SeatHoldMetrics.Transition.EXPIRED_CLEARED
+                        : SeatHoldMetrics.Transition.RELEASED);
             }
             tracker.succeed();
         } catch (RuntimeException exception) {

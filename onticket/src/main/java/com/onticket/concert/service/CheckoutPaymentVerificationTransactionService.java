@@ -88,16 +88,16 @@ public class CheckoutPaymentVerificationTransactionService {
             throw new PaymentVerificationUnknownException();
         }
 
-        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        LocalDateTime initialNow = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
         if (checkout.getStatus() == CheckoutStatus.PAYMENT_VERIFYING) {
-            if (checkout.isPaymentVerificationTimedOut(now)) {
+            if (checkout.isPaymentVerificationTimedOut(initialNow)) {
                 checkout.markPaymentVerificationUnknown();
                 tracker.succeed(CheckoutMetrics.Transition.VERIFICATION_UNKNOWN);
                 throw new PaymentVerificationUnknownException();
             }
             throw new CheckoutConflictException("결제 검증이 진행 중인 Checkout입니다.");
         }
-        if (checkout.expireIfNeeded(now)) {
+        if (checkout.expireIfNeeded(initialNow)) {
             throw new CheckoutExpiredException();
         }
         if (checkout.getStatus() != CheckoutStatus.READY) {
@@ -109,15 +109,20 @@ public class CheckoutPaymentVerificationTransactionService {
         validateAssignments(checkout, snapshot, canonicalSeatNumbers, checkoutFingerprint);
 
         List<Seat> lockedSeats = lockSeats(request.getConcertTimeId(), canonicalSeatNumbers);
+        List<CheckoutSeatAssignment> lockedAssignments = assignmentRepository
+                .findByCheckoutIdWithLock(checkout.getId());
+        validateAssignments(checkout, lockedAssignments, canonicalSeatNumbers, checkoutFingerprint);
+
+        // 좌석·귀속 잠금 대기 중 Checkout과 Hold가 만료될 수 있다.
+        LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+        if (checkout.expireIfNeeded(now)) {
+            throw new CheckoutExpiredException();
+        }
         for (Seat seat : lockedSeats) {
             if (seat.isReserved() || !seat.isHeldBy(username, now)) {
                 throw new CheckoutConflictException("Checkout 좌석의 임시 점유가 유효하지 않습니다.");
             }
         }
-
-        List<CheckoutSeatAssignment> lockedAssignments = assignmentRepository
-                .findByCheckoutIdWithLock(checkout.getId());
-        validateAssignments(checkout, lockedAssignments, canonicalSeatNumbers, checkoutFingerprint);
 
         LocalDateTime deadline = checkout.getExpiresAt().plus(verificationGraceDuration);
         checkout.beginPaymentVerification(

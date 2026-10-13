@@ -28,6 +28,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -42,6 +44,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -61,12 +65,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -103,6 +111,7 @@ class CheckoutVerifiedReservationIntegrationTest {
     private static final String CONCERT_ID = "CHECKOUT-RESERVATION-CONCERT";
     private static final String USERNAME = "checkout-reservation-user";
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2030, 1, 1, 12, 0);
+    private static final AtomicReference<DeadlineLockAttempt> DEADLINE_LOCK_ATTEMPT = new AtomicReference<>();
     private static final AtomicReference<CheckoutAliasLockBarrier> CHECKOUT_ALIAS_LOCK_BARRIER =
             new AtomicReference<>();
     private static final AtomicReference<String> FINALIZATION_FAILURE_MERCHANT_UID =
@@ -196,9 +205,16 @@ class CheckoutVerifiedReservationIntegrationTest {
 
     private Long concertTimeId;
 
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private VerifiedReservationTransactionService finalizationService;
+
     @BeforeEach
     void setUp() {
         meterRegistry.clear();
+        DEADLINE_LOCK_ATTEMPT.set(null);
         CHECKOUT_ALIAS_LOCK_BARRIER.set(null);
         FINALIZATION_FAILURE_MERCHANT_UID.set(null);
         CHECKOUT_RELEASE_BARRIER.set(null);
@@ -1794,6 +1810,161 @@ class CheckoutVerifiedReservationIntegrationTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void claimRejectsExpiryAfterAdditionalLockWait(boolean assignmentWait) throws Exception {
+        CheckoutResponse checkout = prepareCheckout("deadline-claim", "A1", "A2");
+        VerifiedReservRequest request = verifiedRequest(checkout.getMerchantUid(), "deadline-payment", "A2", "A1");
+        Throwable failure = catchThrowable(() -> afterDeadlineLockWait(checkout, assignmentWait, false,
+                checkout.getExpiresAt(), () -> reservationService.reserve(USERNAME, CONCERT_ID, request, "deadline-key")));
+        verifyNoInteractions(paymentVerificationPort);
+        assertThat(failure).isExactlyInstanceOf(CheckoutExpiredException.class);
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(stored.getVerificationPaymentId()).isNull();
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void finalizeDefersAtDeadlineAfterAdditionalLockWait(boolean assignmentWait) throws Exception {
+        CheckoutResponse checkout = prepareCheckout("deadline-finalize", "A1", "A2");
+        VerifiedReservRequest request = verifiedRequest(checkout.getMerchantUid(), "deadline-payment", "A2", "A1");
+        String checkoutFingerprint = ReservationRequestCanonicalizer.fingerprint(CONCERT_ID, request);
+        String bookingFingerprint = ReservationRequestCanonicalizer.checkoutVerifiedFingerprint(
+                CONCERT_ID, request, request.getPaymentId(), request.getMerchantUid());
+        verificationTransactionService.claim(USERNAME, CONCERT_ID, request, List.of("A1", "A2"),
+                "deadline-key", checkoutFingerprint, bookingFingerprint);
+        LocalDateTime deadline = checkout.getExpiresAt().plusSeconds(30);
+        Throwable failure = catchThrowable(() -> afterDeadlineLockWait(checkout, assignmentWait, false,
+                deadline, () -> finalizationService.reserveWithCheckout(USERNAME, CONCERT_ID, request,
+                        "deadline-key", checkoutFingerprint, bookingFingerprint,
+                        approved(request.getPaymentId(), checkout.getMerchantUid(), 60_000))));
+        assertEmptyReservationSnapshot(2);
+        assertThat(failure).isExactlyInstanceOf(PaymentVerificationUnknownException.class);
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.PAYMENT_VERIFICATION_UNKNOWN);
+        assertThat(stored.getVerificationDeadline()).isEqualTo(deadline);
+        assertThat(stored.getBooking()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId())).allSatisfy(assignment ->
+                assertThat(assignment.getVerificationLeaseUntil()).isEqualTo(deadline));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void cancellationExpiresInsteadOfCancelingAfterAdditionalLockWait(boolean assignmentWait) throws Exception {
+        CheckoutResponse checkout = prepareCheckout("deadline-cancel", "A1", "A2");
+        Throwable failure = catchThrowable(() -> afterDeadlineLockWait(checkout, assignmentWait, false,
+                checkout.getExpiresAt(), () -> checkoutCancellationService.cancel(
+                        USERNAME, CONCERT_ID, checkout.getMerchantUid())));
+        assertThat(failure).isExactlyInstanceOf(CheckoutExpiredException.class);
+        entityManager.clear();
+        Checkout stored = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(CheckoutStatus.EXPIRED);
+        assertThat(stored.getCanceledAt()).isNull();
+        assertThat(checkoutSeatAssignmentRepository.findByCheckoutId(stored.getId())).allSatisfy(assignment ->
+                assertThat(assignment.getReleasedAt()).isNull());
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void holdReleaseIgnoresAssignmentsThatExpireDuringLockWait(boolean assignmentWait) throws Exception {
+        CheckoutResponse checkout = prepareCheckout("deadline-release", "A1", "A2");
+        afterDeadlineLockWait(checkout, assignmentWait, true, checkout.getExpiresAt(), () -> {
+            seatHoldService.release(USERNAME, CONCERT_ID, holdRequest("A1", "A2"));
+            return null;
+        });
+        entityManager.clear();
+        for (String number : List.of("A1", "A2")) {
+            Seat seat = seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, number);
+            assertThat(seat.getHeldBy()).isNull();
+            assertThat(seat.getHeldUntil()).isNull();
+            assertThat(seat.isReserved()).isFalse();
+        }
+        assertEmptyReservationSnapshot(2);
+    }
+
+    @Test
+    void knownFailureUsesTimeAfterLockWaitAndRestoresOriginalHoldExpiry() throws Exception {
+        CheckoutResponse checkout = prepareCheckout("deadline-known-failure", "A1", "A2");
+        VerifiedReservRequest request = verifiedRequest(checkout.getMerchantUid(), "deadline-payment", "A1", "A2");
+        String checkoutFingerprint = ReservationRequestCanonicalizer.fingerprint(CONCERT_ID, request);
+        String bookingFingerprint = ReservationRequestCanonicalizer.checkoutVerifiedFingerprint(
+                CONCERT_ID, request, request.getPaymentId(), request.getMerchantUid());
+        verificationTransactionService.claim(USERNAME, CONCERT_ID, request, List.of("A1", "A2"),
+                "deadline-key", checkoutFingerprint, bookingFingerprint);
+        afterDeadlineLockWait(checkout, false, false, checkout.getExpiresAt(), () -> {
+            verificationTransactionService.releaseKnownFailure(checkout.getMerchantUid(), USERNAME,
+                    concertTimeId, List.of("A1", "A2"), request.getPaymentId(), "deadline-key", bookingFingerprint);
+            return null;
+        });
+        entityManager.clear();
+        assertThat(checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow().getStatus())
+                .isEqualTo(CheckoutStatus.EXPIRED);
+        for (String number : List.of("A1", "A2")) {
+            assertThat(seatRepository.findByConcertTimeAndSeatNumber(concertTimeId, number).getHeldUntil())
+                    .isEqualTo(checkout.getExpiresAt());
+        }
+        assertEmptyReservationSnapshot(2);
+    }
+
+    private <T> T afterDeadlineLockWait(CheckoutResponse checkout, boolean assignmentWait, boolean holdRelease,
+                                       LocalDateTime boundary, Callable<T> action) throws Exception {
+        Long checkoutId = checkoutRepository.findByMerchantUid(checkout.getMerchantUid()).orElseThrow().getId();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch attempted = new CountDownLatch(1);
+        String method = assignmentWait
+                ? (holdRelease ? "findByActiveSeatIdsWithLock" : "findByCheckoutIdWithLock")
+                : "findByConcertTimeIdAndSeatNumberWithLock";
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<?> blocker = executor.submit(() -> new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(status -> {
+                        if (assignmentWait) checkoutSeatAssignmentRepository.findByCheckoutIdWithLock(checkoutId);
+                        else seatRepository.findByConcertTimeIdAndSeatNumberWithLock(concertTimeId, "A2").orElseThrow();
+                        locked.countDown();
+                        try {
+                            if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("blocker timeout");
+                        } catch (InterruptedException exception) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException(exception);
+                        }
+                    }));
+            try {
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+                DEADLINE_LOCK_ATTEMPT.set(new DeadlineLockAttempt(method, attempted));
+                Future<T> waiting = executor.submit(action);
+                assertThat(attempted.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> waiting.get(200, TimeUnit.MILLISECONDS))
+                        .isExactlyInstanceOf(TimeoutException.class);
+                clock.set(boundary);
+                release.countDown();
+                blocker.get(5, TimeUnit.SECONDS);
+                try { return waiting.get(5, TimeUnit.SECONDS); }
+                catch (ExecutionException exception) {
+                    if (exception.getCause() instanceof Exception cause) throw cause;
+                    throw exception;
+                }
+            } finally {
+                DEADLINE_LOCK_ATTEMPT.set(null);
+                release.countDown();
+                blocker.get(5, TimeUnit.SECONDS);
+            }
+        }
+    }
+
+    private record DeadlineLockAttempt(String method, CountDownLatch attempted) {
+        void signal(String invokedMethod, Object[] args) {
+            if (method.equals(invokedMethod)
+                    && (!method.equals("findByConcertTimeIdAndSeatNumberWithLock") || "A2".equals(args[1]))) {
+                attempted.countDown();
+            }
+        }
+    }
+
     private AttemptResult checkoutPreparationAttempt(CheckoutRequest request, String idempotencyKey) {
         try {
             checkoutService.prepare(USERNAME, CONCERT_ID, request, idempotencyKey);
@@ -2185,6 +2356,14 @@ class CheckoutVerifiedReservationIntegrationTest {
             return new BeanPostProcessor() {
                 @Override
                 public Object postProcessAfterInitialization(Object bean, String beanName) {
+                    if (bean instanceof SeatRepository repository) {
+                        return Proxy.newProxyInstance(SeatRepository.class.getClassLoader(),
+                                new Class<?>[]{SeatRepository.class}, (proxy, method, args) -> {
+                                    DeadlineLockAttempt attempt = DEADLINE_LOCK_ATTEMPT.get();
+                                    if (attempt != null) attempt.signal(method.getName(), args);
+                                    return invoke(repository, method, args);
+                                });
+                    }
                     if (bean instanceof CheckoutRepository checkoutRepository) {
                         return Proxy.newProxyInstance(
                                 CheckoutRepository.class.getClassLoader(),
@@ -2249,6 +2428,8 @@ class CheckoutVerifiedReservationIntegrationTest {
                                 CheckoutSeatAssignmentRepository.class.getClassLoader(),
                                 new Class<?>[]{CheckoutSeatAssignmentRepository.class},
                                 (proxy, method, args) -> {
+                                    DeadlineLockAttempt attempt = DEADLINE_LOCK_ATTEMPT.get();
+                                    if (attempt != null) attempt.signal(method.getName(), args);
                                     Object result = invoke(assignmentRepository, method, args);
                                     CheckoutReleaseBarrier releaseBarrier = CHECKOUT_RELEASE_BARRIER.get();
                                     if (releaseBarrier != null
