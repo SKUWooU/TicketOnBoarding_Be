@@ -178,3 +178,67 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 [mixed-seat-plan.mjs](../../load-test/k6/mixed-seat-plan.mjs)는 고정 좌석 묶음을 만들고 [mixed-seat-hold.js](../../load-test/k6/mixed-seat-hold.js)는 1석과 다좌석 클래스별 점유 성공·409·해제·지연을 기록한다. Hold→50ms 대기→해제는 반복 가능한 재고 쓰기이며 PG·예약 확정·운영 사용자의 행동을 재현한 것은 아니다. 큰 요청끼리는 같은 묶음을 경쟁하므로 분리 조건에서도 그들끼리 잠금 대기가 생긴다.
 
 [비교 runner](../../load-test/scripts/Run-MixedSeatHoldComparison.ps1)는 warm-up과 측정을 구분해 정순/역순 반복하고 CPU peak 90%에서 중단한다. 빈 묶음 크기는 거절하며 필수 조건의 3회 측정 완료를 검사한다. [계측 runner](../../load-test/scripts/Measure-MixedSeatHold.ps1)는 Windows 가용 메모리 2GiB preflight, 준비된 fixture의 GET·전용 DB SQL 대조, 결과 합계·최종 Hold 불변식을 검증한다. 자동 fixture 생성은 제거해 대상 확인 전에 DB에 쓰지 않도록 했다. 첫 두 배치는 이전 도구의 warm-up 자원 gate에서 끝났으므로 측정 0단계이며 상한값이나 p95 개선을 결론 내리지 않는다. 원 수치·환경·표본 간격·재개 조건은 [실험 9절](EXPERIMENTS.md#9-큰작은-다좌석-hold-혼합-224)에 통합했다.
+
+## 14. 공연 오픈 대기실의 설계 계약 (#228)
+
+**현재 구현과 구분:** 아래는 신규 기능의 초안이며 코드·Redis·FE 화면은 아직 구현하지 않았다. 선택 이유와 대안은 [ADR-0006](adr/0006-performance-opening-admission.md)에 둔다. 기존 로그인 cookie와 회차/공연 소속 검증을 재사용하되 현재 `SecurityConfig`는 `/**`를 ignore하므로 새 API가 자동으로 인증된다고 가정하지 않는다. 각 진입점에서 인증된 사용자 이름을 추출하고 본문의 username/순번을 신뢰하지 않는다.
+
+### 요구와 최소 정책
+
+- 공연 상세 → 기존 예약 화면의 날짜·회차 선택 → 대기 패널 → 입장 허용 후 좌석표 → 기존 Hold·Checkout·결제 흐름.
+- 정책은 회차별 `enabled`, `opensAt`, `maxActiveAdmissions`, `maxWaitingEntries`, `waitingTtl`, `admissionTtl`, `generation`을 서버에서 지정한다. 최초에는 명시적 fixture만 활성화하고 기존 회차는 비활성으로 유지한다. 정책 조회 실패를 비활성으로 대체하지 않는다.
+- 테스트 예산은 입장 한도 2·사용자 5명 같은 작은 구성이며 서비스 권장 용량이 아니다. TTL·오픈 시각은 configurable로 구현하고 경계 테스트에는 제어 시계를 사용한다. 시간값은 실제 운영 정책으로 확정한 것이 아니다.
+- 오픈 전에 대기를 허용하지만 `opensAt` 이전 입장은 금지한다. 순서는 Redis가 수락한 등록 sequence 기준이며 브라우저 click 시각이나 네트워크 요청 발송 순서를 보장하지 않는다.
+- 같은 사용자/회차/generation 재등록·재접속은 기존 대기/입장권 ID·순서·만료를 유지한다. 상태 조회로 TTL을 무한 연장하지 않는다. 이탈/만료 후 새 등록은 맨 뒤로 간다.
+- 정해진 만료 시각에서 `now >= expiresAt`이면 유효하지 않다. Redis 원자 처리의 기준 시각과 앱 응답 `serverNow`의 차이를 고려하며, 여러 앱의 자체 시계 차이로 입장권을 연장하지 않는다.
+
+### 상태와 API 후보
+
+공개 사용자 상태는 `WAITING → ADMITTED → EXPIRED / LEFT`다. WAITING도 만료·이탈할 수 있다. `ADMITTED`는 좌석을 고를 권한이며 `HELD`나 `RESERVATION_CONFIRMED`와 다른 개념이다. 비활성 회차는 정책 응답에서 `enabled:false`, 신규 등록 결과는 `409 ADMISSION_NOT_ENABLED`로 구분한다. 서버 장애는 사용자 상태가 아니라 503 오류다.
+
+공통 경로 후보: `/main/detail/{concertId}/calendar/{concertTimeId}/admission`.
+
+| 요청 | 계약 초안 |
+| --- | --- |
+| `GET /policy` | 해당 공연/회차 소속 검증, 공개 운영 정책·serverNow 조회. 내부 key·다른 사용자 정보 미노출 |
+| `POST` | 로그인 사용자 등록/기존 상태 재사용. `queueEntryId`, 상태, 자신의 position, waitingExpiresAt, serverNow 반환. 허용 시 admissionId·token·expiresAt 포함 |
+| `GET` | 로그인 사용자의 현재 상태만 조회. Redis mutation/배정은 bounded worker에서 수행하며 HTTP GET에 등록·기한 연장을 넣지 않음 |
+| `DELETE` | 자신의 `queueEntryId`·generation을 제시해 이탈. 반복/오래된 ID의 이탈은 204이며 새 등록/입장권을 삭제하지 않음. 좌석 Hold 해제·Checkout 취소를 대신하지 않음 |
+
+token은 서버 발급의 예측 불가능한 구매 권한이며 로그인 JWT와 구분한다. `X-Admission-Token` 후보 헤더로 전달하고 서버에서 사용자·회차·generation·입장 ID·만료를 대조한다. token/username/queueEntryId는 metric label에 넣거나 로그에 남기지 않는다. waiting 순번은 변하는 조회 값이며 확정 입장 시각을 약속하지 않는다. FE polling 기본 후보 5초+jitter, 재시도 backoff, 페이지 숨김/언마운트 시 정지. polling 주기는 전체 용량의 성능 근거가 아니다.
+
+HTTP 오류 후보는 미인증 401, 위조/타 사용자/다른 회차/만료 권한 403(별도 admission code), 신규 등록 시 대기 인원 초과 429·Retry-After, Redis/정책 상태 불명확 503이다. 알려진 정상 회차 상태에서 아직 등록하지 않은 사용자 조회는 404 `ADMISSION_NOT_JOINED`로 구분한다. 대기 중 GET는 200 WAITING이다. 기존 좌석 충돌 409를 admission 오류로 재사용하지 않는다. 최종 API 코드는 후속 구현/FE 계약 테스트에서 고정한다.
+
+### Redis 원자 코어의 구현 조건
+
+회차/generation별 sequence, waiting Sorted Set, 사용자 상태, active admission 만료 인덱스를 공유한다. 동일 timestamp tie 대신 등록 sequence를 사용하고 score 정밀도 범위를 검증한다. 짧은 원자 작업으로 중복 확인·등록·만료 정리·남은 슬롯의 FIFO 배정을 수행한다. waiting 최대 인원, 처리 batch 크기, 유지 데이터 TTL을 제한하며 전체 큐를 한 script에서 순회하지 않는다. 한 사용자가 슬롯을 두 개 소비하거나 유효 입장권 수가 한도를 넘으면 실패다. 여러 key는 같은 hash tag를 사용하는 설계 후보이며 첫 배포는 cluster가 아니다.
+
+첫 배정 worker는 bounded tick 작업이다. 앱 두 개가 배정해도 Redis의 원자 작업이 상태를 직렬화하며 새 요청이 기존 대기자를 건너뛰지 않는다. 오류 때 자동으로 process-local 큐로 fallback하지 않는다. Redis 자료 유실 시 이전 입장권은 유효 처리하지 않고 수동 재개·generation 변경이 필요하다. 이를 검증하기 위한 정책 원본은 Redis 외부의 서버 구성에 둔다.
+
+활성 회차/generation의 Redis 준비 marker도 관리자가 확인한 bootstrap 단계에서 준비한다. marker가 없으면 신규 등록/구매를 503으로 닫고 빈 큐/비활성으로 자동 초기화하지 않는다. 복구·새 generation 배포는 앱 간 설정을 일치시키는 별도 제어 단계이며 일반 사용자의 join으로 수행하지 않는다. AOF clean restart와 강제 자료 유실 후 수동 복구를 별도 테스트한다.
+
+### API 우회와 결제 연속성
+
+현재 [ReservationController](../../onticket/src/main/java/com/onticket/concert/controller/ReservationController.java)는 수동 cookie 검증 후 서비스를 호출한다. 새로운 gate도 화면 숨김에만 의존하지 않고 신규 구매 쓰기의 좌석 잠금/업무 저장 앞에 둔다.
+
+명시적 Controller 외에 `spring-boot-starter-data-rest`의 Repository 자동 export 후보와 `/loadtest/runs`·관리 reset 등 fixture 쓰기 경로도 조사한다. 현재 소스 조사만으로 실제 HTTP 노출/악용을 확인한 것은 아니다. 활성 회차의 보호를 우회하는 쓰기는 차단하거나 별도 테스트 전용 경계로 격리한 뒤 기능 완료를 판단한다. FE 연동에서는 새 token 헤더의 CORS 허용 범위와 이전 회차 polling 응답의 무시도 검증한다.
+
+| 기존 경로 | 활성 회차의 후속 gate 요구 |
+| --- | --- |
+| `POST .../seat-holds` | 신규 점유·추가 선택·재점유에 유효한 자신의 입장권 필요. 입장권이 좌석 conflict를 성공으로 바꾸지 않음 |
+| `POST .../checkouts` | 신규 Checkout 준비 전에 입장권 검증, 재시도에서 기존 Checkout 결과 재사용과 신규 생성은 구분 |
+| `POST .../verified-reservation` | 유지된 Checkout 없는 PG 검증 경로도 우회 후보. 활성 회차에서는 신규 생성 gate를 적용하거나 명시적으로 차단. 기존 k6 비활성 fixture 계약은 유지 |
+| `POST .../reservation` | 이미 종료된 경로의 410 유지; 입장권이 있어도 재개하지 않음 |
+| Hold DELETE / Checkout DELETE | 기존 DB 소유권·상태 검증으로 cleanup 계속, 대기실 장애/입장 만료를 이유로 해제·취소를 막지 않음 |
+| `POST .../checkouts/{merchantUid}/verified-reservation` | 이미 준비된 Checkout의 소유권·검증 선점·Hold lease로 계속 처리. 입장권 만료/Redis 장애 때문에 유효 결제를 버리지 않음 |
+
+Redis 검증과 MariaDB transaction은 하나의 원자 transaction이 아니다. gate를 통과한 뒤 입장권이 만료돼도 이미 시작한 DB 작업을 자동 취소하거나 승인 결제를 되돌리지 않는다. 만료/이탈은 다음 신규 구매 접근을 차단하고, 기존 Hold/Checkout은 원래 정책으로 정리한다. 입장권 개수·유효 구매 세션 수·DB 요청 동시 수는 각각 다르다. worker나 클라이언트가 임의로 TTL을 재발급하는 방식으로 이 경계를 감추지 않는다.
+
+### 후속 구현 순서와 완료 조건
+
+1. **BE 원자 코어:** Redis 추가·실행 경계 확인 후 등록·중복·순서·bounded 배정·만료·이탈. Redis Testcontainers로 동시 등록/배정에서 한도·순서·단일 사용자 상태 검증. 이탈→재등록 후 오래된 이탈/만료 작업의 새 상태 미삭제, 자료형/입력 오류와 script 부분 변경 검사 포함.
+2. **BE API/gate:** 인증·타 사용자/다른 회차/위조·만료 token·legacy 우회·Redis unavailable을 검증. 거절 시 MariaDB 재고·Checkout·PG 호출이 시작되지 않아야 한다. 기존 Checkout의 종료·복구 경로 회귀.
+3. **FE 별도 저장소 Issue/PR:** 회차 선택 뒤 WAITING/ADMITTED 표시, 재접속·만료·이탈·API 오류 처리. 기존 소규모 좌석·2,000석 fixture UI 유지, 화면과 실제 gate가 일치하는지 확인.
+4. **제한된 통합 검증:** 앱 두 개의 공유 순서/권한·앱 재시작·Redis clean restart/자료 유실을 구분해 검증. 최초는 작은 fixture·Mock PG·명시적 기능 검증이며 새 k6 성능 증량은 요구하지 않는다.
+
+처음부터 운영 고가용성·Kafka·대형 AWS·SSE·무제한 큐를 붙이지 않는다. 위 단계가 실제로 통과하기 전에는 새 기능이나 트래픽 보호를 구현한 성과로 기록하지 않는다.
