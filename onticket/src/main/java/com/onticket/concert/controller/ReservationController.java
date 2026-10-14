@@ -12,6 +12,7 @@ import com.onticket.concert.service.SeatHoldService;
 import com.onticket.concert.service.SeatReservationConflictException;
 import com.onticket.concert.service.VerifiedReservationService;
 import com.onticket.user.jwt.JwtUtil;
+import com.onticket.admission.AdmissionAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -46,6 +47,8 @@ public class ReservationController {
 
     private final JwtUtil jwtUtil;
 
+    private final AdmissionAccess admissionAccess;
+
     // 결제 검증 없는 기존 예약 경로는 본문을 해석하지 않고 폐쇄한다.
     @PostMapping(value = "/main/detail/{concertId}/reservation", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> setReservation(
@@ -72,6 +75,7 @@ public class ReservationController {
     ) throws Exception {
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.getUsernameFromToken(token);
+            admissionAccess.rejectDirectReservation(reservRequest.getConcertTimeId());
             LocalDateTime reservationCreatedAt = verifiedReservationService.reserve(
                     username,
                     concertId,
@@ -91,16 +95,20 @@ public class ReservationController {
             @CookieValue(value = "accessToken", required = false) String token,
             @PathVariable("concertId") String concertId,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(value = AdmissionAccess.TOKEN_HEADER, required = false) String admissionToken,
             @RequestBody CheckoutRequest checkoutRequest
     ) {
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.getUsernameFromToken(token);
-            CheckoutResponse response = checkoutService.prepare(
-                    username,
-                    concertId,
-                    checkoutRequest,
-                    idempotencyKey
-            );
+            CheckoutResponse response;
+            if (admissionAccess.protectedTime(checkoutRequest.getConcertTimeId())) {
+                // Replaying an existing Checkout must not depend on a fresh Redis lease.
+                response = checkoutService.prepare(username, concertId, checkoutRequest, idempotencyKey,
+                        () -> admissionAccess.requireAdmission(username, concertId,
+                                checkoutRequest.getConcertTimeId(), admissionToken));
+            } else {
+                response = checkoutService.prepare(username, concertId, checkoutRequest, idempotencyKey);
+            }
             return ResponseEntity.ok(response);
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("로그인이 필요한 서비스입니다.");
@@ -152,10 +160,12 @@ public class ReservationController {
     public ResponseEntity<?> holdSeats(
             @CookieValue(value = "accessToken", required = false) String token,
             @PathVariable("concertId") String concertId,
+            @RequestHeader(value = AdmissionAccess.TOKEN_HEADER, required = false) String admissionToken,
             @RequestBody SeatHoldRequest request
     ) {
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.getUsernameFromToken(token);
+            admissionAccess.requireAdmission(username, concertId, request.getConcertTimeId(), admissionToken);
             SeatHoldResponse response = seatHoldService.hold(username, concertId, request);
             return ResponseEntity.ok(response);
         }

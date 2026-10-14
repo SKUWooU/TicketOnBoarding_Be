@@ -24,7 +24,7 @@ class LoadTestControllerTest {
     @BeforeEach
     void setUp() {
         fixtureService = mock(LoadTestFixtureService.class);
-        mockMvc = standaloneSetup(new LoadTestController(fixtureService, mock(JwtUtil.class)))
+        mockMvc = standaloneSetup(new LoadTestController(fixtureService, mock(JwtUtil.class), mock(com.onticket.admission.AdmissionAccess.class)))
                 .setMessageConverters(new MappingJackson2HttpMessageConverter())
                 .build();
     }
@@ -55,7 +55,7 @@ class LoadTestControllerTest {
     void createsFixtureUsersBeforeIssuingTokens() throws Exception {
         JwtUtil jwtUtil = mock(JwtUtil.class);
         fixtureService = mock(LoadTestFixtureService.class);
-        mockMvc = standaloneSetup(new LoadTestController(fixtureService, jwtUtil))
+        mockMvc = standaloneSetup(new LoadTestController(fixtureService, jwtUtil, mock(com.onticket.admission.AdmissionAccess.class)))
                 .setMessageConverters(new MappingJackson2HttpMessageConverter())
                 .build();
         when(fixtureService.ensureUsers("browser-run", 2))

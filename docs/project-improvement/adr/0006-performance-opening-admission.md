@@ -2,11 +2,11 @@
 
 ## 상태
 
-신규 도메인 확장 방향·로컬 Redis 추가/실행 승인. #230에서 비노출 원자 코어 구현·검증, API/gate/FE/자동 worker는 구현 전.
+신규 도메인 확장 방향·로컬 Redis 추가/실행 승인. #230 비노출 원자 코어에 이어 #232에서 인증 API·신규 구매 gate 구현. FE·자동 worker·운영자 초기화 도구는 후속 단계.
 
 ## 맥락과 재현 근거
 
-사용자는 공연 예매라는 기존 서비스에 오픈 시점 대기·순차 구매 입장을 추가하기로 했다. 현재 FE는 `/concertReservation/:concertID`에서 회차를 고르고 Hold를 요청한다. BE의 `SeatHoldService`는 좌석 재고를 보호하지만 구매 단계 접근 순서나 입장 권한은 관리하지 않는다. #228 조사 시 Redis 의존성은 없었으며 #230에서 추가했다. 원자 코어는 명시적으로 구성하는 객체이고 아직 기존 API에 연결하지 않았다.
+사용자는 공연 예매라는 기존 서비스에 오픈 시점 대기·순차 구매 입장을 추가하기로 했다. 현재 FE는 `/concertReservation/:concertID`에서 회차를 고르고 Hold를 요청한다. 기존 `SeatHoldService`는 좌석 재고를 보호하지만 구매 접근 순서는 관리하지 않았다. #228 조사 시 Redis 의존성은 없었으며 #230에서 추가했다. #232는 local+loadtest의 명시적 fixture 회차 한 개에만 API/gate를 연결한다.
 
 #224·#226의 혼합 부하 비교는 warm-up 자원 gate에서 끝났으며 성능 개선·처리 한계 근거가 아니다. 이번 선택은 그 병목을 해결한다는 주장이 아니라 **새로운 입장 제어 요구**에 따른 확장이다. ADR-0004의 재검토 조건 중 명시적 입장 제어 요구가 생긴 것으로 해석한다. Kafka·outbox·운영 LB와 측정 peak만으로 인프라를 추가하지 않는 결정은 유지한다.
 
@@ -16,6 +16,9 @@
 - 기본 동작은 유지하고, 명시적으로 지정한 로컬 fixture 회차에만 입장 제어를 적용한다. 적용 대상 정책은 Redis 자료 유무와 독립된 서버 소유 구성으로 판정한다. Redis 오류/자료 유실을 비활성 회차로 해석해 우회하지 않는다.
 - #230의 상태 공유·순서·원자적 입장 배정은 단일 Redis와 Sorted Set·bounded Lua script로 구현한다. 좌석·Hold·Checkout·결제의 원본은 MariaDB로 유지하며 Redis를 좌석 재고의 분산 락으로 쓰지 않는다.
 - 첫 FE는 기존 예약 화면의 회차 선택 뒤 대기 패널을 보여준다. polling부터 시작하며 별도 디자인 전면 수정·SSE·WebSocket은 제외한다.
+- #232의 신규 Hold/Checkout만 `X-Admission-Token`으로 본인 입장권을 검증한다. 기존 Checkout 동일 결과 재사용·검증·취소·Hold 해제는 새 입장권이나 Redis 연결 없이 기존 소유권/상태 검증으로 처리한다. 입장 확인과 MariaDB 변경은 하나의 원자 트랜잭션이 아니며, gate 통과 후 lease 만료/이탈은 이미 진행 중인 DB 요청을 중단시키지 않는다.
+- 활성 회차의 Checkout 없는 직접 `verified-reservation`은 PG 조회 전 차단한다. 활성 fixture 생성/수정·Hold reset·테스트 사용자/token 발급도 중단한다. 기존에 사용하지 않던 data-rest starter를 제거해 repository 자동 CRUD로 구매 경계를 우회하지 못하게 한다. 커스텀 Controller API와 JPA repository는 유지한다. 전역 Security·다른 관리자 기능을 안전하게 만든 것은 아니다.
+- API는 Redis namespace를 bootstrap하거나 tick하지 않는다. 첫 범위는 인증·구매 경계이며, 운영자 초기화와 bounded 승격 worker를 검증한 뒤 FE를 연결한다. Redis 유실은 503이며 초기 상태로 자동 복구하지 않는다.
 - API 설계 계약은 [학습 가이드 14절](../STUDY_GUIDE.md#14-공연-오픈-대기실의-설계-계약-228), 구현/검증과 미구현 경계는 [15절](../STUDY_GUIDE.md#15-redis-대기입장-원자-코어-230)에 둔다. #230의 로컬 Redis 추가·컨테이너 실행은 사용자 승인 후 수행했다.
 
 Redis의 Lua 실행은 다른 요청과 섞이지 않는 원자 실행을 제공하지만 실행 중 서버를 막으므로, 전체 대기열 순회가 아닌 bounded 작업으로 설계한다([공식 scripting 문서](https://redis.io/docs/latest/develop/programmability/eval-intro/)). script의 원자 실행은 MariaDB까지 포함하는 transaction·오류 시 전체 rollback·crash durability를 뜻하지 않는다. 입력·자료형을 변경 전에 검증하고 실패 후 부분 변경도 검사해야 한다.

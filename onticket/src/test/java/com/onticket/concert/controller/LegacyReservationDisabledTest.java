@@ -36,7 +36,8 @@ class LegacyReservationDisabledTest {
     @BeforeEach
     void setUp() {
         mvc = MockMvcBuilders.standaloneSetup(new ReservationController(
-                verified, holds, checkouts, cancellations, checkoutVerified, jwt
+                verified, holds, checkouts, cancellations, checkoutVerified, jwt,
+                mock(com.onticket.admission.AdmissionAccess.class)
         )).build();
         when(jwt.validateToken("valid")).thenReturn(true);
     }

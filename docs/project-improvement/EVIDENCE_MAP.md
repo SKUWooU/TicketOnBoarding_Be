@@ -6,7 +6,8 @@
 
 | 문제 / 개념 | 변경과 검증 | 대표 근거 |
 | --- | --- | --- |
-| 공유 대기 순서·기한부 입장권 | Redis 비노출 원자 코어, 독립 연결 두 개·동시 등록/배정·ID 조건부 이탈·bounded 만료/종료 상태·자료 유실 fail-closed 검증 | [#230](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/230), [구현·테스트·한계](STUDY_GUIDE.md#15-redis-대기입장-원자-코어-230). API gate·FE·다중 앱 운영·성능 미검증. |
+| 대기 입장권 없이 신규 구매·우회 요청 | 본인 JWT 기반 API·신규 Hold/Checkout gate, Redis 자료 유실 fail-closed, 기존 Checkout 재사용/검증/정리 유지 | [#232](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/232), [구현·검증 경계](STUDY_GUIDE.md#16-인증-대기-api와-신규-구매-gate-232). 자동 승격·FE·성능 미검증. |
+| 공유 대기 순서·기한부 입장권 | Redis 비노출 원자 코어, 독립 연결 두 개·동시 등록/배정·ID 조건부 이탈·bounded 만료/종료 상태·자료 유실 fail-closed 검증 | [#230](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/230), [구현·테스트·한계](STUDY_GUIDE.md#15-redis-대기입장-원자-코어-230). API 연결은 #232, FE·다중 앱 운영·성능 미검증. |
 | 공연 오픈 구매 접근의 순서·권한 요구 | 기존 경로 조사, 회차별 계약·Redis 후보·우회/기존 결제 연속성/복구 한계 설계. 혼합 실험은 보류로 마무리 | [#228](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/228), [ADR-0006](adr/0006-performance-opening-admission.md), [계약 초안](STUDY_GUIDE.md#14-공연-오픈-대기실의-설계-계약-228). 기능·성능 구현 성과 아님. |
 | 메모리 여유 확보 후 혼합 비교 재개 | idle Gradle daemon만 종료, 최신 fixture GET·SQL gate로 실행. 작은 요청 warm-up 50번·오류/재고 이상 0, host CPU gate 중단 | [#226](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/226), [재시도 조건·한계](EXPERIMENTS.md#자원-여유-확보-후-재시도-226). 큰 요청·측정 단계 0, 성능 개선 아님. |
 | 큰 다좌석 요청이 작은 요청에 미치는 영향 | 1석 유입량 고정, 20/200석 분리/중첩 Hold 도구. 두 배치 warm-up 자원 gate 중단, 측정 0단계·상한 보류 | [#224](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/224), [조건·중단·재개](EXPERIMENTS.md#9-큰작은-다좌석-hold-혼합-224). 성능 개선·안정 처리 구간 아님. |
