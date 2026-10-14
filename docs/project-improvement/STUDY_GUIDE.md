@@ -181,7 +181,7 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 
 ## 14. 공연 오픈 대기실의 설계 계약 (#228)
 
-**현재 구현과 구분:** 아래는 신규 기능의 초안이며 코드·Redis·FE 화면은 아직 구현하지 않았다. 선택 이유와 대안은 [ADR-0006](adr/0006-performance-opening-admission.md)에 둔다. 기존 로그인 cookie와 회차/공연 소속 검증을 재사용하되 현재 `SecurityConfig`는 `/**`를 ignore하므로 새 API가 자동으로 인증된다고 가정하지 않는다. 각 진입점에서 인증된 사용자 이름을 추출하고 본문의 username/순번을 신뢰하지 않는다.
+**현재 구현과 구분:** 아래는 신규 API/gate·FE의 설계 초안이다. #230의 비노출 Redis 코어 구현은 15절로 구분하며 HTTP 기능은 아직 구현하지 않았다. 선택 이유와 대안은 [ADR-0006](adr/0006-performance-opening-admission.md)에 둔다. 기존 로그인 cookie와 회차/공연 소속 검증을 재사용하되 현재 `SecurityConfig`는 `/**`를 ignore하므로 새 API가 자동으로 인증된다고 가정하지 않는다. 각 진입점에서 인증된 사용자 이름을 추출하고 본문의 username/순번을 신뢰하지 않는다.
 
 ### 요구와 최소 정책
 
@@ -242,3 +242,35 @@ Redis 검증과 MariaDB transaction은 하나의 원자 transaction이 아니다
 4. **제한된 통합 검증:** 앱 두 개의 공유 순서/권한·앱 재시작·Redis clean restart/자료 유실을 구분해 검증. 최초는 작은 fixture·Mock PG·명시적 기능 검증이며 새 k6 성능 증량은 요구하지 않는다.
 
 처음부터 운영 고가용성·Kafka·대형 AWS·SSE·무제한 큐를 붙이지 않는다. 위 단계가 실제로 통과하기 전에는 새 기능이나 트래픽 보호를 구현한 성과로 기록하지 않는다.
+
+## 15. Redis 대기·입장 원자 코어 (#230)
+
+### 구현한 경계
+
+[RedisAdmissionStore](../../onticket/src/main/java/com/onticket/admission/RedisAdmissionStore.java)는 명시적인 `AdmissionPolicy`와 Redis 연결을 받는다. 자동 Spring bean·bootstrap·worker·Controller는 없다. Redis starter는 추가했지만 [앱 진입점](../../onticket/src/main/java/com/onticket/OnticketApplication.java)에서 Redis 자동 연결/repository 설정을 제외해 기존 health가 Redis에 의존하지 않게 했다. API 단계에서 opt-in 연결을 별도로 구성해야 한다. 인증·공연/회차 소속·서버 정책 원본·generation 전환 권한은 아직 이 코어가 대신 검증하지 않는다.
+
+`bootstrap`은 운영자/테스트 준비용이며 일반 join이 호출하지 않는다. 최초 empty generation을 준비하고 기존 정책 fingerprint·상태 개수가 일치할 때만 재사용한다. marker 유실·부분 상태 유실·다른 정책·자료형/인덱스 모순은 `AdmissionUnavailableException`으로 닫는다. Redis 전체 자료 유실은 첫 empty generation과 자체적으로 구별할 수 없으므로, bootstrap은 신뢰된 제어 단계에서 **새 generation으로만** 재개해야 한다. 지금 public HTTP bootstrap이나 자동 fallback은 없다.
+
+### 순서·입장·시간
+
+[Lua 코어](../../onticket/src/main/resources/admission/admission.lua)는 회차/generation hash tag 아래 metadata·사용자 상태 hash·waiting sequence·waiting expiry·active expiry·terminal expiry의 6개 key를 관리한다. 사용자 member는 username의 SHA-256이며 인증을 대신하지 않는다. join마다 queueEntryId·admissionId·비밀 token 후보를 서버에서 생성하되, 기존 유효 상태를 재사용하면 ID·순서·만료를 바꾸지 않는다. WAITING/EXPIRED/LEFT snapshot에는 구매 token을 노출하지 않는다.
+
+등록 sequence는 `HINCRBY`로 부여하고 score의 정확한 정수 범위를 검사한다. JSON에는 sequence를 문자열로 저장해 cjson 숫자 직렬화의 반올림을 피한다. tick은 오픈 시각 전 배정하지 않고, 수락된 순서의 앞에서 설정 batch만 검사해 유효 active 한도 안에서 배정한다. expired head가 batch를 채우면 그 tick은 배정 0건일 수 있으며 다음 tick이 진행한다. 뒤 사용자를 앞서 배정해 이 제한을 우회하지 않는다.
+
+운영 생성자는 Lua의 Redis `TIME`을 쓰고, package-local 테스트 생성자만 제어 시간 seam을 제공한다. 정책 시각·TTL은 millisecond 정밀도, TTL 1ms~24h, active 1~1,000·waiting 1~10,000·batch 1~1,000 범위를 검증한다. 이 범위는 입력/작업 제한이며 권장 처리 용량이 아니다. 만료 정각부터 권한이 무효이며 GET/VERIFY는 기한이나 Redis 상태를 갱신하지 않는다. 만료 상태는 조회 시 EXPIRED로 투영하고 실제 정리는 bounded mutation에서 수행한다.
+
+### 이탈·메모리·실패
+
+leave는 username의 현재 queueEntryId와 요청 ID가 같을 때만 유효 상태를 LEFT로 전이한다. 오래된 이탈은 새 등록·입장을 지우지 않는다. 종료 상태 보존은 waiting TTL+admission TTL 이내의 정리 기한과 `maxWaiting+maxActive` cardinality 한도를 함께 둔다. 오래된 terminal은 eviction/정리 후 조회에서 사라질 수 있다. generation metadata는 남고 generation 자체 삭제/관리는 별도 제어 작업이다.
+
+script는 관련 key type·marker·상태 개수/인덱스와 해당 batch의 JSON을 첫 mutation 전에 검증한다. 전체 key loss에서 marker만 남은 경우도 저장한 stateCount로 감지한다. 의미 오류로 인한 테스트는 변경 전 상태를 유지하지만, OOM·Redis crash 등에 대한 rollback을 보장하지 않는다. 오류 후 인덱스/개수 모순은 후속 접근을 닫으며 운영 복구는 별도다. API의 429/503 변환·metrics·자동 tick·기존 결제 연속성 gate는 다음 단계다.
+
+### 검증과 로컬 실행
+
+[RedisAdmissionStoreTest](../../onticket/src/test/java/com/onticket/admission/RedisAdmissionStoreTest.java)는 별도의 Redis 7.4.7-alpine Testcontainers(128MiB 제한)에서 작은 정책으로 검증한다. 8개의 동시 join, 독립 Lettuce 연결 두 개의 동시 tick, FIFO/한도·오픈 전·중복 재조회·정각·expired head·재등록 후 오래된 이탈·자료 유실·잘못된 자료형/JSON·terminal 한도·sequence 정밀도·서버 시간·null 결과 fail-closed를 확인한다. [활성화 경계 테스트](../../onticket/src/test/java/com/onticket/admission/AdmissionActivationBoundaryTest.java)는 자동 연결 제외와 비등록 코어를 확인하며 실제 서버 health E2E를 대신하지 않는다. CI가 기존 Backend 회귀를 추가 수행한다.
+
+실행은 `onticket`에서 `gradlew.bat test --tests "com.onticket.admission.*" --no-daemon --max-workers=1`이며 실제 PG/KOPIS·MariaDB 재고를 호출하지 않는다. 별도 로컬 Redis는 저장소 루트에서 `docker compose -f compose.admission.yml --profile admission up -d admission-redis`, PING 확인은 같은 옵션의 `exec -T admission-redis redis-cli ping`, 종료는 `stop admission-redis`다. 기본 loopback 16379·128MiB container/64MiB Redis noeviction·AOF 설정으로 opt-in이다. 이 구성의 실제 기동/PONG/종료는 확인했지만 AOF crash durability·failover는 검증하지 않았다. volume은 보존했다.
+
+첫 Redis 코어 테스트에서 queue-full 오류가 일반 unavailable로 변환되는 실패를 발견해 Redis exception의 가장 구체적인 원인 code로 분류하도록 수정했다. 이것은 신규 코어의 개발 회귀 수정이지 기존 예매 성능 개선이 아니다. 코어의 단위/통합 검증과 실제 사용자 입장 제어 완성·다중 앱 운영·대규모 성능 증명은 구분한다.
+
+Reviewer 후속 지적으로 `AdmissionSnapshot.toString()`은 token·queueEntryId·admissionId를 제외하도록 보강하고 비노출 테스트를 추가했다. 이는 객체의 문자열 표현만 보호하며, 향후 HTTP DTO의 JSON 응답이나 요청 로그까지 자동으로 보호하는 것은 아니다. 실제 HTTP 연동에서 본인에게만 구매 token을 반환하고 로그 redaction을 별도로 검증해야 한다.

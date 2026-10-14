@@ -2,11 +2,11 @@
 
 ## 상태
 
-신규 도메인 확장 방향 승인 / API·Redis 설계 초안, 구현·인프라 실행 전.
+신규 도메인 확장 방향·로컬 Redis 추가/실행 승인. #230에서 비노출 원자 코어 구현·검증, API/gate/FE/자동 worker는 구현 전.
 
 ## 맥락과 재현 근거
 
-사용자는 공연 예매라는 기존 서비스에 오픈 시점 대기·순차 구매 입장을 추가하기로 했다. 현재 FE는 `/concertReservation/:concertID`에서 회차를 고르고 Hold를 요청한다. BE의 `SeatHoldService`는 좌석 재고를 보호하지만 구매 단계 접근 순서나 입장 권한은 관리하지 않는다. BE에 Redis 의존성·구성은 아직 없다.
+사용자는 공연 예매라는 기존 서비스에 오픈 시점 대기·순차 구매 입장을 추가하기로 했다. 현재 FE는 `/concertReservation/:concertID`에서 회차를 고르고 Hold를 요청한다. BE의 `SeatHoldService`는 좌석 재고를 보호하지만 구매 단계 접근 순서나 입장 권한은 관리하지 않는다. #228 조사 시 Redis 의존성은 없었으며 #230에서 추가했다. 원자 코어는 명시적으로 구성하는 객체이고 아직 기존 API에 연결하지 않았다.
 
 #224·#226의 혼합 부하 비교는 warm-up 자원 gate에서 끝났으며 성능 개선·처리 한계 근거가 아니다. 이번 선택은 그 병목을 해결한다는 주장이 아니라 **새로운 입장 제어 요구**에 따른 확장이다. ADR-0004의 재검토 조건 중 명시적 입장 제어 요구가 생긴 것으로 해석한다. Kafka·outbox·운영 LB와 측정 peak만으로 인프라를 추가하지 않는 결정은 유지한다.
 
@@ -14,9 +14,9 @@
 
 - 첫 범위는 로그인 사용자와 공연 회차 단위의 대기 순서·기한부 입장권이다. 입장권은 좌석이나 결제 성공을 보장하지 않는다.
 - 기본 동작은 유지하고, 명시적으로 지정한 로컬 fixture 회차에만 입장 제어를 적용한다. 적용 대상 정책은 Redis 자료 유무와 독립된 서버 소유 구성으로 판정한다. Redis 오류/자료 유실을 비활성 회차로 해석해 우회하지 않는다.
-- 상태 공유·순서·원자적 입장 배정의 구현 후보는 단일 Redis와 Sorted Set·짧은 Lua script다. 좌석·Hold·Checkout·결제의 원본은 MariaDB로 유지하며 Redis를 좌석 재고의 분산 락으로 쓰지 않는다.
+- #230의 상태 공유·순서·원자적 입장 배정은 단일 Redis와 Sorted Set·bounded Lua script로 구현한다. 좌석·Hold·Checkout·결제의 원본은 MariaDB로 유지하며 Redis를 좌석 재고의 분산 락으로 쓰지 않는다.
 - 첫 FE는 기존 예약 화면의 회차 선택 뒤 대기 패널을 보여준다. polling부터 시작하며 별도 디자인 전면 수정·SSE·WebSocket은 제외한다.
-- 구현 계약과 검증 항목은 [학습 가이드 14절](../STUDY_GUIDE.md#14-공연-오픈-대기실의-설계-계약-228)에 통합한다. 실제 Redis 추가·컨테이너 실행은 별도 구현 Issue에서 사용자에게 알리고 승인 경계를 확인한 후 수행한다.
+- API 설계 계약은 [학습 가이드 14절](../STUDY_GUIDE.md#14-공연-오픈-대기실의-설계-계약-228), 구현/검증과 미구현 경계는 [15절](../STUDY_GUIDE.md#15-redis-대기입장-원자-코어-230)에 둔다. #230의 로컬 Redis 추가·컨테이너 실행은 사용자 승인 후 수행했다.
 
 Redis의 Lua 실행은 다른 요청과 섞이지 않는 원자 실행을 제공하지만 실행 중 서버를 막으므로, 전체 대기열 순회가 아닌 bounded 작업으로 설계한다([공식 scripting 문서](https://redis.io/docs/latest/develop/programmability/eval-intro/)). script의 원자 실행은 MariaDB까지 포함하는 transaction·오류 시 전체 rollback·crash durability를 뜻하지 않는다. 입력·자료형을 변경 전에 검증하고 실패 후 부분 변경도 검사해야 한다.
 
@@ -46,4 +46,5 @@ Redis 장애는 신규 대기/입장 확인/입장권이 필요한 신규 구매
 ## 관련 Issue·PR·측정
 
 - [#228](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/228)
+- [#230](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/230)
 - [ADR-0004](0004-defer-hold-admission-infrastructure.md), [실험 9절](../EXPERIMENTS.md#9-큰작은-다좌석-hold-혼합-224)
