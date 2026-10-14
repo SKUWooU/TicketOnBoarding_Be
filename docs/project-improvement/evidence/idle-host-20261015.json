@@ -1,0 +1,18 @@
+{
+  "clientDate": "2026-10-15",
+  "scope": "Windows host observation without TicketOnBoarding Backend, running Docker containers, or k6 workload",
+  "collector": "Win32_PerfFormattedData_PerfOS_Processor _Total and Win32_OperatingSystem via CIM",
+  "requestedPauseSeconds": 2,
+  "actualIntervalsRecorded": false,
+  "observerOverheadExcluded": false,
+  "samples": [
+    {"sample": 0, "hostCpuPercent": 45, "availableGiB": 0.727},
+    {"sample": 1, "hostCpuPercent": 43, "availableGiB": 0.738},
+    {"sample": 2, "hostCpuPercent": 92, "availableGiB": 0.779},
+    {"sample": 3, "hostCpuPercent": 38, "availableGiB": 0.760},
+    {"sample": 4, "hostCpuPercent": 33, "availableGiB": 0.757},
+    {"sample": 5, "hostCpuPercent": 38, "availableGiB": 0.788}
+  ],
+  "decision": "Do not start Backend or load test while available memory is below 2GiB",
+  "limitations": "Short host-only observation; not directly comparable with earlier Prometheus peaks, not attribution of prior CPU peaks to any specific process, not a service capacity measurement"
+}
