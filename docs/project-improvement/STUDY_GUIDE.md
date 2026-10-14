@@ -274,3 +274,33 @@ script는 관련 key type·marker·상태 개수/인덱스와 해당 batch의 JS
 첫 Redis 코어 테스트에서 queue-full 오류가 일반 unavailable로 변환되는 실패를 발견해 Redis exception의 가장 구체적인 원인 code로 분류하도록 수정했다. 이것은 신규 코어의 개발 회귀 수정이지 기존 예매 성능 개선이 아니다. 코어의 단위/통합 검증과 실제 사용자 입장 제어 완성·다중 앱 운영·대규모 성능 증명은 구분한다.
 
 Reviewer 후속 지적으로 `AdmissionSnapshot.toString()`은 token·queueEntryId·admissionId를 제외하도록 보강하고 비노출 테스트를 추가했다. 이는 객체의 문자열 표현만 보호하며, 향후 HTTP DTO의 JSON 응답이나 요청 로그까지 자동으로 보호하는 것은 아니다. 실제 HTTP 연동에서 본인에게만 구매 token을 반환하고 로그 redaction을 별도로 검증해야 한다.
+
+## 16. 인증 대기 API와 신규 구매 gate (#232)
+
+### 요청부터 구매까지
+
+이 단계는 15절 코어를 인증/구매 경계에 연결한다. 기본 `onticket.admission.enabled=false`이며 Redis bean/접속이 생기지 않는다. 활성화에는 `local,loadtest` 두 프로필과 `concert-id=LOAD-TEST-{runId}`, `concert-time-id`, `generation`, `opens-at` 명시 설정이 필요하다. 잘못된 프로필/정책은 startup 실패로 처리한다. active/waiting/batch 기본값은 2/20/2, 대기 TTL 5분·입장 TTL 1분·loopback Redis port 16379다. 작은 검증용 기본값이지 처리 용량이 아니다.
+
+| 경로 | 입력/응답 | 경계 |
+| --- | --- | --- |
+| `GET /main/detail/{concertId}/times/{concertTimeId}/admission-policy` | enabled, 활성인 경우 generation/opensAt/pollIntervalMillis | 실제 공연-회차 소속 DB 조회, 비활성 회차는 Redis 미사용 |
+| 같은 prefix의 `POST /admission` | accessToken cookie → generation + admission + serverNow | JWT username만 사용, 중복 등록은 기존 항목 재사용 |
+| `GET /admission` | 본인 상태, 대기 순번/만료시각, ADMITTED만 token/admissionId | 없으면 404, GET은 입장 배정/TTL 갱신하지 않음 |
+| `DELETE /admission?generation=...&queueEntryId=...` | 204 | 본인·현재 ID 일치만 이탈, 오래된 generation/ID는 새 항목을 지우지 않음 |
+| 기존 `POST /seat-holds`, 신규 `POST /checkouts` | `X-Admission-Token` header | 활성 회차만 본인/현재 generation/입장 ID/token/만료 검증 후 구매 진행 |
+
+API의 `serverNow`는 Redis Lua의 같은 조회에서 얻은 TIME이다. application clock으로 대기 기한을 연장하지 않는다. 모든 대기 응답은 `Cache-Control: no-store`, 429에는 `Retry-After: 5`, 상태 유실/정책 불일치/Redis 오류에는 안전한 code의 503을 사용한다. WAITING·EXPIRED·LEFT에는 구매 token을 반환하지 않는다. 문자열 표현도 token·식별자를 제외한다. 기존 FE와의 연결은 Vite `/api` same-origin proxy를 전제로 하며 직접 cross-origin CORS 정책 추가는 이번 범위가 아니다.
+
+### 기존 결제를 막지 않는 이유
+
+[AdmissionAccess](../../onticket/src/main/java/com/onticket/admission/AdmissionAccess.java)는 신규 구매의 입장 여부만 확인한다. [CheckoutService](../../onticket/src/main/java/com/onticket/concert/service/CheckoutService.java)의 gate callback은 기존 멱등 결과 조회 다음, 신규 생성 transaction 앞에 실행한다. 이미 존재하는 같은 Checkout 결과를 다시 읽는 데 Redis lease를 요구하지 않는다. Checkout 기반 PG 검증·취소·Hold DELETE에도 새로운 gate를 적용하지 않아 입장 만료/Redis 장애가 정리나 결제 후속 처리를 막지 않는다. 이 경로의 기존 소유권·fingerprint·상태 검증은 그대로 유지한다.
+
+활성 회차의 Checkout 없는 `verified-reservation`은 PG 조회 전에 403 `CHECKOUT_REQUIRED`로 차단한다. 인증 후 410을 반환하던 legacy `reservation`은 그대로다. 활성 fixture의 `/loadtest/runs`, `/seat-holds/reset`, `/tokens`는 403으로 동결한다. 따라서 fixture와 테스트 사용자/token은 활성화 전 별도 준비해야 한다. 다른 fixture의 기존 테스트 API는 유지한다. JPA repository를 자동 HTTP CRUD로 노출하던 미사용 data-rest starter는 제거하며 custom Controller/JPA는 유지한다.
+
+### 검증과 남은 단계
+
+[AdmissionApiGateTest](../../onticket/src/test/java/com/onticket/admission/AdmissionApiGateTest.java)는 실제 disposable Redis 7.4.7-alpine Testcontainers(128MiB) + MockMvc에서 JWT 주체·다른 사용자·회차 경계·대기 포화·TTL 미연장·오래된 이탈·입장 만료·marker 유실·신규 gate·우회 차단·기존 결제/정리 연속성을 확인한다. 구매 서비스는 mock이므로 실제 MariaDB 쓰기/PG I/O까지의 E2E 성과는 아니다. [CheckoutAdmissionBoundaryTest](../../onticket/src/test/java/com/onticket/concert/service/CheckoutAdmissionBoundaryTest.java)는 실제 CheckoutService와 mock repository/transaction을 사용해 신규 gate 순서와 기존 결과 재사용을 검증한다. [설정 테스트](../../onticket/src/test/java/com/onticket/admission/AdmissionConfigurationTest.java)는 기본 비연결·잘못된 설정 fail-fast·자동 repository REST exporter 부재를 확인한다. 기존 Redis 코어/Controller 회귀도 함께 실행한다.
+
+이번 API에는 bootstrap/tick 호출 경로가 없다. 테스트만 trusted fixture에서 직접 bootstrap/tick한다. 따라서 아직 자동 입장 승격이나 FE 대기 화면을 완성한 것이 아니며, 운영자 초기화·bounded worker 검증이 다음 단계다. Redis 완전 유실 후 같은 generation 자동 재초기화는 금지한다. 입장 token 검증과 MariaDB transaction은 서로 다른 저장소이며 검증 직후 만료/이탈된 in-flight 요청을 취소하지 않는다. maxActive는 유효 입장권 한도이지 DB 동시 transaction 절대 상한·좌석 보장·TPS 성과가 아니다. 전역 Security 및 다른 관리자 경로의 기존 문제까지 해결한 것은 아니다.
+
+로컬 대상 테스트는 76개 통과했다(API/gate 13·설정 5·Checkout 경계 3·Redis 코어 19·활성화/문자열 2·기존 Controller 회귀 34). 실행은 `gradlew.bat test --tests "*Admission*Test" --tests "*RedisAdmissionStoreTest" --tests "*ReservationControllerTest" --tests "*LegacyReservationDisabledTest" --tests "*LoadTestControllerTest" --no-daemon --max-workers=1`. full Backend CI와 독립 검토 결과는 Issue #232의 연결 PR에서 확인한다.

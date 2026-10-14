@@ -73,6 +73,7 @@ local function view(member)
   if (state.state == 'WAITING' or state.state == 'ADMITTED') and state.expiry <= now then state.state = 'EXPIRED' end
   local rank = state.state == 'WAITING' and redis.call('ZRANK', KEYS[3], member) or false
   state.position = rank and rank + 1 or 0
+  state.serverNow = now
   return cjson.encode(state)
 end
 local current = user ~= '' and load(user) or nil

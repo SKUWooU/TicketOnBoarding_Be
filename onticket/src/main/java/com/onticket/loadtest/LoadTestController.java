@@ -1,6 +1,7 @@
 package com.onticket.loadtest;
 
 import com.onticket.user.jwt.JwtUtil;
+import com.onticket.admission.AdmissionAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ public class LoadTestController {
 
     private final LoadTestFixtureService fixtureService;
     private final JwtUtil jwtUtil;
+    private final AdmissionAccess admissionAccess;
 
     @ExceptionHandler(InvalidLoadTestRunIdException.class)
     public ResponseEntity<LoadTestErrorResponse> handleInvalidRunId(InvalidLoadTestRunIdException exception) {
@@ -32,6 +34,7 @@ public class LoadTestController {
 
     @PostMapping("/runs")
     public LoadTestFixtureService.FixtureMetadata initialize(@RequestParam String runId) {
+        admissionAccess.rejectFixtureMutation(runId);
         return fixtureService.initialize(runId);
     }
 
@@ -52,6 +55,7 @@ public class LoadTestController {
 
     @PostMapping("/seat-holds/reset")
     public LoadTestFixtureService.SeatHoldSnapshot resetSeatHolds(@RequestParam String runId) {
+        admissionAccess.rejectFixtureMutation(runId);
         return fixtureService.resetSeatHolds(runId);
     }
 
@@ -65,6 +69,7 @@ public class LoadTestController {
             @RequestParam String runId,
             @RequestParam(defaultValue = "100") int count
     ) {
+        admissionAccess.rejectFixtureMutation(runId);
         if (count <= 0 || count > MAX_TOKEN_COUNT) {
             throw new IllegalArgumentException("loadtest token count는 1~500 범위여야 합니다.");
         }

@@ -49,12 +49,20 @@ public final class RedisAdmissionStore {
     public void bootstrap() { execute("INIT", "", "", "", ""); }
 
     public AdmissionSnapshot join(String username) {
-        return snapshot(execute("JOIN", member(username), UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(), UUID.randomUUID().toString())).orElseThrow(AdmissionUnavailableException::new);
+        return joinObserved(username).admission();
     }
 
     public Optional<AdmissionSnapshot> get(String username) {
-        return snapshot(execute("READ", member(username), "", "", ""));
+        return getObserved(username).map(AdmissionObservation::admission);
+    }
+
+    public AdmissionObservation joinObserved(String username) {
+        return observation(execute("JOIN", member(username), UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(), UUID.randomUUID().toString())).orElseThrow(AdmissionUnavailableException::new);
+    }
+
+    public Optional<AdmissionObservation> getObserved(String username) {
+        return observation(execute("READ", member(username), "", "", ""));
     }
 
     public void leave(String username, String expectedQueueEntryId) {
@@ -98,6 +106,16 @@ public final class RedisAdmissionStore {
                     Instant.ofEpochMilli(node.get("expiry").asLong()), node.get("seq").asLong(),
                     node.get("position").asLong(), state == AdmissionSnapshot.State.ADMITTED ? node.get("admissionId").asText() : null,
                     state == AdmissionSnapshot.State.ADMITTED ? node.get("token").asText() : null));
+        } catch (Exception invalid) { throw new AdmissionUnavailableException(); }
+    }
+
+    private Optional<AdmissionObservation> observation(String json) {
+        var snapshot = snapshot(json);
+        if (snapshot.isEmpty()) return Optional.empty();
+        try {
+            JsonNode now = mapper.readTree(json).get("serverNow");
+            if (now == null || !now.isIntegralNumber() || now.asLong() < 0) throw new AdmissionUnavailableException();
+            return Optional.of(new AdmissionObservation(snapshot.get(), Instant.ofEpochMilli(now.asLong())));
         } catch (Exception invalid) { throw new AdmissionUnavailableException(); }
     }
 

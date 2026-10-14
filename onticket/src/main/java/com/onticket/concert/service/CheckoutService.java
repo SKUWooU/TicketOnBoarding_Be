@@ -38,6 +38,12 @@ public class CheckoutService {
             CheckoutRequest request,
             String idempotencyKey
     ) {
+        return prepare(username, concertId, request, idempotencyKey, () -> { });
+    }
+
+    /** Gate only new purchases, outside the creation transaction; existing results remain reusable. */
+    public CheckoutResponse prepare(String username, String concertId, CheckoutRequest request,
+                                    String idempotencyKey, Runnable beforeCreate) {
         validateUsername(username);
         validateIdempotencyKey(idempotencyKey);
 
@@ -67,6 +73,7 @@ public class CheckoutService {
             return resultForMatchingRequest(existing.get(), requestFingerprint);
         }
 
+        java.util.Objects.requireNonNull(beforeCreate).run();
         try {
             Checkout created = transactionService.create(
                     newMerchantUid(),

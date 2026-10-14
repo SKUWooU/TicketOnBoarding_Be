@@ -102,7 +102,8 @@ class ReservationControllerTest {
                         checkoutService,
                         checkoutCancellationService,
                         checkoutVerifiedReservationService,
-                        jwtUtil
+                        jwtUtil,
+                        mock(com.onticket.admission.AdmissionAccess.class)
                 )
         )
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(
@@ -492,7 +493,8 @@ class ReservationControllerTest {
                         checkoutService,
                         checkoutCancellationService,
                         realValidationService,
-                        jwtUtil
+                        jwtUtil,
+                        mock(com.onticket.admission.AdmissionAccess.class)
                 )
         ).build();
 
