@@ -1,0 +1,381 @@
+﻿{
+    "SchemaVersion":  1,
+    "Complete":  false,
+    "Failure":  "Host CPU peak \u003e=90%; stop bounded batch for resource review, not a DB bottleneck conclusion.",
+    "SmallIterationsPerSecond":  10,
+    "LargeIterationsPerSecond":  2,
+    "SmallSeatCount":  1,
+    "SmallSeatPool":  40,
+    "DwellMilliseconds":  50,
+    "LargeSizes":  [
+                       20
+                   ],
+    "MeasuredSeconds":  10,
+    "Repeats":  3,
+    "WarmupExcluded":  true,
+    "Records":  [
+                    {
+                        "RunId":  "mixed224b-s-w",
+                        "Warmup":  true,
+                        "Summary":  {
+                                        "SchemaVersion":  1,
+                                        "ValidMeasurement":  true,
+                                        "RunId":  "mixed224b-s-w",
+                                        "K6":  {
+                                                   "mode":  "small-only",
+                                                   "largeSeats":  20,
+                                                   "smallIterationsPerSecond":  10,
+                                                   "largeIterationsPerSecond":  0,
+                                                   "duration":  "5s",
+                                                   "dwellMs":  50,
+                                                   "classes":  {
+                                                                   "small":  {
+                                                                                 "attempts":  51,
+                                                                                 "success":  51,
+                                                                                 "conflicts":  0,
+                                                                                 "failures":  0,
+                                                                                 "released":  51,
+                                                                                 "holdMs":  {
+                                                                                                "med":  35.1716,
+                                                                                                "p(95)":  47.9314,
+                                                                                                "max":  136.2448,
+                                                                                                "avg":  37.848939215686265
+                                                                                            },
+                                                                                 "successMs":  {
+                                                                                                   "avg":  37.848939215686265,
+                                                                                                   "med":  35.1716,
+                                                                                                   "p(95)":  47.9314,
+                                                                                                   "max":  136.2448
+                                                                                               },
+                                                                                 "conflictMs":  {
+                                                                                                    "max":  0,
+                                                                                                    "avg":  0,
+                                                                                                    "med":  0,
+                                                                                                    "p(95)":  0
+                                                                                                }
+                                                                             },
+                                                                   "large":  {
+                                                                                 "attempts":  0,
+                                                                                 "success":  0,
+                                                                                 "conflicts":  0,
+                                                                                 "failures":  0,
+                                                                                 "released":  0,
+                                                                                 "holdMs":  {
+                                                                                                "med":  0,
+                                                                                                "p(95)":  0,
+                                                                                                "max":  0,
+                                                                                                "avg":  0
+                                                                                            },
+                                                                                 "successMs":  {
+                                                                                                   "max":  0,
+                                                                                                   "avg":  0,
+                                                                                                   "med":  0,
+                                                                                                   "p(95)":  0
+                                                                                               },
+                                                                                 "conflictMs":  {
+                                                                                                    "avg":  0,
+                                                                                                    "med":  0,
+                                                                                                    "p(95)":  0,
+                                                                                                    "max":  0
+                                                                                                }
+                                                                             }
+                                                               },
+                                                   "droppedIterations":  0,
+                                                   "httpRequests":  105
+                                               },
+                                        "Snapshot":  {
+                                                         "expectedTotalSeats":  2000,
+                                                         "actualSeatCount":  2000,
+                                                         "remainingSeats":  2000,
+                                                         "reservedSeats":  0,
+                                                         "activeHeldSeats":  0,
+                                                         "holdRows":  0,
+                                                         "partialHoldStates":  0,
+                                                         "reservations":  0,
+                                                         "bookings":  0,
+                                                         "payments":  0,
+                                                         "invariantSatisfied":  true
+                                                     },
+                                        "Metrics":  {
+                                                        "SampleCount":  4,
+                                                        "Sampling":  {
+                                                                         "MinimumIntervalMs":  2679,
+                                                                         "AverageIntervalMs":  2787,
+                                                                         "MaximumIntervalMs":  2906
+                                                                     },
+                                                        "Peaks":  {
+                                                                      "HikariActive":  1,
+                                                                      "HikariPending":  0,
+                                                                      "HikariIdle":  24,
+                                                                      "HikariMax":  24,
+                                                                      "ProcessCpuUsage":  0.14043309831592768,
+                                                                      "SystemCpuUsage":  0.74354821270767668,
+                                                                      "HeapUsedBytes":  206349000,
+                                                                      "JvmThreadsLive":  39,
+                                                                      "DbRowLockCurrentWaits":  0,
+                                                                      "DbThreadsConnected":  25,
+                                                                      "DbThreadsRunning":  1
+                                                                  },
+                                                        "Deltas":  {
+                                                                       "DbRowLockWaits":  0,
+                                                                       "DbRowLockTimeMs":  0,
+                                                                       "DbDeadlocks":  0,
+                                                                       "JvmGcPauseSeconds":  0.013999999999999985,
+                                                                       "JvmGcPauseCount":  1
+                                                                   },
+                                                        "MariaDbContainer":  null,
+                                                        "ObserverEffects":  {
+                                                                                "DbCliConnectionIncludedInThreadGauges":  true,
+                                                                                "ConnectionsCounterExcluded":  true,
+                                                                                "ComposeHealthcheckMayOpenConnections":  true,
+                                                                                "DockerStatsCollected":  false
+                                                                            }
+                                                    },
+                                        "RequestedSamplingPauseMilliseconds":  1000,
+                                        "DbCountersScope":  "Whole run including setup/teardown; not query-specific wait attribution"
+                                    }
+                    },
+                    {
+                        "RunId":  "mixed224b-d20-w",
+                        "Warmup":  true,
+                        "Summary":  {
+                                        "SchemaVersion":  1,
+                                        "ValidMeasurement":  true,
+                                        "RunId":  "mixed224b-d20-w",
+                                        "K6":  {
+                                                   "mode":  "separate",
+                                                   "largeSeats":  20,
+                                                   "smallIterationsPerSecond":  10,
+                                                   "largeIterationsPerSecond":  2,
+                                                   "duration":  "5s",
+                                                   "dwellMs":  50,
+                                                   "classes":  {
+                                                                   "small":  {
+                                                                                 "attempts":  51,
+                                                                                 "success":  51,
+                                                                                 "conflicts":  0,
+                                                                                 "failures":  0,
+                                                                                 "released":  51,
+                                                                                 "holdMs":  {
+                                                                                                "max":  43.3414,
+                                                                                                "avg":  35.6504137254902,
+                                                                                                "med":  35.2258,
+                                                                                                "p(95)":  41.64945
+                                                                                            },
+                                                                                 "successMs":  {
+                                                                                                   "avg":  35.6504137254902,
+                                                                                                   "med":  35.2258,
+                                                                                                   "p(95)":  41.64945,
+                                                                                                   "max":  43.3414
+                                                                                               },
+                                                                                 "conflictMs":  {
+                                                                                                    "avg":  0,
+                                                                                                    "med":  0,
+                                                                                                    "p(95)":  0,
+                                                                                                    "max":  0
+                                                                                                }
+                                                                             },
+                                                                   "large":  {
+                                                                                 "attempts":  10,
+                                                                                 "success":  10,
+                                                                                 "conflicts":  0,
+                                                                                 "failures":  0,
+                                                                                 "released":  10,
+                                                                                 "holdMs":  {
+                                                                                                "avg":  120.215,
+                                                                                                "med":  121.6493,
+                                                                                                "p(95)":  126.003655,
+                                                                                                "max":  126.955
+                                                                                            },
+                                                                                 "successMs":  {
+                                                                                                   "max":  126.955,
+                                                                                                   "avg":  120.215,
+                                                                                                   "med":  121.6493,
+                                                                                                   "p(95)":  126.003655
+                                                                                               },
+                                                                                 "conflictMs":  {
+                                                                                                    "p(95)":  0,
+                                                                                                    "max":  0,
+                                                                                                    "avg":  0,
+                                                                                                    "med":  0
+                                                                                                }
+                                                                             }
+                                                               },
+                                                   "droppedIterations":  0,
+                                                   "httpRequests":  125
+                                               },
+                                        "Snapshot":  {
+                                                         "expectedTotalSeats":  2000,
+                                                         "actualSeatCount":  2000,
+                                                         "remainingSeats":  2000,
+                                                         "reservedSeats":  0,
+                                                         "activeHeldSeats":  0,
+                                                         "holdRows":  0,
+                                                         "partialHoldStates":  0,
+                                                         "reservations":  0,
+                                                         "bookings":  0,
+                                                         "payments":  0,
+                                                         "invariantSatisfied":  true
+                                                     },
+                                        "Metrics":  {
+                                                        "SampleCount":  4,
+                                                        "Sampling":  {
+                                                                         "MinimumIntervalMs":  2667,
+                                                                         "AverageIntervalMs":  2702.3333333333335,
+                                                                         "MaximumIntervalMs":  2725
+                                                                     },
+                                                        "Peaks":  {
+                                                                      "HikariActive":  3,
+                                                                      "HikariPending":  0,
+                                                                      "HikariIdle":  24,
+                                                                      "HikariMax":  24,
+                                                                      "ProcessCpuUsage":  0.14923310919506397,
+                                                                      "SystemCpuUsage":  0.76153707502430956,
+                                                                      "HeapUsedBytes":  184591256,
+                                                                      "JvmThreadsLive":  39,
+                                                                      "DbRowLockCurrentWaits":  0,
+                                                                      "DbThreadsConnected":  25,
+                                                                      "DbThreadsRunning":  2
+                                                                  },
+                                                        "Deltas":  {
+                                                                       "DbRowLockWaits":  0,
+                                                                       "DbRowLockTimeMs":  0,
+                                                                       "DbDeadlocks":  0,
+                                                                       "JvmGcPauseSeconds":  0.014000000000000012,
+                                                                       "JvmGcPauseCount":  1
+                                                                   },
+                                                        "MariaDbContainer":  null,
+                                                        "ObserverEffects":  {
+                                                                                "DbCliConnectionIncludedInThreadGauges":  true,
+                                                                                "ConnectionsCounterExcluded":  true,
+                                                                                "ComposeHealthcheckMayOpenConnections":  true,
+                                                                                "DockerStatsCollected":  false
+                                                                            }
+                                                    },
+                                        "RequestedSamplingPauseMilliseconds":  1000,
+                                        "DbCountersScope":  "Whole run including setup/teardown; not query-specific wait attribution"
+                                    }
+                    },
+                    {
+                        "RunId":  "mixed224b-o20-w",
+                        "Warmup":  true,
+                        "Summary":  {
+                                        "SchemaVersion":  1,
+                                        "ValidMeasurement":  true,
+                                        "RunId":  "mixed224b-o20-w",
+                                        "K6":  {
+                                                   "mode":  "overlap",
+                                                   "largeSeats":  20,
+                                                   "smallIterationsPerSecond":  10,
+                                                   "largeIterationsPerSecond":  2,
+                                                   "duration":  "5s",
+                                                   "dwellMs":  50,
+                                                   "classes":  {
+                                                                   "small":  {
+                                                                                 "attempts":  51,
+                                                                                 "success":  51,
+                                                                                 "conflicts":  0,
+                                                                                 "failures":  0,
+                                                                                 "released":  51,
+                                                                                 "holdMs":  {
+                                                                                                "p(95)":  81.57804999999999,
+                                                                                                "max":  105.5621,
+                                                                                                "avg":  49.23987647058825,
+                                                                                                "med":  44.114
+                                                                                            },
+                                                                                 "successMs":  {
+                                                                                                   "p(95)":  81.57804999999999,
+                                                                                                   "max":  105.5621,
+                                                                                                   "avg":  49.23987647058825,
+                                                                                                   "med":  44.114
+                                                                                               },
+                                                                                 "conflictMs":  {
+                                                                                                    "avg":  0,
+                                                                                                    "med":  0,
+                                                                                                    "p(95)":  0,
+                                                                                                    "max":  0
+                                                                                                }
+                                                                             },
+                                                                   "large":  {
+                                                                                 "attempts":  11,
+                                                                                 "success":  4,
+                                                                                 "conflicts":  7,
+                                                                                 "failures":  0,
+                                                                                 "released":  4,
+                                                                                 "holdMs":  {
+                                                                                                "avg":  160.41168181818182,
+                                                                                                "med":  154.8936,
+                                                                                                "p(95)":  220.01100000000002,
+                                                                                                "max":  249.1862
+                                                                                            },
+                                                                                 "successMs":  {
+                                                                                                   "avg":  174.15120000000002,
+                                                                                                   "med":  156.25295,
+                                                                                                   "p(95)":  238.148225,
+                                                                                                   "max":  249.1862
+                                                                                               },
+                                                                                 "conflictMs":  {
+                                                                                                    "p(95)":  189.14698,
+                                                                                                    "max":  190.8358,
+                                                                                                    "avg":  152.5605285714286,
+                                                                                                    "med":  154.8936
+                                                                                                }
+                                                                             }
+                                                               },
+                                                   "droppedIterations":  0,
+                                                   "httpRequests":  120
+                                               },
+                                        "Snapshot":  {
+                                                         "expectedTotalSeats":  2000,
+                                                         "actualSeatCount":  2000,
+                                                         "remainingSeats":  2000,
+                                                         "reservedSeats":  0,
+                                                         "activeHeldSeats":  0,
+                                                         "holdRows":  0,
+                                                         "partialHoldStates":  0,
+                                                         "reservations":  0,
+                                                         "bookings":  0,
+                                                         "payments":  0,
+                                                         "invariantSatisfied":  true
+                                                     },
+                                        "Metrics":  {
+                                                        "SampleCount":  4,
+                                                        "Sampling":  {
+                                                                         "MinimumIntervalMs":  2475,
+                                                                         "AverageIntervalMs":  2986.6666666666665,
+                                                                         "MaximumIntervalMs":  3516
+                                                                     },
+                                                        "Peaks":  {
+                                                                      "HikariActive":  3,
+                                                                      "HikariPending":  0,
+                                                                      "HikariIdle":  24,
+                                                                      "HikariMax":  24,
+                                                                      "ProcessCpuUsage":  0.1811557309683523,
+                                                                      "SystemCpuUsage":  0.99599342797699,
+                                                                      "HeapUsedBytes":  191201856,
+                                                                      "JvmThreadsLive":  39,
+                                                                      "DbRowLockCurrentWaits":  0,
+                                                                      "DbThreadsConnected":  25,
+                                                                      "DbThreadsRunning":  1
+                                                                  },
+                                                        "Deltas":  {
+                                                                       "DbRowLockWaits":  9,
+                                                                       "DbRowLockTimeMs":  240,
+                                                                       "DbDeadlocks":  0,
+                                                                       "JvmGcPauseSeconds":  0.014000000000000012,
+                                                                       "JvmGcPauseCount":  1
+                                                                   },
+                                                        "MariaDbContainer":  null,
+                                                        "ObserverEffects":  {
+                                                                                "DbCliConnectionIncludedInThreadGauges":  true,
+                                                                                "ConnectionsCounterExcluded":  true,
+                                                                                "ComposeHealthcheckMayOpenConnections":  true,
+                                                                                "DockerStatsCollected":  false
+                                                                            }
+                                                    },
+                                        "RequestedSamplingPauseMilliseconds":  1000,
+                                        "DbCountersScope":  "Whole run including setup/teardown; not query-specific wait attribution"
+                                    }
+                    }
+                ]
+}

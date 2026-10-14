@@ -1,8 +1,9 @@
 # 가상 좌석 경합 실험 요약
 
-최근 실사례는 [7. MCP 근거에서 선택한 SQL 진단](#7-mcp-근거에서-선택한-sql-진단-208)을 참고한다. 실측은 계측 횟수 불일치로 중단됐으며 성능 개선 결과가 아니다.
+최근 실험은 [9. 큰·작은 다좌석 Hold 혼합](#9-큰작은-다좌석-hold-혼합-224)을 참고한다. 두 배치 모두 warm-up 자원 기준에서 중단됐으며 반복 비교·성능 개선 결과가 아니다.
 
 #210에서 [제한된 SQL 대조와 기존 예매 경합 복귀](#8-제한된-sql-대조와-예매-경합-복귀-210)를 마치고 MCP 분석·실험 연결 단계를 종료했다. 추가 계측·AI 비교·증량은 필수 후속 단계가 아니다.
+
 
 이 문서는 **결론을 재현 조건과 함께** 읽기 위한 요약이다. 기존 표의 RPS는 k6 목표 도착률(iterations/s)이며 TPS나 실제 예매처 처리량이 아니다. Hold 성공 iteration에는 POST와 DELETE가 포함되고 충돌 iteration에는 POST만 있으므로 전체 HTTP RPS와도 다르다. 각 run의 원 수치는 추적된 `load-test/results/` JSON에, 정리 전 긴 상세 기록은 [이전 문서 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 남아 있다.
 
@@ -153,3 +154,18 @@ backtick·별칭을 포함한 정규화 SQL 분류 fixture를 보강했다. 다�
 기존 stdio MCP `assess_sampling_contrast(return210a)`를 실제 호출했다. 결과는 `RESOURCE_REVIEW_REQUIRED / MANUAL_REVIEW_ONLY`이며 warm-up을 제외한 6개 관측을 반환한다. 실행 권한·자동 증량·새 SQL probe 입력 권한은 추가하지 않았다. API snapshot·독립 SQL·실측 artifact·MCP 판정의 연결을 회귀 테스트로 남겼다.
 
 **단계 마무리:** 근거 조회 → 가설·실험 제안 → 제한된 실측 → 근거 부족의 보류 → 서비스 경합 복귀까지 완료했다. AI 정확도·분석 시간 절감·운영 용량·Kafka/RAG 도입 효과는 검증하지 않았다. 현 MCP 구현의 성과는 허용된 근거 조회와 판정 경계를 실제 사례에 연결한 것이며 서비스 처리 성능 개선과 구분한다. 두 실험 DB 데이터와 #208 실패 근거는 보존하고 실행 프로세스는 종료했다. 이후는 서비스 흐름 학습·기존 문제 해결 근거 정리를 우선하며 계측 심화는 선택 과제로 남긴다.
+
+## 9. 큰·작은 다좌석 Hold 혼합 (#224)
+
+**질문:** 큰 좌석 묶음의 잠금·검증·저장이 작은 요청까지 지연시키는가? 서비스 상한부터 추가하지 않고 작은 요청의 유입량을 고정한 대조 도구를 구성했다. Backend/FE 동작·PG·MCP 계약은 변경하지 않았다.
+
+**조건:** 동일 Windows 8 logical CPU·15.81GiB RAM 호스트, MariaDB 10.11.8 전용 DB(`ticketon-mixed224-a`, 3309), Java 21 `local,loadtest`·`-Xms256m -Xmx768m`·Hikari 24. 2,000석 fixture에서 작은 요청은 40석 범위를 순환하는 1석·10 iterations/s, 큰 요청은 고정 20/200석 묶음·2 iterations/s다. 큰 요청끼리는 같은 묶음을 사용한다. 분리 조건은 작은 40석 밖, 중첩 조건은 작은 범위의 처음 20/40석과 겹친다. 모든 성공 요청의 Hold dwell은 50ms 후 DELETE다. 작은/큰 VU 예산은 20/10이며 사용자 token을 동시 공유하지 않는다. 세 조건의 전체 유입량은 같지 않다(단독 10, 혼합 12 iterations/s). **분리↔중첩** 비교가 같은 전체 유입량·묶음 크기의 대조이며, 단독↔혼합은 작업량 추가의 영향 탐색이다.
+
+**계획·중단:** 조건별 5초 warm-up 제외 후 10초씩 정순→역순→정순 3회 비교를 계획했다. 첫 `mixed224a`는 4개 warm-up 중 200석 분리의 host CPU peak **91.5%**에서 중단했다. 20석만 남긴 `mixed224b`도 3개 warm-up 중 중첩의 peak **99.6%**에서 중단됐다. 따라서 **두 배치 모두 `Complete:false`, warm-up 제외 측정 단계는 0개**다. [첫 시도](../../load-test/results/mixed224a-comparison.json), [낮은 묶음 크기 재시도](../../load-test/results/mixed224b-comparison.json)를 보존하며 p95 개선·반복 비교·처리 한계의 결과로 사용하지 않는다.
+
+- 보존된 7개 warm-up 합계 **410번 점유 시도 = 성공·해제 385 + 예상 409 25**, 예상 밖 오류·dropped·SQL deadlock·종료 Hold·재고 불변식 위반 0. 성공/409 지연은 클래스별로 따로 저장했다. 이는 실행 도구·정합성 확인이지 안정 처리 구간 증명이 아니다.
+- 200석 분리 warm-up의 큰 요청은 11번 중 성공 2·409 9, 큰 요청 p95 약 6.82초였다. DB 전역 row-lock wait 증가 12건·누적 wait time 45,862ms가 동반됐다. **동일 큰 묶음끼리의 경합도 포함**하므로 작은 요청으로부터 분리했다고 모든 잠금 대기가 없어지는 것이 아니다. 누적 wait time은 여러 transaction의 합이며 실행 벽시계 시간과 다르다. 이 짧은 단일 warm-up으로 특정 SQL·호스트 CPU 원인을 확정하지 않는다.
+- Hikari pending은 표본상 0이었다. 수집기의 대기 설정은 1초지만 Docker CLI 수집 비용을 포함한 실제 표본 간격은 **1,399~3,961ms**로, 순간 대기가 없다는 보장이 아니다. DB counter 구간에는 k6 setup/teardown이 포함되며 쿼리별 lock 귀속 자료가 아니다.
+- 중단 후 Windows 가용 메모리는 **1,278,644KiB ≈ 1.22GiB**였다. 실행 전의 최소 메모리 측정값으로 소급하지 않는다. 이를 확인한 뒤 새 실행에는 **가용 메모리 2GiB 미만 preflight 차단**을 추가했고 mock host 테스트로 API 호출 전 거절을 검증했다. 기존 배치에 이 새 guard가 적용됐다고 주장하지 않는다.
+
+**결론·재현:** 요청 상한·lock timeout·대기열은 보류한다. 자원 여유를 확보한 동일/별도 명시 환경에서 `powershell -NoProfile -ExecutionPolicy Bypass -File load-test/scripts/Run-MixedSeatHoldComparison.ps1 -BatchId <새 ID> -FixtureRunId <준비된 fixture ID>`로 기본 20석 조건부터 재개한다. 전용 `COMPOSE_PROJECT_NAME=ticketon-mixed224-*`, DB 3309, 2,000석 local/loadtest Backend·k6가 필요하다. 최신 runner는 fixture를 **생성/초기화하지 않고**, 준비된 fixture를 GET·전용 DB SQL로 대조한 뒤에만 k6를 시작한다. 잘못된 DB 대상의 사전 확인에서 쓰기 API 호출이 없음을 mock으로 검증했다. 초기 실측은 각 run의 새 fixture를 생성한 이전 도구로 실행했으며, 이후 코드의 읽기 전용 preflight·동일 fixture 재사용이 과거 실측에 적용됐다고 소급하지 않는다. 재개할 fixture 준비는 실행자가 Backend datasource가 전용 DB를 가리키는지 확인한 별도 단계로 수행한다. 200석은 `-LargeSizes 20,200`의 명시적 선택이며 기본 증량하지 않는다. 빈 크기 배열은 거절하고, 모든 필수 조건의 3회 측정이 정확히 존재할 때만 `Complete:true`다. Docker 주소 풀 고갈은 기존 비활성 TicketOnBoarding user-defined network 재사용으로 우회했고, 기존 network·volume·사용자 프로세스를 삭제하지 않았다. 실행 중단 후 이번 Backend/DB만 종료하고 DB 데이터는 보존했다.
