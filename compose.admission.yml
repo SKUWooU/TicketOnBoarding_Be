@@ -1,0 +1,17 @@
+services:
+  admission-redis:
+    image: redis:7.4.7-alpine
+    profiles: [admission]
+    ports:
+      - "127.0.0.1:${ONTICKET_ADMISSION_REDIS_PORT:-16379}:6379"
+    command: [redis-server, --appendonly, "yes", --maxmemory, 64mb, --maxmemory-policy, noeviction]
+    mem_limit: 128m
+    volumes:
+      - admission-redis-data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  admission-redis-data:
