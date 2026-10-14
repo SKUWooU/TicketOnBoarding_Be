@@ -272,3 +272,5 @@ script는 관련 key type·marker·상태 개수/인덱스와 해당 batch의 JS
 실행은 `onticket`에서 `gradlew.bat test --tests "com.onticket.admission.*" --no-daemon --max-workers=1`이며 실제 PG/KOPIS·MariaDB 재고를 호출하지 않는다. 별도 로컬 Redis는 저장소 루트에서 `docker compose -f compose.admission.yml --profile admission up -d admission-redis`, PING 확인은 같은 옵션의 `exec -T admission-redis redis-cli ping`, 종료는 `stop admission-redis`다. 기본 loopback 16379·128MiB container/64MiB Redis noeviction·AOF 설정으로 opt-in이다. 이 구성의 실제 기동/PONG/종료는 확인했지만 AOF crash durability·failover는 검증하지 않았다. volume은 보존했다.
 
 첫 Redis 코어 테스트에서 queue-full 오류가 일반 unavailable로 변환되는 실패를 발견해 Redis exception의 가장 구체적인 원인 code로 분류하도록 수정했다. 이것은 신규 코어의 개발 회귀 수정이지 기존 예매 성능 개선이 아니다. 코어의 단위/통합 검증과 실제 사용자 입장 제어 완성·다중 앱 운영·대규모 성능 증명은 구분한다.
+
+Reviewer 후속 지적으로 `AdmissionSnapshot.toString()`은 token·queueEntryId·admissionId를 제외하도록 보강하고 비노출 테스트를 추가했다. 이는 객체의 문자열 표현만 보호하며, 향후 HTTP DTO의 JSON 응답이나 요청 로그까지 자동으로 보호하는 것은 아니다. 실제 HTTP 연동에서 본인에게만 구매 token을 반환하고 로그 redaction을 별도로 검증해야 한다.

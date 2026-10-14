@@ -14,4 +14,10 @@ class AdmissionActivationBoundaryTest {
                 .contains(RedisAutoConfiguration.class, RedisRepositoriesAutoConfiguration.class);
         assertThat(RedisAdmissionStore.class.getAnnotation(Component.class)).isNull();
     }
+    @Test void snapshotStringDoesNotContainCredentialsOrIdentifiers() {
+        var snapshot = new AdmissionSnapshot("entry-sensitive", AdmissionSnapshot.State.ADMITTED,
+                java.time.Instant.ofEpochMilli(1000), 1, 0, "admission-sensitive", "token-sensitive");
+        assertThat(snapshot.toString()).contains("ADMITTED")
+                .doesNotContain("entry-sensitive", "admission-sensitive", "token-sensitive");
+    }
 }
