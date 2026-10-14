@@ -48,6 +48,9 @@ public final class RedisAdmissionStore {
     /** Operator-only primitive: callers must use a new generation after state loss. */
     public void bootstrap() { execute("INIT", "", "", "", ""); }
 
+    /** Operator CLI: atomically refuses any already initialized or partially present namespace. */
+    public void bootstrapFresh() { execute("INIT_FRESH", "", "", "", ""); }
+
     public AdmissionSnapshot join(String username) {
         return joinObserved(username).admission();
     }

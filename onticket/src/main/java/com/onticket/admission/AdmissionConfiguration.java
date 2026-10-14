@@ -5,11 +5,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
-import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import java.time.Duration;
 import java.util.Arrays;
 
 @Configuration(proxyBeanMethods = false)
@@ -29,9 +26,7 @@ public class AdmissionConfiguration {
     @ConditionalOnProperty(name = "onticket.admission.enabled", havingValue = "true")
     LettuceConnectionFactory admissionRedisConnectionFactory(AdmissionSettings settings, AdmissionPolicy policy) {
         // Loopback only. No automatic namespace initialization or recreation on failure.
-        return new LettuceConnectionFactory(new RedisStandaloneConfiguration("127.0.0.1", settings.redisPort()),
-                LettuceClientConfiguration.builder().commandTimeout(Duration.ofSeconds(1))
-                        .shutdownTimeout(Duration.ofMillis(100)).build());
+        return AdmissionRedisConnections.loopback(settings.redisPort());
     }
 
     @Bean

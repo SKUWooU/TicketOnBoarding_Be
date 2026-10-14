@@ -2,7 +2,7 @@
 
 ## 상태
 
-신규 도메인 확장 방향·로컬 Redis 추가/실행 승인. #230 비노출 원자 코어에 이어 #232에서 인증 API·신규 구매 gate 구현. FE·자동 worker·운영자 초기화 도구는 후속 단계.
+신규 도메인 확장 방향·로컬 Redis 추가/실행 승인. #230 비노출 원자 코어·#232 인증 API/gate에 이어 #234에서 운영자 fresh bootstrap CLI·자동 승격 worker 구현. FE·구매 서비스 연동·입장 제어 전후 부하는 후속 단계.
 
 ## 맥락과 재현 근거
 
@@ -18,7 +18,8 @@
 - 첫 FE는 기존 예약 화면의 회차 선택 뒤 대기 패널을 보여준다. polling부터 시작하며 별도 디자인 전면 수정·SSE·WebSocket은 제외한다.
 - #232의 신규 Hold/Checkout만 `X-Admission-Token`으로 본인 입장권을 검증한다. 기존 Checkout 동일 결과 재사용·검증·취소·Hold 해제는 새 입장권이나 Redis 연결 없이 기존 소유권/상태 검증으로 처리한다. 입장 확인과 MariaDB 변경은 하나의 원자 트랜잭션이 아니며, gate 통과 후 lease 만료/이탈은 이미 진행 중인 DB 요청을 중단시키지 않는다.
 - 활성 회차의 Checkout 없는 직접 `verified-reservation`은 PG 조회 전 차단한다. 활성 fixture 생성/수정·Hold reset·테스트 사용자/token 발급도 중단한다. 기존에 사용하지 않던 data-rest starter를 제거해 repository 자동 CRUD로 구매 경계를 우회하지 못하게 한다. 커스텀 Controller API와 JPA repository는 유지한다. 전역 Security·다른 관리자 기능을 안전하게 만든 것은 아니다.
-- API는 Redis namespace를 bootstrap하거나 tick하지 않는다. 첫 범위는 인증·구매 경계이며, 운영자 초기화와 bounded 승격 worker를 검증한 뒤 FE를 연결한다. Redis 유실은 503이며 초기 상태로 자동 복구하지 않는다.
+- API는 Redis namespace를 bootstrap하거나 tick하지 않는다. #234의 standalone CLI만 새 namespace를 명시적으로 초기화하고, 기존 namespace/부분 자료는 Lua에서 원자 거절한다. 완전 유실 이후 동일 generation의 과거 사용 여부는 Redis만으로 알 수 없으므로 새 generation을 고르는 운영자 책임·확인 인자가 필요하다. 강한 재사용 방지 ledger/failover를 구현한 것은 아니다.
+- 활성 local+loadtest fixture의 worker는 전용 단일 scheduler에서 기본 1초 fixed-delay로 bounded tick한다. 여러 앱 worker의 직렬성/입장 한도는 Lua가 보장하며 leader election이나 분산 락을 추가하지 않는다. Redis 실패는 안전한 상태 전이 로그와 낮은 cardinality 지표만 기록하고, 자동 초기화/입장 fallback 없이 다음 tick을 시도한다.
 - API 설계 계약은 [학습 가이드 14절](../STUDY_GUIDE.md#14-공연-오픈-대기실의-설계-계약-228), 구현/검증과 미구현 경계는 [15절](../STUDY_GUIDE.md#15-redis-대기입장-원자-코어-230)에 둔다. #230의 로컬 Redis 추가·컨테이너 실행은 사용자 승인 후 수행했다.
 
 Redis의 Lua 실행은 다른 요청과 섞이지 않는 원자 실행을 제공하지만 실행 중 서버를 막으므로, 전체 대기열 순회가 아닌 bounded 작업으로 설계한다([공식 scripting 문서](https://redis.io/docs/latest/develop/programmability/eval-intro/)). script의 원자 실행은 MariaDB까지 포함하는 transaction·오류 시 전체 rollback·crash durability를 뜻하지 않는다. 입력·자료형을 변경 전에 검증하고 실패 후 부분 변경도 검사해야 한다.

@@ -6,6 +6,7 @@
 
 | 문제 / 개념 | 변경과 검증 | 대표 근거 |
 | --- | --- | --- |
+| 대기 상태의 자동 입장 승격·안전한 초기화 | 원자 fresh bootstrap CLI, 전용 bounded tick scheduler, 독립 Redis 연결의 중복 worker·정각 만료/이탈·marker 유실·실제 scheduling/Redis TIME 검증 | [#234](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/234), [실행·검증·한계](STUDY_GUIDE.md#17-운영자-초기화와-자동-입장-승격-234). FE·MariaDB 구매 E2E·부하 비교는 후속. |
 | 대기 입장권 없이 신규 구매·우회 요청 | 본인 JWT 기반 API·신규 Hold/Checkout gate, Redis 자료 유실 fail-closed, 기존 Checkout 재사용/검증/정리 유지 | [#232](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/232), [구현·검증 경계](STUDY_GUIDE.md#16-인증-대기-api와-신규-구매-gate-232). 자동 승격·FE·성능 미검증. |
 | 공유 대기 순서·기한부 입장권 | Redis 비노출 원자 코어, 독립 연결 두 개·동시 등록/배정·ID 조건부 이탈·bounded 만료/종료 상태·자료 유실 fail-closed 검증 | [#230](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/230), [구현·테스트·한계](STUDY_GUIDE.md#15-redis-대기입장-원자-코어-230). API 연결은 #232, FE·다중 앱 운영·성능 미검증. |
 | 공연 오픈 구매 접근의 순서·권한 요구 | 기존 경로 조사, 회차별 계약·Redis 후보·우회/기존 결제 연속성/복구 한계 설계. 혼합 실험은 보류로 마무리 | [#228](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/228), [ADR-0006](adr/0006-performance-opening-admission.md), [계약 초안](STUDY_GUIDE.md#14-공연-오픈-대기실의-설계-계약-228). 기능·성능 구현 성과 아님. |

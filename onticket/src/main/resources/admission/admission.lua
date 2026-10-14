@@ -10,7 +10,7 @@ else now = tonumber(ARGV[13]) end
 if not now or now < 0 or not opens or not maxActive or not maxWaiting or not waitMs or not admitMs or not batch then
   return redis.error_reply('ADMISSION_INVALID_INPUT')
 end
-if op ~= 'INIT' and op ~= 'JOIN' and op ~= 'READ' and op ~= 'LEAVE' and op ~= 'TICK' and op ~= 'VERIFY' then
+if op ~= 'INIT' and op ~= 'INIT_FRESH' and op ~= 'JOIN' and op ~= 'READ' and op ~= 'LEAVE' and op ~= 'TICK' and op ~= 'VERIFY' then
   return redis.error_reply('ADMISSION_INVALID_OPERATION')
 end
 local types = {'hash', 'hash', 'zset', 'zset', 'zset', 'zset'}
@@ -19,7 +19,8 @@ for i = 1, 6 do
   if actual ~= 'none' and actual ~= types[i] then return redis.error_reply('ADMISSION_WRONG_TYPE') end
 end
 local configured = redis.call('HGET', KEYS[1], 'policy')
-if op == 'INIT' then
+if op == 'INIT' or op == 'INIT_FRESH' then
+  if op == 'INIT_FRESH' and configured then return redis.error_reply('ADMISSION_ALREADY_INITIALIZED') end
   if configured then
     if configured ~= fingerprint then return redis.error_reply('ADMISSION_POLICY_MISMATCH') end
   else
