@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][ValidatePattern('^[A-Za-z0-9-]{1,12}$')][string]$BatchId,
-    [ValidateSet(20,200)][int[]]$LargeSizes = @(20)
+    [Parameter(Mandatory=$true)][ValidatePattern('^[A-Za-z0-9-]{1,24}$')][string]$FixtureRunId,
+    [ValidateNotNullOrEmpty()][ValidateSet(20,200)][int[]]$LargeSizes = @(20)
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -19,7 +20,7 @@ foreach ($size in $LargeSizes) {
 }
 function Run-Condition($condition, $label, $duration, $warmup) {
     $id = "$BatchId-$($condition.Code)-$label"
-    try { & (Join-Path $PSScriptRoot 'Measure-MixedSeatHold.ps1') -RunId $id -Mode $condition.Mode -LargeSeats $condition.Size -DurationSeconds $duration }
+    try { & (Join-Path $PSScriptRoot 'Measure-MixedSeatHold.ps1') -RunId $id -FixtureRunId $FixtureRunId -Mode $condition.Mode -LargeSeats $condition.Size -DurationSeconds $duration }
     catch { throw "Measurement $id failed: $($_.Exception.Message)" }
     $summary = Get-Content -Raw -Encoding UTF8 (Join-Path $root "load-test/results/$id/summary.json") | ConvertFrom-Json
     $records.Add([pscustomobject]@{ RunId=$id; Warmup=$warmup; Summary=$summary })
@@ -33,9 +34,18 @@ try {
         if ($repeat -eq 2) { [Array]::Reverse($order) }
         foreach ($condition in $order) { Run-Condition $condition "r$repeat" 10 $false }
     }
+    $measured = @($records.ToArray() | Where-Object { !$_.Warmup })
+    if ($measured.Count -ne $conditions.Count * 3) { throw 'Required comparison stages are missing.' }
+    foreach ($condition in $conditions) {
+        for ($repeat=1; $repeat -le 3; $repeat++) {
+            $expected = "$BatchId-$($condition.Code)-r$repeat"
+            $matching = @($measured | Where-Object { $_.RunId -eq $expected -and $_.Summary.K6.mode -eq $condition.Mode -and $_.Summary.K6.largeSeats -eq $condition.Size })
+            if ($matching.Count -ne 1) { throw "Missing or duplicate comparison condition: $expected" }
+        }
+    }
     $complete = $true
 } catch { $failure = $_.Exception.Message; throw }
 finally {
-    [ordered]@{ SchemaVersion=1; Complete=$complete; Failure=$failure; SmallIterationsPerSecond=10; LargeIterationsPerSecond=2; SmallSeatCount=1; SmallSeatPool=40; DwellMilliseconds=50; LargeSizes=$LargeSizes; MeasuredSeconds=10; Repeats=3; WarmupExcluded=$true; Records=$records.ToArray() } |
+    [ordered]@{ SchemaVersion=1; Complete=$complete; Failure=$failure; FixtureRunId=$FixtureRunId; SmallIterationsPerSecond=10; LargeIterationsPerSecond=2; SmallSeatCount=1; SmallSeatPool=40; DwellMilliseconds=50; LargeSizes=$LargeSizes; MeasuredSeconds=10; Repeats=3; WarmupExcluded=$true; Records=$records.ToArray() } |
         ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $batchPath -Encoding UTF8
 }

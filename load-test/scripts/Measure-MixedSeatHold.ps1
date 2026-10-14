@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][ValidatePattern('^[A-Za-z0-9-]{1,24}$')][string]$RunId,
+    [Parameter(Mandatory=$true)][ValidatePattern('^[A-Za-z0-9-]{1,24}$')][string]$FixtureRunId,
     [ValidateSet('small-only','separate','overlap')][string]$Mode = 'small-only',
     [ValidateRange(1,200)][int]$LargeSeats = 20,
     [ValidateRange(1,20)][int]$SmallRate = 10,
@@ -22,11 +23,12 @@ if (Test-Path -LiteralPath $output) { throw 'RunId already exists; refusing to o
 $base = 'http://127.0.0.1:18080'
 $management = 'http://127.0.0.1:18081'
 if ((Invoke-RestMethod "$management/actuator/health" -TimeoutSec 10).status -ne 'UP') { throw 'Backend is not UP.' }
-$fixture = Invoke-RestMethod -Method Post -Uri "$base/loadtest/runs?runId=$RunId" -TimeoutSec 30
+$fixture = Invoke-RestMethod -Method Get -Uri "$base/loadtest/fixture?runId=$FixtureRunId" -TimeoutSec 10
 if ($fixture.totalSeats -ne 2000) { throw 'Expected 2000-seat loadtest fixture.' }
-$ownership = & docker compose -f (Join-Path $root 'compose.yml') exec -T mariadb mariadb -uonticket -ponticket -N onticket_local -e "SELECT COUNT(*) FROM concert_time t JOIN seat s ON s.concert_time_id=t.id WHERE t.concert_id='LOAD-TEST-$RunId' AND t.id=$($fixture.concertTimeId);" 2>&1
+if ($fixture.concertId -ne "LOAD-TEST-$FixtureRunId" -or [long]$fixture.concertTimeId -le 0) { throw 'Fixture identity is invalid.' }
+$ownership = & docker compose -f (Join-Path $root 'compose.yml') exec -T mariadb mariadb -uonticket -ponticket -N onticket_local -e "SELECT COUNT(*) FROM concert_time t JOIN seat s ON s.concert_time_id=t.id WHERE t.concert_id='LOAD-TEST-$FixtureRunId' AND t.id=$([long]$fixture.concertTimeId);" 2>&1
 if ($LASTEXITCODE -ne 0 -or ([string]($ownership -join '').Trim()) -ne '2000') { throw 'Backend fixture is not in the dedicated measurement DB.' }
-$initial = Invoke-RestMethod "$base/loadtest/seat-holds/snapshot?runId=$RunId" -TimeoutSec 10
+$initial = Invoke-RestMethod "$base/loadtest/seat-holds/snapshot?runId=$FixtureRunId" -TimeoutSec 10
 if (!$initial.invariantSatisfied -or $initial.holdRows -ne 0) { throw 'Expected unused fixture; no automatic reset.' }
 New-Item -ItemType Directory -Path $output | Out-Null
 $compose = Join-Path $root 'compose.yml'
@@ -54,7 +56,7 @@ $samples = New-Object 'Collections.Generic.List[object]'
 $process = $null
 try {
     $samples.Add((Sample))
-    $k6Arguments = @('run', '-e', "FIXTURE_RUN_ID=$RunId", '-e', "MIXED_MODE=$Mode", '-e', "LARGE_SEATS=$LargeSeats", '-e', "SMALL_RATE=$SmallRate", '-e', "LARGE_RATE=$LargeRate", '-e', "DURATION=$($DurationSeconds)s", (Join-Path $root 'load-test/k6/mixed-seat-hold.js'))
+    $k6Arguments = @('run', '-e', "FIXTURE_RUN_ID=$FixtureRunId", '-e', "MIXED_MODE=$Mode", '-e', "LARGE_SEATS=$LargeSeats", '-e', "SMALL_RATE=$SmallRate", '-e', "LARGE_RATE=$LargeRate", '-e', "DURATION=$($DurationSeconds)s", (Join-Path $root 'load-test/k6/mixed-seat-hold.js'))
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = (Get-Command k6 -ErrorAction Stop).Source
     $start.Arguments = ($k6Arguments | ForEach-Object { '"' + $_ + '"' }) -join ' '
@@ -84,10 +86,10 @@ try {
         if ($class.failures -ne 0 -or $class.attempts -ne ($class.success + $class.conflicts) -or $class.success -ne $class.released) { throw "Invalid $kind outcome accounting." }
     }
     if ($result.classes.small.attempts -eq 0 -or ($Mode -ne 'small-only' -and $result.classes.large.attempts -eq 0)) { throw 'Required request class was not exercised.' }
-    $snapshot = Invoke-RestMethod "$base/loadtest/seat-holds/snapshot?runId=$RunId" -TimeoutSec 10
+    $snapshot = Invoke-RestMethod "$base/loadtest/seat-holds/snapshot?runId=$FixtureRunId" -TimeoutSec 10
     if (!$snapshot.invariantSatisfied -or $snapshot.holdRows -ne 0) { throw 'Final inventory/Hold invariant failed.' }
     $metrics = New-ContentionMetricsSummary -Samples $samples.ToArray()
-    [ordered]@{ SchemaVersion=1; ValidMeasurement=$true; RunId=$RunId; AvailableHostMemoryBytesBeforeRun=$availableMemoryBytes; K6=$result; Snapshot=$snapshot; Metrics=$metrics; RequestedSamplingPauseMilliseconds=1000; DbCountersScope='Whole run including setup/teardown; not query-specific wait attribution' } |
+    [ordered]@{ SchemaVersion=1; ValidMeasurement=$true; RunId=$RunId; FixtureRunId=$FixtureRunId; AvailableHostMemoryBytesBeforeRun=$availableMemoryBytes; K6=$result; Snapshot=$snapshot; Metrics=$metrics; RequestedSamplingPauseMilliseconds=1000; DbCountersScope='Whole run including setup/teardown; not query-specific wait attribution' } |
         ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $output 'summary.json') -Encoding UTF8
     Write-Output "MIXED_COMPLETE run=$RunId mode=$Mode largeSeats=$LargeSeats smallP95=$($result.classes.small.holdMs.'p(95)') pending=$($metrics.Peaks.HikariPending)"
 } catch {
