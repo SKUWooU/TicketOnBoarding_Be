@@ -203,7 +203,7 @@ GlobalTimes의 검색·캐시·외부 AI 읽기 경로와 달리, 이 프로젝�
 | `GET /policy` | 해당 공연/회차 소속 검증, 공개 운영 정책·serverNow 조회. 내부 key·다른 사용자 정보 미노출 |
 | `POST` | 로그인 사용자 등록/기존 상태 재사용. `queueEntryId`, 상태, 자신의 position, waitingExpiresAt, serverNow 반환. 허용 시 admissionId·token·expiresAt 포함 |
 | `GET` | 로그인 사용자의 현재 상태만 조회. Redis mutation/배정은 bounded worker에서 수행하며 HTTP GET에 등록·기한 연장을 넣지 않음 |
-| `DELETE` | 자신의 대기/입장권 이탈, 반복 이탈은 204. 좌석 Hold 해제·Checkout 취소를 대신하지 않음 |
+| `DELETE` | 자신의 `queueEntryId`·generation을 제시해 이탈. 반복/오래된 ID의 이탈은 204이며 새 등록/입장권을 삭제하지 않음. 좌석 Hold 해제·Checkout 취소를 대신하지 않음 |
 
 token은 서버 발급의 예측 불가능한 구매 권한이며 로그인 JWT와 구분한다. `X-Admission-Token` 후보 헤더로 전달하고 서버에서 사용자·회차·generation·입장 ID·만료를 대조한다. token/username/queueEntryId는 metric label에 넣거나 로그에 남기지 않는다. waiting 순번은 변하는 조회 값이며 확정 입장 시각을 약속하지 않는다. FE polling 기본 후보 5초+jitter, 재시도 backoff, 페이지 숨김/언마운트 시 정지. polling 주기는 전체 용량의 성능 근거가 아니다.
 
@@ -221,6 +221,8 @@ HTTP 오류 후보는 미인증 401, 위조/타 사용자/다른 회차/만료 �
 
 현재 [ReservationController](../../onticket/src/main/java/com/onticket/concert/controller/ReservationController.java)는 수동 cookie 검증 후 서비스를 호출한다. 새로운 gate도 화면 숨김에만 의존하지 않고 신규 구매 쓰기의 좌석 잠금/업무 저장 앞에 둔다.
 
+명시적 Controller 외에 `spring-boot-starter-data-rest`의 Repository 자동 export 후보와 `/loadtest/runs`·관리 reset 등 fixture 쓰기 경로도 조사한다. 현재 소스 조사만으로 실제 HTTP 노출/악용을 확인한 것은 아니다. 활성 회차의 보호를 우회하는 쓰기는 차단하거나 별도 테스트 전용 경계로 격리한 뒤 기능 완료를 판단한다. FE 연동에서는 새 token 헤더의 CORS 허용 범위와 이전 회차 polling 응답의 무시도 검증한다.
+
 | 기존 경로 | 활성 회차의 후속 gate 요구 |
 | --- | --- |
 | `POST .../seat-holds` | 신규 점유·추가 선택·재점유에 유효한 자신의 입장권 필요. 입장권이 좌석 conflict를 성공으로 바꾸지 않음 |
@@ -234,7 +236,7 @@ Redis 검증과 MariaDB transaction은 하나의 원자 transaction이 아니다
 
 ### 후속 구현 순서와 완료 조건
 
-1. **BE 원자 코어:** Redis 추가·실행 경계 확인 후 등록·중복·순서·bounded 배정·만료·이탈. Redis Testcontainers로 동시 등록/배정에서 한도·순서·단일 사용자 상태 검증. 자료형/입력 오류와 script 부분 변경 검사 포함.
+1. **BE 원자 코어:** Redis 추가·실행 경계 확인 후 등록·중복·순서·bounded 배정·만료·이탈. Redis Testcontainers로 동시 등록/배정에서 한도·순서·단일 사용자 상태 검증. 이탈→재등록 후 오래된 이탈/만료 작업의 새 상태 미삭제, 자료형/입력 오류와 script 부분 변경 검사 포함.
 2. **BE API/gate:** 인증·타 사용자/다른 회차/위조·만료 token·legacy 우회·Redis unavailable을 검증. 거절 시 MariaDB 재고·Checkout·PG 호출이 시작되지 않아야 한다. 기존 Checkout의 종료·복구 경로 회귀.
 3. **FE 별도 저장소 Issue/PR:** 회차 선택 뒤 WAITING/ADMITTED 표시, 재접속·만료·이탈·API 오류 처리. 기존 소규모 좌석·2,000석 fixture UI 유지, 화면과 실제 gate가 일치하는지 확인.
 4. **제한된 통합 검증:** 앱 두 개의 공유 순서/권한·앱 재시작·Redis clean restart/자료 유실을 구분해 검증. 최초는 작은 fixture·Mock PG·명시적 기능 검증이며 새 k6 성능 증량은 요구하지 않는다.
