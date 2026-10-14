@@ -6,6 +6,7 @@
 
 | 문제 / 개념 | 변경과 검증 | 대표 근거 |
 | --- | --- | --- |
+| 메모리 여유 확보 후 혼합 비교 재개 | idle Gradle daemon만 종료, 최신 fixture GET·SQL gate로 실행. 작은 요청 warm-up 50번·오류/재고 이상 0, host CPU gate 중단 | [#226](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/226), [재시도 조건·한계](EXPERIMENTS.md#자원-여유-확보-후-재시도-226). 큰 요청·측정 단계 0, 성능 개선 아님. |
 | 큰 다좌석 요청이 작은 요청에 미치는 영향 | 1석 유입량 고정, 20/200석 분리/중첩 Hold 도구. 두 배치 warm-up 자원 gate 중단, 측정 0단계·상한 보류 | [#224](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/224), [조건·중단·재개](EXPERIMENTS.md#9-큰작은-다좌석-hold-혼합-224). 성능 개선·안정 처리 구간 아님. |
 | 결제 claim/finalize·취소·해제의 추가 잠금 중 기한 경과 | 전체 필요 잠금 후 시각 재판정, UNKNOWN은 업무 저장 전에 결정. 좌석/귀속 대기 경계와 정상 거절 해제 회귀 | [#222](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/222), [원리·재현·한계](STUDY_GUIDE.md#12-결제-검증확정해제의-추가-잠금-후-기한-222). 실 PG·TPS·commit 기한 절대 보장 아님. |
 | 다좌석 잠금 대기 전 시각으로 Hold 만료 판정 | Hold 생성·Checkout 준비에서 전체 잠금 후 시간 판정. 실 MariaDB lock + MutableClock의 직전/정각/직후 재현 | [#220](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/220), [전후·저장 결과·한계](STUDY_GUIDE.md#11-다좌석-잠금-대기와-hold-만료-경계-220). TPS·실제 5분 대기·전체 결제 경로 보장 아님. |

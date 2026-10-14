@@ -169,3 +169,13 @@ backtick·별칭을 포함한 정규화 SQL 분류 fixture를 보강했다. 다�
 - 중단 후 Windows 가용 메모리는 **1,278,644KiB ≈ 1.22GiB**였다. 실행 전의 최소 메모리 측정값으로 소급하지 않는다. 이를 확인한 뒤 새 실행에는 **가용 메모리 2GiB 미만 preflight 차단**을 추가했고 mock host 테스트로 API 호출 전 거절을 검증했다. 기존 배치에 이 새 guard가 적용됐다고 주장하지 않는다.
 
 **결론·재현:** 요청 상한·lock timeout·대기열은 보류한다. 자원 여유를 확보한 동일/별도 명시 환경에서 `powershell -NoProfile -ExecutionPolicy Bypass -File load-test/scripts/Run-MixedSeatHoldComparison.ps1 -BatchId <새 ID> -FixtureRunId <준비된 fixture ID>`로 기본 20석 조건부터 재개한다. 전용 `COMPOSE_PROJECT_NAME=ticketon-mixed224-*`, DB 3309, 2,000석 local/loadtest Backend·k6가 필요하다. 최신 runner는 fixture를 **생성/초기화하지 않고**, 준비된 fixture를 GET·전용 DB SQL로 대조한 뒤에만 k6를 시작한다. 잘못된 DB 대상의 사전 확인에서 쓰기 API 호출이 없음을 mock으로 검증했다. 초기 실측은 각 run의 새 fixture를 생성한 이전 도구로 실행했으며, 이후 코드의 읽기 전용 preflight·동일 fixture 재사용이 과거 실측에 적용됐다고 소급하지 않는다. 재개할 fixture 준비는 실행자가 Backend datasource가 전용 DB를 가리키는지 확인한 별도 단계로 수행한다. 200석은 `-LargeSizes 20,200`의 명시적 선택이며 기본 증량하지 않는다. 빈 크기 배열은 거절하고, 모든 필수 조건의 3회 측정이 정확히 존재할 때만 `Complete:true`다. Docker 주소 풀 고갈은 기존 비활성 TicketOnBoarding user-defined network 재사용으로 우회했고, 기존 network·volume·사용자 프로세스를 삭제하지 않았다. 실행 중단 후 이번 Backend/DB만 종료하고 DB 데이터는 보존했다.
+
+### 자원 여유 확보 후 재시도 (#226)
+
+사용자 승인으로 Gradle 8.13 daemon PID 28544의 마지막 빌드 종료를 로그에서 확인한 뒤 해당 프로세스만 종료했다. Java 언어 서버·다른 서버·파일은 변경하지 않았다. Windows 가용 메모리는 직후 약 **3.3GiB**, Backend 기동 후 약 2.2GiB였다. 동일 전용 DB·Java 메모리·Hikari 24·2,000석 구성에서 `mixed226-fixture`를 새로 준비했다. fixture 생성 전에 API를 제공하는 Backend PID의 실제 DB 3309 연결과 해당 compose 서비스의 포트 매핑을 확인했다. 서비스 코드 변경이 없어 기존 jar를 재사용했다.
+
+[mixed226a 원자료](../../load-test/results/mixed226a-comparison.json)는 최신 runner와 준비된 fixture로 실행한 결과다. preflight 가용 메모리는 **2,224,656,384 bytes ≈ 2.07GiB**로 기준을 통과했지만, 첫 작은 요청 단독 5초 warm-up에서 host CPU peak **90.75%**로 중단됐다. `Complete:false`, 기록 1개 모두 warm-up, **측정 단계 0개·큰 요청 시도 0번**이다. 작은 요청 50번 모두 Hold→Release 완료, 충돌·예상 밖 오류·dropped·DB row-lock wait/time·deadlock·종료 Hold·재고 불변식 위반 0이었다. k6 전체 HTTP 요청 103건에는 fixture/token/snapshot 조회 3건이 포함되어 50번 점유 사이클과 구분한다.
+
+해당 표본의 JVM process CPU peak는 16.9%, host peak는 90.75%였지만 서로 같은 시점의 값이라는 보장이 없으므로 빼기 계산이나 다른 프로세스 원인 단정은 하지 않는다. 수집 표본 5개, 실제 간격 1,011~4,868ms로 순간 pending·잠금 대기의 부재를 증명하지 않는다. warm-up p95 61.68ms는 **성능 개선·반복 비교 결과로 사용하지 않는다**. 메모리 정리만으로 실측 환경이 안정됐다고 볼 수 없으며, 큰 묶음 자체의 문제도 이번 실행으로 판단할 수 없다.
+
+추가 retry·증량·자원 gate 완화는 하지 않았다. 다음 실행은 Backend 준비 후 **무부하 host CPU/가용 메모리 기준선**을 먼저 확인하고, 자원 안정화 또는 별도 명시 환경에서 20석 비교를 재개하는 방향이다. 변경 전후 성능 수치로 서로 다른 호스트를 비교하지 않는다. 이번 Backend/DB는 종료하고 fixture 데이터는 보존했다.
