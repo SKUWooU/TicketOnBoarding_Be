@@ -301,6 +301,39 @@ API의 `serverNow`는 Redis Lua의 같은 조회에서 얻은 TIME이다. applic
 
 [AdmissionApiGateTest](../../onticket/src/test/java/com/onticket/admission/AdmissionApiGateTest.java)는 실제 disposable Redis 7.4.7-alpine Testcontainers(128MiB) + MockMvc에서 JWT 주체·다른 사용자·회차 경계·대기 포화·TTL 미연장·오래된 이탈·입장 만료·marker 유실·신규 gate·우회 차단·기존 결제/정리 연속성을 확인한다. 구매 서비스는 mock이므로 실제 MariaDB 쓰기/PG I/O까지의 E2E 성과는 아니다. [CheckoutAdmissionBoundaryTest](../../onticket/src/test/java/com/onticket/concert/service/CheckoutAdmissionBoundaryTest.java)는 실제 CheckoutService와 mock repository/transaction을 사용해 신규 gate 순서와 기존 결과 재사용을 검증한다. [설정 테스트](../../onticket/src/test/java/com/onticket/admission/AdmissionConfigurationTest.java)는 기본 비연결·잘못된 설정 fail-fast·자동 repository REST exporter 부재를 확인한다. 기존 Redis 코어/Controller 회귀도 함께 실행한다.
 
-이번 API에는 bootstrap/tick 호출 경로가 없다. 테스트만 trusted fixture에서 직접 bootstrap/tick한다. 따라서 아직 자동 입장 승격이나 FE 대기 화면을 완성한 것이 아니며, 운영자 초기화·bounded worker 검증이 다음 단계다. Redis 완전 유실 후 같은 generation 자동 재초기화는 금지한다. 입장 token 검증과 MariaDB transaction은 서로 다른 저장소이며 검증 직후 만료/이탈된 in-flight 요청을 취소하지 않는다. maxActive는 유효 입장권 한도이지 DB 동시 transaction 절대 상한·좌석 보장·TPS 성과가 아니다. 전역 Security 및 다른 관리자 경로의 기존 문제까지 해결한 것은 아니다.
+API에는 bootstrap/tick 호출 경로가 없다. #232 시점에는 테스트만 trusted fixture에서 직접 bootstrap/tick했으며 운영자 초기화·worker는 이후 17절에서 구현했다. FE는 아직 미연동이다. Redis 완전 유실 후 같은 generation 자동 재초기화는 금지한다. 입장 token 검증과 MariaDB transaction은 서로 다른 저장소이며 검증 직후 만료/이탈된 in-flight 요청을 취소하지 않는다. maxActive는 유효 입장권 한도이지 DB 동시 transaction 절대 상한·좌석 보장·TPS 성과가 아니다. 전역 Security 및 다른 관리자 경로의 기존 문제까지 해결한 것은 아니다.
 
 로컬 대상 테스트는 76개 통과했다(API/gate 13·설정 5·Checkout 경계 3·Redis 코어 19·활성화/문자열 2·기존 Controller 회귀 34). 실행은 `gradlew.bat test --tests "*Admission*Test" --tests "*RedisAdmissionStoreTest" --tests "*ReservationControllerTest" --tests "*LegacyReservationDisabledTest" --tests "*LoadTestControllerTest" --no-daemon --max-workers=1`. full Backend CI와 독립 검토 결과는 Issue #232의 연결 PR에서 확인한다.
+
+## 17. 운영자 초기화와 자동 입장 승격 (#234)
+
+### 왜 polling과 승격을 분리하는가
+
+본인의 GET은 조회만 수행한다. 오픈 시각 이후 대기열의 선두를 입장시키는 일은 [AdmissionWorker](../../onticket/src/main/java/com/onticket/admission/AdmissionWorker.java)가 별도 처리한다. `onticket.admission.enabled=true`와 기존 local+loadtest/fixture 정책 검증을 모두 통과할 때만 worker를 등록한다. 기본 fixed-delay/initial-delay는 1초이며 `onticket.admission.worker.delay-ms`는 250~60,000ms 범위, `worker.enabled=false`로 중단할 수 있다. 전용 scheduler는 한 thread이고 실행 종료 후 다음 지연을 세므로 같은 앱에서 tick을 중첩하지 않는다.
+
+각 tick은 정책의 `batchSize`까지만 승격/만료를 처리한다. 오픈 전에는 승격하지 않고, 유효 입장권 수가 `maxActive`를 넘지 않게 Lua가 검사한다. 다른 앱 worker와 실행이 겹쳐도 Redis가 Lua를 직렬 실행하므로 별도 leader election/분산 락이 필요하지 않다. 실제 Redis TIME이 기준이며 JVM/클라이언트 시각으로 기한을 연장하지 않는다. 이탈 또는 만료로 빈 자리가 생기면 다음 tick에서 다음 대기자가 입장한다. 즉시 push가 아니므로 TTL/이탈 이후 입장까지 지연이 존재한다.
+
+Redis 오류/marker 유실은 성공으로 취급하지 않는다. worker는 unavailable counter를 늘리고 다음 tick을 시도하지만 bootstrap/fallback을 호출하지 않는다. 장애 진입/회복 때만 안전한 로그를 기록해 매 tick의 stack trace/token 노출·반복 로그를 피한다. `onticket.admission.worker.ticks{result=success|unavailable}`, `onticket.admission.worker.promoted`만 사용하며 사용자/회차/generation label을 넣지 않는다. 성공 tick 수에는 승격 0건도 포함하고 promoted는 입장 배정 누적 건수이지 구매 성공/동시 입장 수가 아니다. 이 지표는 이번 단계에서 부하 비교/Prometheus 실측까지 한 것이 아니다.
+
+### 초기화 권한과 실행 순서
+
+[AdmissionBootstrapCommand](../../onticket/src/main/java/com/onticket/admission/AdmissionBootstrapCommand.java)는 웹 서버/DB/PG를 띄우지 않는 standalone CLI다. loopback Redis에만 연결하고 connect/command timeout은 각각 1초다. 정책 전용 properties 파일과 `--confirm-new-generation` 두 인자를 요구한다. 다른 설정 key·잘못된 정책·누락/중복 인자는 연결 전에 거절한다. 출력은 안전한 성공/실패 code뿐이며 원시 예외·정책 파일 내용·token은 출력하지 않는다. runtime 서버와 CLI는 같은 `AdmissionSettings.policy()`로 정책 fingerprint를 계산한다.
+
+1. admission 비활성 서버에서 fixture와 테스트 사용자/token을 먼저 준비한다. 기존 `POST /loadtest/runs`, `GET /loadtest/fixture` 응답의 실제 concertId/concertTimeId를 사용한다.
+2. [정책 예제](../../load-test/admission-policy.example.properties)를 추적하지 않는 로컬 파일로 복사해 실제 회차 ID, **새 generation**, UTC opensAt을 수정한다. 기본 2/20/2 한도는 작은 기능 검증용이며 2,000석 fixture와 별개다.
+3. 저장소 루트에서 `docker compose -f compose.admission.yml --profile admission up -d admission-redis`로 명시적으로 Redis를 켠다. 다른 저장소/운영 데이터는 사용하지 않는다.
+4. `onticket`에서 `gradlew.bat bootstrapAdmission --args="--policy-file=../load-test/admission-policy.example.properties --confirm-new-generation=local-demo-g1" --no-daemon --max-workers=1` 형식으로 초기화한다. **예제 경로/ID/generation은 그대로 실행할 값이 아니며 수정한 로컬 파일을 사용한다.** 기본 Redis port는 16379다.
+5. 준비에 사용한 서버를 종료하고 `local,loadtest` 및 동일한 정책 파일로 재시작한다. 예: `gradlew.bat bootRun --args="--spring.profiles.active=local,loadtest --spring.config.additional-location=file:D:/project2/.work/admission-local.properties" --no-daemon --max-workers=1`. 기존 DB/JWT 로컬 환경 변수는 계속 필요하다. 활성 fixture 수정/token 발급이 동결되므로 1단계의 준비를 건너뛰지 않는다.
+6. 현재 FE는 대기 API를 호출하거나 입장 token을 붙이지 않는다. 활성 fixture의 기존 화면에서 바로 좌석 선택을 누르면 403이 정상이며, FE 패널 연결은 별도 후속 작업이다. 이번 단계의 검증은 테스트에서 수행한다.
+
+CLI는 `INIT_FRESH` Lua로 동일 namespace의 초기화를 원자 수행한다. 이미 초기화된 곳이나 일부 key만 남은 곳은 거절하고 아무것도 지우지 않는다. 동시 초기화는 하나만 성공한다. 설정이 잘못됐으면 exit 2, Redis 오류/이미 존재/부분 자료라면 exit 1, 생성이면 exit 0이다. 기존 healthy namespace의 서버 재시작에는 CLI를 다시 실행할 필요가 없다.
+
+**완전 유실 후에는 과거 generation 사용 이력을 Redis만으로 알 수 없다.** 확인 인자는 운영자의 새 generation 선택을 요구하지만 이를 영구 ledger로 증명하지 않는다. 자료 유실/의심 상태에서 worker를 중단하고 새 generation 정책으로 CLI 초기화 및 서버 재시작한다. 이전 generation 자료를 이 도구가 삭제하지 않으며, old token은 새 namespace/주체 검증에서 사용할 수 없다. AOF crash durability·failover·자동 데이터 복원은 아직 검증하지 않았다.
+
+### 검증의 의미와 다음 연결
+
+[AdmissionWorkerIntegrationTest](../../onticket/src/test/java/com/onticket/admission/AdmissionWorkerIntegrationTest.java)는 disposable Redis 7.4.7-alpine Testcontainers(128MiB)에서 fresh 초기화 중복/부분 자료, 두 독립 Lettuce 연결 worker의 동시 tick·FIFO/한도·오픈 전·이탈/정각 만료, marker 유실·새 generation 복구를 검증한다. 실제 Spring scheduling이 수동 tick/polling 없이 승격하는지도 확인한다. 실제 CLI 연결의 정책과 server 생성자가 일치하는지, production Redis TIME 기반 조회/입장 TTL과 재초기화 거절을 확인한다. controlled-time 경계 검증과 실제 시간/scheduling 검증을 구분한다.
+
+설정/CLI/worker unit 검증은 잘못된 설정 fail-fast, 기본 worker 비등록, 단일 scheduler, 장애 후 tick 재시도·낮은 cardinality 지표·로그 비노출을 확인한다. 기존 API/gate/코어/Controller 회귀도 유지한다. 이는 두 전체 BE 프로세스·MariaDB 구매·실 PG·고부하의 E2E 성과가 아니다. 다음은 FE 대기 패널, 제한된 공유/복구·실제 구매 서비스 연결, 이후 입장 제어 적용 전후의 p95/Hikari pending/오류/재고 불변식 비교다. worker 구현만으로 DB 부하 감소를 주장하지 않는다.
+
+로컬 대상 91개 테스트(기존 76 + 초기화/worker 15)와 `bootJar` 빌드를 통과했다. JAR Start-Class가 기존 `OnticketApplication`임도 확인했다. Gradle `bootstrapAdmission`에 존재하지 않는 정책 파일을 전달한 부정 검증은 안전한 `INVALID_ADMISSION_BOOTSTRAP_REQUEST`·프로그램 exit 2(Gradle 실패)로 종료하며 Redis/DB/PG를 시작하지 않는다. 전체 CI·독립 리뷰는 Issue #234의 연결 PR에 기록한다. 반복 횟수나 처리량을 확대한 성능 결과는 아니다.

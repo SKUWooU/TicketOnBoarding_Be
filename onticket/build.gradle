@@ -72,3 +72,15 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+springBoot {
+    mainClass = 'com.onticket.OnticketApplication'
+}
+
+tasks.register('bootstrapAdmission', JavaExec) {
+    group = 'application'
+    description = 'Explicit fresh namespace bootstrap for loopback admission Redis (no web/DB/PG startup).'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.onticket.admission.AdmissionBootstrapCommand'
+    maxHeapSize = '128m'
+}

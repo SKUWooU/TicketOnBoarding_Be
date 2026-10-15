@@ -6,8 +6,9 @@
 | --- | --- | --- |
 | 완료 | 공연 오픈 대기실·입장권 설계 (#228) | ADR-0006·STUDY_GUIDE 14절은 API 계약 초안. 구매 접근 권한이며 좌석/결제 보증 아님. |
 | 완료 | BE 대기·입장 원자 코어 (#230) | 비노출 코어·동시 join/tick·FIFO/한도·만료/이탈·자료 유실 검증. PR #231 병합. |
-| 현재 | BE 인증 API·신규 구매 gate (#232) | 본인 등록/조회/이탈, 기본 비활성·local+loadtest fixture opt-in. 신규 Hold/Checkout gate와 직접 예약/자동 repository REST/fixture 변경 우회 차단. 기존 결제·정리 연속성 유지. |
-| 후속 | 운영자 초기화·bounded 승격 worker → FE 대기 패널 → 제한된 공유·복구 검증 | API는 초기화/승격 권한을 공개하지 않음. 현재 자동 입장 승격 없음. FE는 독립 Issue/PR, 큰 부하·SSE·Kafka·AWS 제외. |
+| 완료 | BE 인증 API·신규 구매 gate (#232) | 본인 API·fixture opt-in·신규 구매 gate·우회 차단·기존 결제 연속성, PR #233 병합. |
+| 현재 | 운영자 초기화·bounded 승격 worker (#234) | loopback fresh CLI, 새 generation 명시 확인·기존 자료 보존. 전용 single scheduler·중복 worker/FIFO/한도·Redis 유실 fail-closed 검증. |
+| 후속 | FE 대기 패널 → 제한된 공유·복구·구매 서비스 연동 → 입장 제어 전후 점진 부하 비교 | FE는 독립 Issue/PR. 공개 bootstrap/tick 없음. worker 구현만으로 DB 부담 감소/TPS 성과를 주장하지 않음. 큰 부하·SSE·Kafka·AWS 제외. |
 | 완료 | 미검증 비밀번호 복구 차단 (#214) | `/users/issmscode`·`/users/changepwd`를 일시 중단. 새 인증을 구현한 것으로 해석하지 않음. 로그인 후 변경·회원가입은 이번 범위 밖. |
 | 후속 | 안전한 비밀번호 복구 BE/FE 계약 | 번호별 challenge·만료·시도 제한·일회용 권한·소비와 비밀번호 저장의 원자성, SMS 포트 분리·본문/로그 코드 미노출 검증 후 재개. 현재 공유 SMS 코드/응답 노출은 미해결이며 기존 코드를 복구 증명으로 재사용하지 않음. 실제 SMS 호출은 별도 승인. |
 | 완료 | 리뷰 소유권 경계 (#216) | DB 작성자·공연 소속·관리자 삭제 정책을 서비스에서 검증. 평점 동시성·입력 평점 범위·전역 Security는 제외. |
