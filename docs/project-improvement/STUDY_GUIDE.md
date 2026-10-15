@@ -337,3 +337,34 @@ CLI는 `INIT_FRESH` Lua로 동일 namespace의 초기화를 원자 수행한다.
 설정/CLI/worker unit 검증은 잘못된 설정 fail-fast, 기본 worker 비등록, 단일 scheduler, 장애 후 tick 재시도·낮은 cardinality 지표·로그 비노출을 확인한다. 기존 API/gate/코어/Controller 회귀도 유지한다. 이는 두 전체 BE 프로세스·MariaDB 구매·실 PG·고부하의 E2E 성과가 아니다. 다음은 FE 대기 패널, 제한된 공유/복구·실제 구매 서비스 연결, 이후 입장 제어 적용 전후의 p95/Hikari pending/오류/재고 불변식 비교다. worker 구현만으로 DB 부하 감소를 주장하지 않는다.
 
 로컬 대상 91개 테스트(기존 76 + 초기화/worker 15)와 `bootJar` 빌드를 통과했다. JAR Start-Class가 기존 `OnticketApplication`임도 확인했다. Gradle `bootstrapAdmission`에 존재하지 않는 정책 파일을 전달한 부정 검증은 안전한 `INVALID_ADMISSION_BOOTSTRAP_REQUEST`·프로그램 exit 2(Gradle 실패)로 종료하며 Redis/DB/PG를 시작하지 않는다. 전체 CI·독립 리뷰는 Issue #234의 연결 PR에 기록한다. 반복 횟수나 처리량을 확대한 성능 결과는 아니다.
+
+## 18. Redis 장애와 기존 구매 처리 분리 (#236)
+
+### 왜 필요한가
+
+입장 제어는 **새 구매의 접근 권한**이다. Redis가 잠시 응답하지 않을 때 새 Hold·Checkout을 허용하면 gate를 우회하지만, 이미 준비한 주문의 취소·좌석 해제·결제 검증까지 막으면 장애의 영향이 구매 후속 처리로 확산된다. 16절 API 테스트는 구매 서비스를 mock으로 확인했으므로 실제 DB 쓰기가 이 경계를 유지하는지는 별도로 검증해야 한다. FE [PR #56](https://github.com/SKUWooU/TicketOnBoarding_Fe/pull/56)은 정상 입장·대기·취소·다음 사용자 좌석 재사용을 실제 브라우저로 검증했고, 이번에는 BE 장애 경계를 보완한다.
+
+### 코드 흐름
+
+- 신규 Hold: Controller → `AdmissionAccess.requireAdmission` → 실제 Redis 권한 확인 → MariaDB `SeatHoldService`. Redis 오류는 `ADMISSION_UNAVAILABLE` 503으로 반환하고 구매 서비스에 진입하지 않는다.
+- 신규 Checkout: `CheckoutService.prepare`의 기존 멱등 결과 조회 → 결과가 없을 때만 Redis gate → 생성 transaction. 기존 Key·동일 요청의 재조회는 Redis를 요구하지 않는다. 다른 Key의 신규 생성은 차단한다.
+- 취소·Hold DELETE·기존 Checkout 결제 검증: 기존 MariaDB 소유권/상태/요청 검증을 사용하며 새로운 입장권을 요구하지 않는다. PG는 `PaymentVerificationPort`만 Mock이며 예약·결제 저장은 실제 transaction으로 처리한다.
+
+### 검증 조건과 관측
+
+[AdmissionPurchaseContinuityIntegrationTest](../../onticket/src/test/java/com/onticket/admission/AdmissionPurchaseContinuityIntegrationTest.java)는 JUnit 5·MariaDB 10.11.8(512MiB 제한)·Redis 7.4.7-alpine(128MiB container, maxmemory 64MiB/noeviction) Testcontainers를 사용한다. MariaDB는 Flyway 적용 후 Hibernate validate, HikariCP 최대 4개 연결이다. Spring 구매 서비스와 repository·transaction은 실제 구현이며 Controller는 standalone MockMvc, JWT 주체와 외부 PG 포트는 mock이다. 실제 HTTP 서버·FE E2E는 아니다.
+
+| 시나리오 | 확인할 저장 결과 |
+| --- | --- |
+| 두 독립 Lettuce 연결 | 첫 연결에서 발급한 입장권을 두 번째 연결의 gate가 검증하고 실제 Hold 저장. 다른 사용자가 같은 token을 제출하면 403, DB 무변경. 조회 전후 만료 시각 동일. |
+| Redis 일시 정지 중 신규 차단·정리 | `docker pause`로 해당 disposable Redis만 정지. 조회·신규 Hold·신규 Checkout은 503, 좌석·주문·귀속·예약·결제 snapshot 무변경. 기존 Checkout 재조회는 동일 결과, 취소/해제를 각각 두 번 수행해 CANCELED·점유 0·예약/결제 0 확인. |
+| Redis 재개 | finally에서 unpause. 기존 entry ID·만료 시각·sequence 유지 및 기존 입장권으로 새 Hold 성공. 자동 초기화나 기한 연장으로 회복한 것이 아님. |
+| 정지 중 기존 결제 후속 처리 | Redis 조회 503을 확인한 같은 정지 구간에서 준비된 Checkout의 Mock PG 검증·동일 Key 재시도 성공. PG 호출 1회, Booking·Reservation·Payment 각 1건, 잔여 수량 3→2, 예약 좌석 1개·남은 Hold 0. |
+
+Redis 연결은 실제 서버와 같은 `AdmissionRedisConnections.loopback`의 connect/command timeout 1초 설정을 사용한다. 정지 중 테스트가 요청하는 Redis 명령은 조회뿐이며 timed-out JOIN 같은 쓰기의 사후 실행 안전성을 주장하지 않는다. 구매 시간은 고정 Clock, Redis 입장 기한은 실제 Redis TIME을 사용한다. pause는 **네트워크 차단·process crash·자료 유실·AOF 복원·failover가 아니다**. 두 연결은 두 전체 BE 프로세스의 운영 검증도 아니다.
+
+실행: `onticket`에서 `gradlew.bat test --tests "*AdmissionPurchaseContinuityIntegrationTest" --no-daemon --max-workers=1`. 신규 3개와 기존 입장 제어·관련 Controller 회귀를 합친 대상 94개(실패/오류 0) 및 `bootJar`가 로컬에서 통과했다. 전체 Backend CI·독립 검토 결과는 Issue #236의 연결 PR에서 확인한다. 응답시간/처리량 비교나 장애 복구 SLA 수치는 측정하지 않았다. 테스트 전용 DB/Redis는 종료 시 정리하며 기존 로컬 volume을 사용하지 않는다.
+
+### 다음 판단
+
+이 경계를 확인한 뒤 같은 작은 fixture에서 입장 제어 적용 전후를 점진적으로 비교한다. 대기열 입장 지연과 구매 API 지연·DB pending·정상 좌석 충돌·예상 밖 오류·재고 불변식을 분리해야 한다. 유효 입장권 한도는 DB 동시 transaction의 절대 상한이나 성능 향상을 뜻하지 않는다.
