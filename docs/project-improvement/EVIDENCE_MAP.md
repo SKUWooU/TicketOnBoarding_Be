@@ -32,5 +32,6 @@
 | MCP 단계 종료·업무 결과와 집계 구분 | 독립 SQL 600 transactions의 DB 반영 일치, 병렬 digest 집계 부족 재현. 예매 경합 1,804건 복귀 후 실제 MCP 자원 재검토 판정 | [#210](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/210), [대조·복귀·한계](EXPERIMENTS.md#8-제한된-sql-대조와-예매-경합-복귀-210) |
 | DB 대기 반복성과 계측 부담 구분 | 같은 인기 1석·20 iterations/s에서 1초/2초 수집 교차 3회. 1,804건·예상 밖 오류 0; 실패 배치도 보존, p95 개선·CPU 귀속 단정 제외 | [#202](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/202), [계측 비교](EXPERIMENTS.md#6-같은-경합에서-계측-빈도-교차-검증) |
 | 다중 인스턴스·DB schema 변경 경계 | 로컬 2-instance 상태 수렴 smoke; Flyway fresh/baseline 검증 | [#150](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/150), [#152](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/152). 운영 확장성·기존 DB 무중단 migration 증명 아님. |
+| 입장 제어 장애와 기존 구매 처리 분리 | 실제 Redis pause 중 신규 Hold/Checkout 503·DB 무변경, 기존 재조회/취소/해제·Mock PG 확정, 독립 연결의 입장권 공유/소유자 경계 | [#236](https://github.com/SKUWooU/TicketOnBoarding_Be/issues/236), [학습 가이드 18절](STUDY_GUIDE.md#18-redis-장애와-기존-구매-처리-분리-236). pause/resume 검증이며 crash/failover·두 전체 앱·부하 성능 증명 아님. |
 
 위 수치는 **가상 좌석 fixture와 제한된 로컬 환경**의 결과다. 0건은 해당 반복에서 관측하지 않았다는 뜻이며, 실제 예매처의 운영 처리량이나 모든 경합 조건의 안전성을 뜻하지 않는다. 과거 Issue별 긴 기록은 [아카이브](archive/)와 [정리 전 스냅샷](https://github.com/SKUWooU/TicketOnBoarding_Be/tree/53e9b7a7425a7ee961f332ef716e8b05e08484e5/docs/project-improvement)에 보존된다.
