@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "status": "STOPPED_DURING_WARMUP",
+  "runId": "adm238-e9c51453-1-off",
+  "usableForComparison": false,
+  "reason": "The short k6 arrival window scheduled one extra boundary iteration; strict planned-session accounting rejected the warm-up before measurement.",
+  "warmup": {
+    "targetSessionsPerSecond": 1,
+    "durationSeconds": 2,
+    "plannedSessions": 2,
+    "observedSessions": 3,
+    "holdSuccess": 3,
+    "released": 3,
+    "unexpectedFailures": 0,
+    "droppedIterations": 0
+  },
+  "resolution": "Cap logical purchase sessions at the planned budget. Record at most one no-HTTP boundary iteration separately; more boundaries invalidate the run. Use fresh fixtures for the next attempt.",
+  "otherPreparationChange": "Explicit INFO/WARN logger overrides for both modes; no measurements from this attempt are reused.",
+  "scope": "Workload harness diagnostic, not a Backend error or performance improvement"
+}

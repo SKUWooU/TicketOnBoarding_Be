@@ -185,3 +185,33 @@ backtick·별칭을 포함한 정규화 SQL 분류 fixture를 보강했다. 다�
 2026-10-15(client date) 후속 [host-only 진단](evidence/idle-host-20261015.json)은 TicketOnBoarding Backend·실행 중 Docker container·k6가 없는 상태에서 Windows CIM으로 CPU·메모리를 6회 관측했다. CPU 표본은 **45/43/92/38/33/38%**, 가용 메모리는 **0.727~0.788GiB**였다. 요청한 pause는 2초지만 실제 간격·관측 비용을 기록/제외하지 않았고 이전 Prometheus와 계측 창도 다르다. Backend 없이도 높은 host CPU가 나타날 수 있다는 관측이며, 이전 peak의 특정 원인이나 서비스 용량을 입증한 것은 아니다.
 
 혼합 실험의 도구·안전장치·원자료·회귀 검증은 보존하되 **성능 비교 미완료·요청 상한 미결정**으로 마무리한다. 재측정·호스트 귀속 심화는 필수 후속이 아닌 선택 과제다. 사용자는 기존 기능의 반복 진단 대신 공연 오픈 대기실·입장권의 도메인 확장을 선택했다([ADR-0006](adr/0006-performance-opening-admission.md)). 새 요구의 설계와 향후 기능 검증을 이 중단된 성능 실험의 개선 결과로 연결하지 않는다.
+
+## 10. 입장 제어의 구매 세션 탐색 (#238)
+
+**질문:** 같은 구매 유입에서 입장 제어가 좌석 경합을 어떻게 바꾸며, 대기·polling 비용은 얼마나 추가되는가? 앱을 튜닝한 결과가 아니라 신규 입장 정책의 초기 탐색이다. [실측 요약](../../load-test/results/admission238-382b9a3b-comparison.json), [흐름·재현 방법](STUDY_GUIDE.md#19-같은-구매-유입에서-입장-대기와-쓰기-비용-비교-238).
+
+**2026-10-15 조건:** Windows·i5-10210U·8 logical CPU·15.81GiB RAM, Java 21 heap 384MiB/metaspace 192MiB·Hikari 4, MariaDB 10.11.8 container 512MiB, Redis 7.4.7 container 128MiB/maxmemory 64MiB/noeviction, k6 2.1.0. 조건마다 새 가상 20석·인기 1석·독립 사용자, Hold 성공 후 500ms 대기·DELETE, ON만 입장권 반납까지 수행했다. Checkout·실 PG·KOPIS·브라우저·실제 결제 체류 시간은 포함하지 않는다. 모든 공연을 20/2,000석으로 변경한 것이 아니다.
+
+**계획:** 1/2/5 **sessions/s**, 각각 5초 도착 구간(5/10/25세션). OFF→ON / ON→OFF / OFF→ON 순서, 별도 사용자 2명의 2초 warm-up 제외. ON은 active 2/waiting 30/batch 2, TTL 각 2분·worker 1초·polling 5초다. 종료 후 대기 세션을 drain하며, 표의 실행시간은 k6 보고 시간으로 도착 구간보다 길다. HTTP RPS·TPS 또는 모든 사용자가 5초 안에 끝난 결과로 해석하지 않는다.
+
+| 유입 (sessions/s) | 모드 | 세션 | 점유 성공 / 정상 409 | Hold p95 (ms) | 입장 대기 p95 (s) | 세션 전체 p95 (s) | k6 실행시간 (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | OFF | 5 | 5 / 0 | 52.87 | 0 | 0.63 | 5.38 |
+| 1 | ON | 5 | 5 / 0 | 85.69 | 5.09 | 5.78 | 10.28 |
+| 2 | ON | 10 | 8 / 2 | 99.70 | 20.22 | 20.90 | 26.43 |
+| 2 | OFF | 10 | 5 / 5 | 88.35 | 0 | 0.64 | 5.49 |
+| 5 | OFF | 25 | 9 / 16 | 73.39 | 0 | 0.63 | 6.25 |
+| 5 | ON | 25 | 12 / 13 | 98.57 | 59.43 | 59.67 | 67.42 |
+
+**정합성·관측:** warm-up 제외 80세션 = 점유 성공·해제 44 + 정상 충돌 36. 예상 밖 오류·dropped·입장 대기 상한 초과 0, ON 40세션 모두 입장·이탈 완료. 각 실행의 최종 잔여 20석·Hold/예약/결제 0·재고 불변식 정상, Hold HTTP 200/409 서버 counter와 k6 건수가 일치했다. 전체 배치 성공 후 자체 앱·컨테이너·임시 인증 파일 정리 출력까지 확인했다. 기존 로컬 DB/volume은 사용하지 않았다.
+
+- Hikari pending은 모든 표본에서 0, active peak는 0~1/최대 4였다. DB row-lock counter는 2 sessions/s ON의 표본 창에서 1건·누적 5ms 증가, 나머지는 0이었다. SQL deadlock counter 증가는 0이었다. **DB 대기가 전혀 없었다거나 입장 제어가 DB 병목을 개선했다고 주장하지 않는다.**
+- 설정한 수집 pause는 1초지만 실제 표본 간격은 1,523~1,716ms, 실행별 표본은 3~42개다. 순간 pending을 놓칠 수 있다. counter 창은 첫~마지막 표본으로 drain·collector SQL을 포함하며 SQL별 병목 귀속이나 전체 실행 delta가 아니다.
+- 표본 host CPU peak는 64.1~84.0%, 최소 가용 메모리는 약 2.24GiB였다. host CPU는 다른 프로세스와 수집 비용을 포함한다. 이 값으로 JVM/DB 단독 원인·자원 한계·안정 처리 구간을 확정하지 않는다.
+- ON의 측정 중 polling은 1/2/5 sessions/s에서 5/25/164회였다. 입장 API의 공연/회차 소속 검증도 MariaDB를 조회하므로 Redis 사용이 전체 DB 접근을 없애는 것은 아니다.
+
+**초기 중단 보존:** [첫 시도](../../load-test/results/admission238-e9c51453-diagnostic.json)는 k6의 종료 경계 추가 iteration 때문에 warm-up 집계에서 중단됐다. 예정 세션 예산 이후 HTTP를 보내지 않고 경계 iteration을 별도 집계하도록 보강했다(완료 배치에서 단계별 0~1회, dropped와 별개). [두 번째 시도](../../load-test/results/admission238-6b175213-diagnostic.json)는 Hold의 정상 HTTP 409를 다른 예약 API의 전용 헤더로 분류하던 도구 오류로 중단됐다. 실제 Hold 계약을 반영하고 회귀 테스트를 추가했다. 상속된 DEBUG 환경 변수도 있어 완료 배치에는 `--debug=false`를 명시했으며 private runtime 로그에서 DEBUG 부재를 확인했다. 두 시도의 지연 수치는 최종 비교에 섞지 않는다.
+
+완료된 실측 이후 실행기에 Java/k6/JAR 사전 확인, child spawn 오류 처리와 cleanup 상태 분리를 보강했다. 이후 실행은 정리 전 `MEASUREMENTS_COMPLETE_CLEANUP_PENDING`, 정리 실패 시 `CLEANUP_FAILED`, 정리 성공 후에만 `EXPLORATION_COMPLETE`를 기록한다. 위 실측의 초기 artifact에는 `runtimeCleanup` 필드가 없으며 별도 `CLEANED owned runtime and temporary credentials` 출력을 근거로 정리를 확인했다. 이 보강을 새 부하 실측으로 세지 않는다.
+
+**판단:** 이 작은 유입에서 지속적인 pool 포화는 관측되지 않았고 ON의 Hold p95도 개선되지 않았다. ON의 성공 건수 증가는 더 긴 대기/drain과 실행 순서의 영향을 포함한다. active 2·polling 5초 조합에서 입장권을 받은 사용자가 다음 poll까지 자리를 점유해 대기가 누적될 수 있다는 가설을 얻었지만, 세부 원인은 타임라인 계측과 통제 비교가 필요하다. 현재 결과는 **입장 정책의 비용 기준선**이며 운영 성능·대규모 트래픽 처리·통계적으로 반복한 개선율이 아니다. 후속은 같은 작은 유입에서 입장 한도/조회 주기 중 한 변수만 바꿔 비용을 비교하는 후보로 남기며, 무조건 증량하거나 SSE·Kafka·AWS를 도입하지 않는다.

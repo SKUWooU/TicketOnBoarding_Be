@@ -10,7 +10,8 @@
 | 완료 | 운영자 초기화·bounded 승격 worker (#234) | PR #235 병합. loopback fresh CLI·single scheduler·중복 worker/FIFO/한도·Redis 유실 fail-closed 검증. |
 | 완료 | FE 대기 패널·실제 구매 연동 | FE #53/PR #54, #55/PR #56에서 실제 Redis·MariaDB·두 브라우저 사용자 입장·취소·다음 사용자 좌석 재사용 검증. 성능 비교 아님. |
 | 검증 완료 | Redis 장애 중 구매 경계·독립 연결 공유 (#236) | 신규 3개 포함 대상 94개·bootJar 로컬 통과, CI/리뷰/병합 결과는 연결 PR 참조. 전용 Redis pause/resume만 사용, crash/failover·전체 두 앱 E2E 제외. |
-| 후속 | 입장 제어 전후 점진 부하 비교 | 작은 동일 fixture·고정된 도착률/세션 흐름에서 입장 대기와 구매 API 지표를 구분. 유효 입장권 수는 DB 동시 transaction 상한이 아님. 큰 부하·SSE·Kafka·AWS 제외. |
+| 검증 완료 | 입장 제어 전후 구매 세션 탐색 (#238) | 1/2/5 sessions/s OFF/ON 6단계·80세션, pending 표본 0·5 sessions/s ON 대기 p95 59.43초. 성능 향상/처리 한계 증명 아님. CI/리뷰/병합은 연결 PR 참조. |
+| 후속 후보 | 입장 정책의 한 변수 통제 비교 | active 한도 또는 polling 주기 중 하나만 바꾸고 대기·추가 요청·Hold 성공/충돌을 함께 확인. 먼저 작은 동일 유입 유지. 큰 부하·SSE·Kafka·AWS 제외. |
 | 완료 | 미검증 비밀번호 복구 차단 (#214) | `/users/issmscode`·`/users/changepwd`를 일시 중단. 새 인증을 구현한 것으로 해석하지 않음. 로그인 후 변경·회원가입은 이번 범위 밖. |
 | 후속 | 안전한 비밀번호 복구 BE/FE 계약 | 번호별 challenge·만료·시도 제한·일회용 권한·소비와 비밀번호 저장의 원자성, SMS 포트 분리·본문/로그 코드 미노출 검증 후 재개. 현재 공유 SMS 코드/응답 노출은 미해결이며 기존 코드를 복구 증명으로 재사용하지 않음. 실제 SMS 호출은 별도 승인. |
 | 완료 | 리뷰 소유권 경계 (#216) | DB 작성자·공연 소속·관리자 삭제 정책을 서비스에서 검증. 평점 동시성·입력 평점 범위·전역 Security는 제외. |

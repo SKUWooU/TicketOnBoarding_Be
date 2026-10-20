@@ -368,3 +368,40 @@ Redis 연결은 실제 서버와 같은 `AdmissionRedisConnections.loopback`의 
 ### 다음 판단
 
 이 경계를 확인한 뒤 같은 작은 fixture에서 입장 제어 적용 전후를 점진적으로 비교한다. 대기열 입장 지연과 구매 API 지연·DB pending·정상 좌석 충돌·예상 밖 오류·재고 불변식을 분리해야 한다. 유효 입장권 한도는 DB 동시 transaction의 절대 상한이나 성능 향상을 뜻하지 않는다.
+
+## 19. 같은 구매 유입에서 입장 대기와 쓰기 비용 비교 (#238)
+
+### 비교 단위와 흐름
+
+HTTP RPS를 동일하게 맞추면 ON의 join/poll/leave 요청 때문에 실제 구매 세션 수가 달라진다. 따라서 **새 세션 유입**을 1/2/5 sessions/s로 고정한다. 각 세션은 새 사용자로 인기 1석의 Hold를 한 번 시도하고 성공 시 500ms 후 해제한다. ON만 join → 실제 정책의 5초 polling → 입장 확인 → Hold/release → leave를 거친다. Checkout·결제·브라우저는 이번 경로에 없다.
+
+- 각 5초 도착 구간에 논리 세션 5/10/25개를 배정한다. 종료 경계에서 k6가 추가한 iteration 하나는 HTTP를 보내지 않고 별도 집계한다. 두 개 이상이면 실패다. dropped iteration을 이 항목으로 옮겨 성공 처리하지 않는다.
+- warm-up은 모드마다 별도 사용자 2명·1 session/s·2초다. 지표에서는 제외하지만 이 정도로 JVM JIT·캐시가 완전히 안정됐다고 보장하지 않는다.
+- OFF→ON(1), ON→OFF(2), OFF→ON(5) 순서, 조건마다 새 20석 fixture를 사용한다. 6개 fixture는 같은 disposable DB에 먼저 준비한다. 각 조건 1회인 **짧은 탐색**이지 반복 A/B 성능 증명은 아니다.
+- 도착 종료 후 대기 중인 세션을 drain한다. 입장 대기 상한 75초·k6 gracefulStop 90초·전체 단계 120초를 넘으면 중단한다. 5초를 전체 완료 시간으로 잘못 나눠 TPS/RPS를 계산하지 않는다.
+- ON 설정은 active 2·waiting 30·batch 2·waiting/admission TTL 각 2분·worker 1초다. 유효 입장권 수는 DB 동시 transaction 수의 절대 상한이 아니다.
+- 한 번의 Hold 성공/충돌 뒤 좌석·입장권을 정리하는 synthetic 세션이다. 실제 FE에서 주문 취소 후에도 입장권을 유지하거나 사용자가 결제창에 오래 머무는 행동은 반영하지 않는다. 일반 사용자 체류가 길면 대기 비용이 더 클 수 있다.
+
+### 도구와 안전 경계
+
+[k6 시나리오](../../load-test/k6/admission-sessions.js)는 준비된 비공개 manifest만 읽고 fixture/token을 생성하지 않는다. loopback URL·runId/회차·실제 DB identity·정책·인증 주체·깨끗한 재고를 확인한다. warm-up과 측정의 사용자 범위는 겹치지 않는다. Hold의 정상 충돌은 해당 API의 HTTP 409 계약으로 분류하며, 다른 verified-reservation API의 헤더를 요구하지 않는다. JSON 응답·Cookie·입장 token을 출력하지 않는다.
+
+[수집기](../../load-test/scripts/measure-admission-sessions.mjs)는 같은 주기의 Prometheus Hikari와 DB 전역 row-lock counter, Node의 Windows host CPU/가용 메모리를 수집한다. pause 설정 1초에 HTTP/Docker CLI 비용이 더해지므로 실제 표본 간격을 남긴다. pending peak 0은 표본상 0이지 순간 대기 부재의 증명이 아니다. DB counter는 첫~마지막 표본 창이며 drain·collector SQL을 포함한다. 쿼리별 병목 귀속이나 전체 실행 구간 counter로 해석하지 않는다. Hold HTTP 200/409의 서버 counter 차이도 k6 성공/충돌 건수와 교차 확인한다.
+
+[실행기](../../load-test/scripts/run-admission-session-comparison.mjs)는 Windows·Java 21·Docker·k6에서 명시적인 `--confirm-disposable-local-resources`가 있어야 시작한다. 기존 서비스의 18080/18081/13308/17380 포트가 사용 중이면 연결하지 않고 거절한다. 전용 label과 새 ID의 `--rm` 컨테이너만 만들며 기존 named/bind volume을 사용하지 않는다. MariaDB 이미지의 자동 생성 anonymous volume은 이 전용 컨테이너와 함께 정리된다. fixture/token 준비 → 운영자 fresh bootstrap CLI → 동일 정책으로 앱 시작 순서다. 공개 API bootstrap/tick이나 자동 fallback은 추가하지 않는다.
+
+실행은 저장소 `onticket`에서 `gradlew.bat bootJar --no-daemon --max-workers=1`로 현재 JAR를 빌드한 뒤, 저장소 루트에서 다음과 같이 수행한다. `JAVA_HOME`은 설치된 Java 21을 가리켜야 한다.
+
+```powershell
+node --test load-test/k6/test/admission-sessions.test.mjs
+node load-test/scripts/run-admission-session-comparison.mjs --confirm-disposable-local-resources
+```
+
+시작·실행 중 host 가용 메모리 2GiB 미만, CPU 90% 이상 3연속 표본, 누락/예상 밖 오류/미해제 Hold/불변식 실패는 다음 단계 증량을 막는다. 표본상 pool pressure도 관측을 보존하고 후속 증량을 중단한다. 이는 탐색용 안전 정책이며 안정 처리 구간의 정의가 아니다. 실패 시 전용 자료·private console을 남기고 임의 reset/재실행하지 않는다. 자신의 앱은 실패 시에도 중단하고, 전체 성공 시에만 자신의 컨테이너·임시 인증 파일을 정리한다. private runtime 로그와 상태 경로는 콘솔에 표시하되 파일 내용은 공개하지 않는다.
+
+### 결과 읽는 순서
+
+1. 세션 수·Hold 성공/409·해제 수·입장/이탈 수·HTTP counter·최종 재고가 맞는지 먼저 확인한다.
+2. 구매 Hold p95와 입장 대기 p95·세션 전체 p95를 구분한다. ON의 성공 수 증가는 더 긴 대기/drain으로 기회가 생긴 결과일 수 있으며 처리량 향상과 다르다.
+3. 실제 DB 대기가 관측됐는지 본다. 입장 API도 공연/회차 소속 검증에서 MariaDB를 조회하므로 Redis 도입이 모든 DB 접근을 없애는 것은 아니다.
+4. 조건별 표본 수·실제 수집 간격·runtime 로그·반복 부재를 함께 읽는다. 초기 도구 중단도 보존하되 최종 비교에 섞지 않는다. 실측과 한계는 [실험 10절](EXPERIMENTS.md#10-입장-제어의-구매-세션-탐색-238)에서 확인한다.
