@@ -65,3 +65,21 @@ test('Redis policy reads accept only the newly created isolated loopback contain
     {...info,Mounts:[{Type:'bind',Destination:'/data'}]}, {...info,State:{Running:false}},
     {...info,HostConfig:{PortBindings:{'6379/tcp':[{HostIp:'0.0.0.0',HostPort:'17380'}]}}}]) assert.throws(()=>assertDedicatedRedis(changed,id));
 });
+
+test('published nine-stage cap comparison preserves balanced accounting and excludes credentials',()=>{
+  const text=readFileSync(new URL('../../results/admission-cap-f3fff2ec-comparison.json',import.meta.url),'utf8'), batch=JSON.parse(text);
+  assert.equal(batch.status,'EXPLORATION_COMPLETE');assert.equal(batch.runtimeCleanup,'COMPLETE');
+  assert.equal(batch.experiment,CAP_EXPERIMENT);assert.match(batch.sourceBaseCommit,/^[a-f0-9]{40}$/);assert.match(batch.jarSha256,/^[a-f0-9]{64}$/);
+  assert.deepEqual(summarizeCapRuns(batch.runs),batch.capSummaries);
+  assert.equal(batch.runs.reduce((sum,r)=>sum+r.result.started,0),225);
+  assert.deepEqual(batch.capSummaries.map(s=>[s.holdSuccess,s.seatConflicts,s.polls]),[[36,39,480],[34,41,238],[27,48,118]]);
+  for(const run of batch.runs) {
+    assert.equal(run.observation.hikariPendingPeak,0);assert.equal(run.observation.deadlockDelta,0);
+    assert.ok(run.observation.samples>=2);assert.ok(run.observation.minimumFreeHostBytes>=2*1024**3);
+  }
+  function visit(value) {
+    if(!value || typeof value!=='object')return;
+    for(const [key,child] of Object.entries(value)){assert.doesNotMatch(key,/^(accessToken|token|cookie|password|users|username)$/i);visit(child);}
+  }
+  visit(batch);assert.doesNotMatch(text,/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/);
+});
