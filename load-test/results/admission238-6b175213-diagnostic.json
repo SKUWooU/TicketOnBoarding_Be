@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "status": "STOPPED_DURING_MEASUREMENT",
+  "runId": "adm238-6b175213-3-on",
+  "usableForFinalComparison": false,
+  "completedPreliminaryStages": ["adm238-6b175213-1-off", "adm238-6b175213-2-on"],
+  "reason": "Hold's @ResponseStatus(409) contract was incorrectly classified using verified-reservation's separate response header. The k6 unexpected counter rejected this stage.",
+  "clientAccountingBeforeCorrection": {
+    "started": 10, "finished": 10, "joined": 10, "admitted": 10, "left": 10,
+    "holdAttempts": 10, "holdSuccess": 5, "released": 5, "unclassifiedResults": 5,
+    "waitTimeouts": 0, "droppedIterations": 0, "schedulerBoundarySkipped": 1
+  },
+  "resolution": "Classify Hold 409 according to its actual endpoint contract, independently of verified-reservation headers. Add a unit regression and rerun all conditions on fresh fixtures.",
+  "otherPreparationChange": "DEBUG environment variable was present. Explicit --debug=false is added to subsequent runtime startup, so no latency figures from this attempt are reused.",
+  "scope": "Incomplete workload harness validation, not proof of a Backend failure or performance gain"
+}
