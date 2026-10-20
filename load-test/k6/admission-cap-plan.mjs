@@ -1,3 +1,4 @@
+import { validPollAssignment } from './admission-poll-plan.mjs';
 export const CAP_EXPERIMENT = 'active-cap-v1';
 
 // Each limit occurs once in every position; traffic, batch, worker and polling remain fixed.
@@ -15,10 +16,12 @@ export function validCapAssignment(m) {
 }
 
 // Matches Java 21 AdmissionPolicy.toString(), whose SHA-256 is stored by the trusted bootstrap CLI.
-export function capPolicyDescription(m) {
-  if (!validCapAssignment(m) || !Number.isSafeInteger(m.concertTimeId) || m.concertTimeId < 1
+export function admissionPolicyDescription(m) {
+  if (!(validCapAssignment(m) || validPollAssignment(m)) || !Number.isSafeInteger(m.concertTimeId) || m.concertTimeId < 1
       || !/^[A-Za-z0-9-]{1,32}$/.test(m.generation || '') || m.opensAt !== '2020-01-01T00:00:00Z') {
-    throw new Error('Invalid cap policy identity');
+    throw new Error('Invalid comparison policy identity');
   }
   return `AdmissionPolicy[concertTimeId=${m.concertTimeId}, generation=${m.generation}, opensAt=${m.opensAt}, maxActive=${m.expectedActive}, maxWaiting=30, waitingTtl=PT2M, admissionTtl=PT2M, batchSize=2]`;
 }
+
+export { admissionPolicyDescription as capPolicyDescription };
