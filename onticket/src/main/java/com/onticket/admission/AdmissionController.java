@@ -19,7 +19,7 @@ public class AdmissionController {
         if (!enabled) return uncached(Map.of("enabled", false));
         var settings = access.requireEnabledPolicy(concertId, concertTimeId);
         return uncached(Map.of("enabled", true, "generation", settings.generation(), "opensAt", settings.opensAt(),
-                "pollIntervalMillis", 5000));
+                "pollIntervalMillis", settings.pollIntervalMillis()));
     }
 
     @PostMapping("/admission")

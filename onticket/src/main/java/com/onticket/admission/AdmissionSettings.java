@@ -13,7 +13,14 @@ public record AdmissionSettings(@DefaultValue("false") boolean enabled, String c
                                 @DefaultValue("5m") Duration waitingTtl,
                                 @DefaultValue("1m") Duration admissionTtl,
                                 @DefaultValue("2") int batchSize,
-                                @DefaultValue("16379") int redisPort) {
+                                @DefaultValue("16379") int redisPort,
+                                @DefaultValue("5000") int pollIntervalMillis) {
+    public AdmissionSettings {
+        // Client guidance only: does not participate in Redis admission identity or renew any lease.
+        if (pollIntervalMillis < 1000 || pollIntervalMillis > 30000) {
+            throw new IllegalArgumentException("Admission polling interval must be 1000..30000ms");
+        }
+    }
     public AdmissionPolicy policy() {
         if (!enabled || concertId == null || !concertId.matches("LOAD-TEST-[A-Za-z0-9-]{1,32}")
                 || redisPort < 1 || redisPort > 65535) {

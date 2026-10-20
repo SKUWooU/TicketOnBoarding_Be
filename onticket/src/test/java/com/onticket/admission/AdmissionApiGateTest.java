@@ -61,7 +61,7 @@ class AdmissionApiGateTest {
         try (var connection = factory.getConnection()) { connection.serverCommands().flushDb(); }
         time = new AtomicLong(1000);
         var settings = new AdmissionSettings(true, CONCERT, 7, "api-g1", Instant.ofEpochMilli(1000),
-                1, 2, Duration.ofSeconds(30), Duration.ofSeconds(10), 1, 16379);
+                1, 2, Duration.ofSeconds(30), Duration.ofSeconds(10), 1, 16379, 5000);
         store = new RedisAdmissionStore(redis, settings.policy(), time::get); store.bootstrap();
         ObjectProvider<RedisAdmissionStore> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(store);
