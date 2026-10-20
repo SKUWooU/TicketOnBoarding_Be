@@ -2,7 +2,8 @@ import http from 'k6/http';
 import exec from 'k6/execution';
 import { sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
-import { validateManifest, assertCleanInventory, classifyHoldStatus, BASE, MANAGEMENT } from './admission-session-contract.mjs';
+import { validateManifest, assertCleanInventory, classifyHoldStatus, advertisedPollInterval, BASE, MANAGEMENT } from './admission-session-contract.mjs';
+import { POLL_EXPERIMENT } from './admission-poll-plan.mjs';
 
 // Credentials are prepared before admission activation; never fetch tokens or mutate fixtures here.
 const m = validateManifest(JSON.parse(open(__ENV.ADMISSION_MANIFEST)));
@@ -19,6 +20,7 @@ const holds = new Trend('admission_hold_ms', true);
 const successes = new Trend('admission_hold_success_ms', true);
 const conflicts = new Trend('admission_hold_conflict_ms', true);
 const sessions = new Trend('admission_session_ms', true);
+const pollTimes = new Trend('admission_poll_ms', true);
 const boundarySkipped = new Counter('admission_boundary_skipped');
 const prefix = `${BASE}/main/detail/${m.concertId}`;
 const queue = `${prefix}/times/${m.concertTimeId}/admission`;
@@ -50,7 +52,7 @@ export function setup() {
   if (fixture.concertId !== m.concertId || fixture.concertTimeId !== m.concertTimeId || fixture.totalSeats !== 20) throw new Error('Fixture mismatch');
   const policy = read(`${queue}-policy`);
   if (policy.enabled !== (m.mode === 'on') || (m.mode === 'on' && (policy.generation !== m.generation
-      || Date.parse(policy.opensAt) !== Date.parse(m.opensAt) || policy.pollIntervalMillis !== m.pollIntervalMs))) throw new Error('Policy mismatch');
+      || Date.parse(policy.opensAt) !== Date.parse(m.opensAt) || policy.pollIntervalMillis !== advertisedPollInterval(m)))) throw new Error('Policy mismatch');
   assertCleanInventory(read(`${BASE}/loadtest/seat-holds/snapshot?runId=${m.runId}`));
   for (const u of m.users.slice(startIndex, startIndex + rate * duration)) {
     const auth = http.get(`${BASE}/auth/valid`, params(u, 'preflight_auth'));
@@ -88,6 +90,7 @@ export default function () {
         }
         sleep(m.pollIntervalMs / 1000); counters.polls.add(1);
         const r = http.get(queue, params(u, 'admission_poll'));
+        pollTimes.add(r.timings.duration);
         if (r.status !== 200) throw new Error('Poll failed');
         entry = data(r).admission;
       }
@@ -123,6 +126,8 @@ export function handleSummary(d) {
   const values = name => d.metrics[name] ? d.metrics[name].values : {};
   const result = { schemaVersion: 1, mode: m.mode, phase, sessionsPerSecond: rate, durationSeconds: duration,
     ...(m.experiment ? { experiment: m.experiment, expectedActive: m.expectedActive, round: m.round, sequence: m.sequence } : {}),
+    ...(m.experiment === POLL_EXPERIMENT ? {pollIntervalMs:m.pollIntervalMs, policyPollIntervalMs:m.policyPollIntervalMs,
+      pollRequestMs:values('admission_poll_ms')} : {}),
     k6RunDurationMs: d.state.testRunDurationMs, httpRequestsIncludingPreflight: values('http_reqs').count || 0,
     schedulerBoundarySkipped: values('admission_boundary_skipped').count || 0,
     dropped: values('dropped_iterations').count || 0, waitMs: values('admission_wait_ms'),

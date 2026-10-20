@@ -10,13 +10,18 @@ import { createServer } from 'node:net';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { measure } from './measure-admission-sessions.mjs';
-import { CAP_EXPERIMENT, capComparisonPlan, capPolicyDescription } from '../k6/admission-cap-plan.mjs';
-import { summarizeCapRuns } from '../k6/admission-session-contract.mjs';
+import { CAP_EXPERIMENT, capComparisonPlan, admissionPolicyDescription } from '../k6/admission-cap-plan.mjs';
+import { POLL_EXPERIMENT, pollComparisonPlan } from '../k6/admission-poll-plan.mjs';
+import { summarizeCapRuns, summarizePollRuns } from '../k6/admission-session-contract.mjs';
 const exec = promisify(execFile);
 if(process.platform!=='win32' || process.argv[2]!=='--confirm-disposable-local-resources' || !process.env.JAVA_HOME
- || process.argv.length>4 || (process.argv[3]!==undefined && process.argv[3]!=='--compare-active-limits'))
+ || process.argv.length>4 || (process.argv[3]!==undefined && !['--compare-active-limits','--compare-client-polling'].includes(process.argv[3])))
  throw new Error('Requires Windows, JAVA_HOME (Java 21), and --confirm-disposable-local-resources');
 const compareCaps=process.argv[3]==='--compare-active-limits';
+const comparePolls=process.argv[3]==='--compare-client-polling';
+const comparison=compareCaps||comparePolls;
+const experiment=comparePolls?POLL_EXPERIMENT:CAP_EXPERIMENT;
+const outputPrefix=comparePolls?'admission-poll':compareCaps?'admission-cap':'admission238';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const work = await mkdtemp(join(tmpdir(), 'onticket-admission238-logs-'));
 console.log('PRIVATE_DIAGNOSTICS '+work);
@@ -79,12 +84,12 @@ try {
  const fingerprint=await command('docker',['exec',db,'mariadb','-uonticket','-ponticket','-N','-B','onticket_admission238',
   '-e',"SELECT SHA2(CONCAT(@@hostname, ':', DATABASE()), 256)"]);
  if((await request('/loadtest/database-identity')).fingerprint!==fingerprint) throw new Error('Seed DB mismatch');
- const plan=compareCaps ? capComparisonPlan() : [[1,'off'],[1,'on'],[2,'on'],[2,'off'],[5,'off'],[5,'on']]
+ const plan=compareCaps ? capComparisonPlan() : comparePolls ? pollComparisonPlan() : [[1,'off'],[1,'on'],[2,'on'],[2,'off'],[5,'off'],[5,'on']]
   .map(([rate,mode])=>({rate,mode,active:2}));
  const prepared=[];
  for(let i=0;i<plan.length;i++) {
-  const {rate,mode,active,round,sequence}=plan[i];
-  const runId=compareCaps ? `cap-${nonce}-${i+1}-a${active}` : `adm238-${nonce}-${i+1}-${mode}`;
+  const {rate,mode,active,round,sequence,pollIntervalMs=5000}=plan[i];
+  const runId=comparePolls ? `poll-${nonce}-${i+1}-p${pollIntervalMs/1000}` : compareCaps ? `cap-${nonce}-${i+1}-a${active}` : `adm238-${nonce}-${i+1}-${mode}`;
   const fixture=await request('/loadtest/runs?runId='+runId,'POST');
   const users=await request('/loadtest/tokens?runId='+runId+'&count='+(2+rate*5));
   const generation=`g238-${nonce}-${i+1}`; const policy=join(directory,`policy-${i}.properties`); files.push(policy);
@@ -93,15 +98,17 @@ try {
   const bootstrap=join(directory,`bootstrap-${i}.properties`);files.push(bootstrap);
   await writeFile(bootstrap,(await readFile(policy,'utf8')).replace('onticket.admission.worker.delay-ms=1000\n',''),{mode:0o600});
   const manifest=join(directory,`manifest-${i}.json`);files.push(manifest);
-  const capIdentity={experiment:CAP_EXPERIMENT,round,sequence,expectedActive:active,mode,sessionsPerSecond:rate,
+  const policyIdentity={experiment,round,sequence,expectedActive:active,mode,sessionsPerSecond:rate,
+   ...(comparePolls ? {pollIntervalMs,policyPollIntervalMs:5000} : {}),
    concertTimeId:fixture.concertTimeId,generation,opensAt:'2020-01-01T00:00:00Z'};
   await writeFile(manifest,JSON.stringify({schemaVersion:1,baseUrl:'http://127.0.0.1:18080',managementUrl:'http://127.0.0.1:18081',
    runId,concertId:fixture.concertId,concertTimeId:fixture.concertTimeId,totalSeats:20,databaseFingerprint:fingerprint,databaseContainerId:db,
-   mode,sessionsPerSecond:rate,durationSeconds:5,holdDwellMs:500,pollIntervalMs:5000,maxAdmissionWaitMs:75000,expectedActive:active,
-   ...(compareCaps ? {experiment:CAP_EXPERIMENT,round,sequence,redisContainerId:redis,
-    policyFingerprint:createHash('sha256').update(capPolicyDescription(capIdentity)).digest('hex')} : {}),
+   mode,sessionsPerSecond:rate,durationSeconds:5,holdDwellMs:500,pollIntervalMs,maxAdmissionWaitMs:75000,expectedActive:active,
+   ...(comparison ? {experiment,round,sequence,redisContainerId:redis,
+    policyFingerprint:createHash('sha256').update(admissionPolicyDescription(policyIdentity)).digest('hex')} : {}),
+   ...(comparePolls ? {policyPollIntervalMs:5000} : {}),
    generation,opensAt:'2020-01-01T00:00:00Z',users}),{mode:0o600});
-  prepared.push({mode,rate,runId,generation,policy,bootstrap,manifest});
+  prepared.push({mode,rate,runId,generation,policy,bootstrap,manifest,pollIntervalMs});
  }
  await stopBackend(); console.log(`PREPARED ${plan.length} isolated 20-seat fixtures; no external APIs`);
  await writeFile(join(work,`admission238-${nonce}-private-state.json`),JSON.stringify({db,redis,directory,files,prepared},null,2));
@@ -110,7 +117,7 @@ try {
   if(p.mode==='on') await command(java,['-Xmx128m','-Dloader.main=com.onticket.admission.AdmissionBootstrapCommand','-cp',jar,
     'org.springframework.boot.loader.launch.PropertiesLauncher',`--policy-file=${p.bootstrap}`,`--confirm-new-generation=${p.generation}`]);
   await startBackend(p.policy,p.runId);
-  console.log(`MEASURING ${p.runId} ${p.rate} sessions/s ${p.mode}`);
+  console.log(`MEASURING ${p.runId} ${p.rate} sessions/s ${p.mode} poll=${p.pollIntervalMs}ms`);
   records.push(await measure(p.manifest));
   if(p.mode==='on') {
    for(const suffix of ['waiting','active']) {
@@ -122,28 +129,32 @@ try {
  }
  batch={schemaVersion:1,status:'MEASUREMENTS_COMPLETE_CLEANUP_PENDING',runtimeCleanup:'PENDING',sourceBaseCommit:await command('git',['-C',root,'-c',`safe.directory=${root.replaceAll('\\','/')}`,'rev-parse','HEAD']),
   ...(compareCaps ? {experiment:CAP_EXPERIMENT,capSummaries:summarizeCapRuns(records)} : {}),
+  ...(comparePolls ? {experiment:POLL_EXPERIMENT,pollSummaries:summarizePollRuns(records)} : {}),
   jarSha256:createHash('sha256').update(await readFile(jar)).digest('hex'),createdAt:new Date().toISOString(),
   environment:{hostMemoryBytes:totalmem(),logicalProcessors:cpus().length,cpuModel:cpus()[0].model,
    javaHeapMiB:384,metaspaceMiB:192,hikariMaximum:4,mariaDbContainerMiB:512,redisContainerMiB:128,redisMaxmemoryMiB:64,k6Version:await command('k6',['version'])},
-  notes:[...(compareCaps ? ['Active limits 2/4/8, three balanced-order repeats each at 5 sessions/s; short local comparison, not capacity.',
+  notes:[...(comparePolls ? ['Synthetic client polling 5000/2000/1000ms, three balanced-order repeats each at 5 sessions/s; short local comparison, not capacity.',
+   'Only client polling varies. Active=4, batch=2, worker=1000ms, hold=500ms. Backend/FE remain unchanged and backend recommendation stays 5000ms.',
+   'Per-run p95 ranges/medians are not pooled p95; HTTP GET 200 counters are checked against workload polls, excluding setup NOT_JOINED GET 404.']
+   : compareCaps ? ['Active limits 2/4/8, three balanced-order repeats each at 5 sessions/s; short local comparison, not capacity.',
    'Only maxActive varies. Batch=2, worker=1000ms, polling=5000ms, hold=500ms; per-run p95 ranges/medians are not pooled p95.']
    : ['One short run per mode/rate, not a statistically repeated benchmark or capacity limit.']),
    'Each stage uses a fresh 20-seat fixture; all fixtures prepared in the same disposable DB.',
-   'Hold/release only. No Checkout, real PG, KOPIS or browser traffic.','Arrival rate is sessions/s, not HTTP RPS. Poll interval 5s; active tickets are held through release/leave.',
+   'Hold/release only. No Checkout, real PG, KOPIS or browser traffic.','Arrival rate is sessions/s, not HTTP RPS. Poll interval is recorded per stage; active tickets are held through release/leave.',
    'DB counter windows are sampled, include drain/collector traffic and are not query-specific.',
    'Explicit --debug=false and package logger overrides are requested; inspect private runtime logs for effective logging before interpreting latency.'],
   runs:records};
- batchFile=root+`/load-test/results/${compareCaps?'admission-cap':'admission238'}-${nonce}-comparison.json`;
+ batchFile=root+`/load-test/results/${outputPrefix}-${nonce}-comparison.json`;
  await writeFile(batchFile,JSON.stringify(batch,null,2));
  success=true;
 }catch(e){
  console.error('BATCH_STOPPED stage='+label+' reason='+e.message);process.exitCode=1;
- if(compareCaps && !success) {
-  const partial={schemaVersion:1,experiment:CAP_EXPERIMENT,status:'STOPPED',runtimeCleanup:'RETAINED',
+ if(comparison && !success) {
+  const partial={schemaVersion:1,experiment,status:'STOPPED',runtimeCleanup:'RETAINED',
    stoppedStage:label,plannedStages:9,completedStages:records.length,runs:records,
    notes:['Incomplete comparison; do not aggregate as a complete balanced experiment.',
     'Only completed structured stages are included; private credentials and raw logs are excluded.']};
-  await writeFile(root+`/load-test/results/admission-cap-${nonce}-stopped.json`,JSON.stringify(partial,null,2),{flag:'wx'});
+  await writeFile(root+`/load-test/results/${outputPrefix}-${nonce}-stopped.json`,JSON.stringify(partial,null,2),{flag:'wx'});
  }
 }
 finally {
@@ -163,7 +174,7 @@ finally {
   }
   batch.status='EXPLORATION_COMPLETE'; batch.runtimeCleanup='COMPLETE';
   await writeFile(batchFile,JSON.stringify(batch,null,2));
-  console.log(`BATCH_COMPLETE ${compareCaps?'admission-cap':'admission238'}-${nonce}-comparison.json`);
+  console.log(`BATCH_COMPLETE ${outputPrefix}-${nonce}-comparison.json`);
   console.log('CLEANED owned runtime and temporary credentials');
  }else console.log('RETAINED isolated containers and private preparation state for diagnosis; no automatic retry/reset; private logs: '+work);
 }

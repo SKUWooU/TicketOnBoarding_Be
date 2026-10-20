@@ -3,11 +3,12 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { cpus, freemem } from 'node:os';
 import { createHash } from 'node:crypto';
-import { capPolicyDescription } from '../k6/admission-cap-plan.mjs';
+import { admissionPolicyDescription } from '../k6/admission-cap-plan.mjs';
+import { POLL_EXPERIMENT } from '../k6/admission-poll-plan.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { validateManifest, validateResult, assertCleanInventory, parsePool, holdHttpCounts,
-  assertHttpAgreement, assertDedicatedDatabase, assertDedicatedRedis, BASE, MANAGEMENT } from '../k6/admission-session-contract.mjs';
+  assertHttpAgreement, pollHttpCounts, assertPollHttpAgreement, assertDedicatedDatabase, assertDedicatedRedis, BASE, MANAGEMENT } from '../k6/admission-session-contract.mjs';
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -33,16 +34,16 @@ export async function measure(manifestPath) {
   if (!/^[a-f0-9]{64}$/.test(dbId || '')) throw new Error('Explicit database container ID required');
   const inspect = JSON.parse(await command('docker', ['inspect', dbId]));
   assertDedicatedDatabase(inspect[0], dbId);
-  async function verifyCapPolicy() {
+  async function verifyPolicy() {
     if (m.experiment === undefined) return;
     const redis = JSON.parse(await command('docker', ['inspect', m.redisContainerId]));
     assertDedicatedRedis(redis[0], m.redisContainerId);
-    const expected = createHash('sha256').update(capPolicyDescription(m)).digest('hex');
+    const expected = createHash('sha256').update(admissionPolicyDescription(m)).digest('hex');
     const actual = await command('docker', ['exec', m.redisContainerId, 'redis-cli', '--raw', 'HGET',
       `admission:{${m.concertTimeId}:${m.generation}}:meta`, 'policy']);
-    if (expected !== m.policyFingerprint || actual !== expected) throw new Error('Active-limit policy fingerprint mismatch');
+    if (expected !== m.policyFingerprint || actual !== expected) throw new Error('Admission policy fingerprint mismatch');
   }
-  await verifyCapPolicy();
+  await verifyPolicy();
   if (freemem() < 2 * 1024 ** 3) throw new Error('Host memory below 2GiB; no workload started');
   const sqlIdentity = await command('docker', ['exec', dbId, 'mariadb', '-uonticket', '-ponticket', '-N', '-B',
     'onticket_admission238', '-e', "SELECT SHA2(CONCAT(@@hostname, ':', DATABASE()), 256)"]);
@@ -86,7 +87,8 @@ export async function measure(manifestPath) {
             const status = Object.fromEntries(db.split(/\r?\n/).map(line => { const [k, v] = line.split(/\s+/); return [k, Number(v)]; }));
             if (['Innodb_deadlocks', 'Innodb_row_lock_time', 'Innodb_row_lock_waits', 'Threads_connected', 'Threads_running']
               .some(k => !Number.isFinite(status[k]))) throw new Error('DB counter sample missing');
-            samples.push({ atMs: Date.now() - began, hostCpuPercent: usage, freeHostBytes: freemem(), pool: parsePool(prom), db: status });
+            samples.push({ atMs: Date.now() - began, hostCpuPercent: usage, freeHostBytes: freemem(), pool: parsePool(prom), db: status,
+              ...(m.experiment === POLL_EXPERIMENT ? {pollSuccessCount:pollHttpCounts(prom).success} : {}) });
           }
           if (hotSamples >= 3) throw new Error('Host CPU >=90% for three consecutive samples; stop escalation');
         }
@@ -108,24 +110,29 @@ export async function measure(manifestPath) {
     const before = await get(`${MANAGEMENT}/actuator/prometheus`, true);
     const samples = [];
     const result = await run('measure', samples);
-    await verifyCapPolicy();
+    await verifyPolicy();
     const after = await get(`${MANAGEMENT}/actuator/prometheus`, true);
     const snapshot = await get(`${BASE}/loadtest/seat-holds/snapshot?runId=${m.runId}`);
     assertCleanInventory(snapshot);
     const httpBefore = holdHttpCounts(before); const httpAfter = holdHttpCounts(after);
     assertHttpAgreement(httpBefore, httpAfter, result);
+    const pollCounters = {before:pollHttpCounts(before), after:pollHttpCounts(after)};
+    if (m.experiment === POLL_EXPERIMENT) assertPollHttpAgreement(pollCounters.before, pollCounters.after, result);
     if (samples.length < 2) throw new Error('Insufficient resource samples');
     const first = samples[0]; const last = samples.at(-1);
     if (last.db.Innodb_deadlocks !== first.db.Innodb_deadlocks) throw new Error('Observed SQL deadlock');
     const record = { schemaVersion: 1, status: 'PASS', scope: 'short local virtual 20-seat admission exploration; not capacity or production performance',
       runId: m.runId, mode: m.mode, sessionsPerSecond: m.sessionsPerSecond, totalSeats: 20, hotSeats: 1,
       ...(m.experiment ? { experiment: m.experiment, round: m.round, sequence: m.sequence, policyFingerprintVerified: true } : {}),
-      holdDwellMs: 500, maxActive: m.mode === 'on' ? m.expectedActive : null, pollIntervalMs: m.mode === 'on' ? 5000 : null,
+      ...(m.experiment === POLL_EXPERIMENT ? {policyPollIntervalMs:m.policyPollIntervalMs, pollHttpCounters:pollCounters} : {}),
+      holdDwellMs: 500, maxActive: m.mode === 'on' ? m.expectedActive : null, pollIntervalMs: m.mode === 'on' ? m.pollIntervalMs : null,
       workerDelayMs: m.mode === 'on' ? 1000 : null, warmup, result, snapshot, holdHttpCounters: { before: httpBefore, after: httpAfter },
       observation: { samples: samples.length, hikariPendingPeak: Math.max(...samples.map(s => s.pool.pending)),
         hikariActivePeak: Math.max(...samples.map(s => s.pool.active)), hikariMax: first.pool.max,
         hostCpuPeakPercent: Math.max(...samples.map(s => s.hostCpuPercent)), minimumFreeHostBytes: Math.min(...samples.map(s => s.freeHostBytes)),
         rowLockWaitDelta: last.db.Innodb_row_lock_waits - first.db.Innodb_row_lock_waits,
+        ...(m.experiment === POLL_EXPERIMENT ? {sampledPollRpsPeak:Math.max(...samples.slice(1).map((s,i)=>
+          1000*(s.pollSuccessCount-samples[i].pollSuccessCount)/(s.atMs-samples[i].atMs)))} : {}),
         rowLockTimeMsDelta: last.db.Innodb_row_lock_time - first.db.Innodb_row_lock_time,
         deadlockDelta: last.db.Innodb_deadlocks - first.db.Innodb_deadlocks,
         requestedPauseMs: 1000, actualSampleGapsMs: samples.slice(1).map((s, i) => s.atMs - samples[i].atMs),

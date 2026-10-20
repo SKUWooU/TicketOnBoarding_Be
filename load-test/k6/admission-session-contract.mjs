@@ -1,4 +1,8 @@
 import { CAP_EXPERIMENT, capComparisonPlan, validCapAssignment } from './admission-cap-plan.mjs';
+import { POLL_EXPERIMENT, pollComparisonPlan, validPollAssignment } from './admission-poll-plan.mjs';
+
+const validAssignment = m => validCapAssignment(m) || validPollAssignment(m);
+export const advertisedPollInterval = m => m.experiment === POLL_EXPERIMENT ? m.policyPollIntervalMs : m.pollIntervalMs;
 
 export const BASE = 'http://127.0.0.1:18080';
 export const MANAGEMENT = 'http://127.0.0.1:18081';
@@ -12,8 +16,8 @@ export function validateManifest(m) {
       || !Number.isSafeInteger(m.concertTimeId) || m.concertTimeId < 1 || m.totalSeats !== 20
       || !/^[a-f0-9]{64}$/.test(m.databaseFingerprint || '') || !['off', 'on'].includes(m.mode)
       || ![1, 2, 5].includes(m.sessionsPerSecond) || m.durationSeconds !== 5 || m.holdDwellMs !== 500
-      || m.pollIntervalMs !== 5000 || m.maxAdmissionWaitMs !== 75000
-      || (m.experiment === undefined ? m.expectedActive !== 2 : !validCapAssignment(m))
+      || (m.experiment === POLL_EXPERIMENT ? !validPollAssignment(m) : m.pollIntervalMs !== 5000) || m.maxAdmissionWaitMs !== 75000
+      || (m.experiment === undefined ? m.expectedActive !== 2 : !validAssignment(m))
       || (m.experiment !== undefined && (!/^[a-f0-9]{64}$/.test(m.policyFingerprint || '')
         || !/^[a-f0-9]{64}$/.test(m.redisContainerId || '')))
       || !/^[A-Za-z0-9-]{1,32}$/.test(m.generation || '') || m.opensAt !== '2020-01-01T00:00:00Z'
@@ -55,23 +59,37 @@ export function validateResult(r, m, phase = 'measure') {
       || (m.mode === 'on' ? r.polls < expected : r.polls !== 0)) {
     throw new Error('Incomplete or inconsistent admission session accounting');
   }
-  if (m.experiment !== undefined && (!validCapAssignment(m) || r.experiment !== CAP_EXPERIMENT
-      || r.expectedActive !== m.expectedActive || r.round !== m.round || r.sequence !== m.sequence)) {
-    throw new Error('Cap result does not match assigned stage');
+  if (m.experiment !== undefined && (!validAssignment(m) || r.experiment !== m.experiment
+      || r.expectedActive !== m.expectedActive || r.round !== m.round || r.sequence !== m.sequence
+      || (m.experiment === POLL_EXPERIMENT && (r.pollIntervalMs !== m.pollIntervalMs || r.policyPollIntervalMs !== 5000
+        || !Number.isFinite(r.pollRequestMs?.['p(95)']) || r.pollRequestMs['p(95)'] < 0)))) {
+    throw new Error('Comparison result does not match assigned stage');
   }
   return r;
 }
 
 export function summarizeCapRuns(runs) {
-  const plan = capComparisonPlan();
+  return summarizeComparisonRuns(runs, CAP_EXPERIMENT);
+}
+
+export function summarizePollRuns(runs) {
+  return summarizeComparisonRuns(runs, POLL_EXPERIMENT);
+}
+
+function summarizeComparisonRuns(runs, experiment) {
+  const polling = experiment === POLL_EXPERIMENT;
+  const plan = polling ? pollComparisonPlan() : capComparisonPlan();
   if (!Array.isArray(runs) || runs.length !== plan.length) throw new Error('Incomplete cap comparison');
   if (new Set(runs.map(r => r.runId)).size !== plan.length) throw new Error('Fresh cap fixtures required');
   runs.forEach((run, i) => {
     const stage = plan[i];
-    if (run.experiment !== CAP_EXPERIMENT || run.sequence !== stage.sequence || run.round !== stage.round
+    if (run.experiment !== experiment || run.sequence !== stage.sequence || run.round !== stage.round
         || run.maxActive !== stage.active || run.mode !== 'on' || run.sessionsPerSecond !== 5
         || run.status !== 'PASS' || run.escalationAllowed !== true || run.policyFingerprintVerified !== true
-        || run.pollIntervalMs !== 5000 || run.workerDelayMs !== 1000 || run.holdDwellMs !== 500 || run.totalSeats !== 20
+        || run.pollIntervalMs !== (polling ? stage.pollIntervalMs : 5000)
+        || (polling && (run.policyPollIntervalMs !== 5000 || !Number.isFinite(run.observation?.sampledPollRpsPeak)
+          || run.observation.sampledPollRpsPeak < 0))
+        || run.workerDelayMs !== 1000 || run.holdDwellMs !== 500 || run.totalSeats !== 20
         || !run.observation || ['hikariPendingPeak', 'hikariActivePeak', 'rowLockWaitDelta', 'rowLockTimeMsDelta']
           .some(k => !Number.isFinite(run.observation[k]) || run.observation[k] < 0)) {
       throw new Error('Cap stage order, identity or fixed conditions changed');
@@ -79,20 +97,23 @@ export function summarizeCapRuns(runs) {
     const m = { ...run, expectedActive: run.maxActive };
     validateResult(run.result, m); validateResult(run.warmup, m, 'warmup'); assertCleanInventory(run.snapshot);
     assertHttpAgreement(run.holdHttpCounters.before, run.holdHttpCounters.after, run.result);
+    if (polling) assertPollHttpAgreement(run.pollHttpCounters.before, run.pollHttpCounters.after, run.result);
   });
   function range(values) {
     if (values.some(v => !Number.isFinite(v))) throw new Error('Missing cap timing evidence');
     const sorted = [...values].sort((a, b) => a - b);
     return { minimum: sorted[0], medianOfRunP95: sorted[1], maximum: sorted[2] };
   }
-  return [2, 4, 8].map(active => {
-    const selected = runs.filter(r => r.maxActive === active);
+  return (polling ? [5000, 2000, 1000] : [2, 4, 8]).map(value => {
+    const selected = runs.filter(r => (polling ? r.pollIntervalMs : r.maxActive) === value);
     const sum = field => selected.reduce((total, r) => total + r.result[field], 0);
-    return { maxActive: active, repeats: 3, sessions: sum('started'), holdSuccess: sum('holdSuccess'),
+    return { ...(polling ? {pollIntervalMs:value, maxActive:4} : {maxActive:value}), repeats: 3, sessions: sum('started'), holdSuccess: sum('holdSuccess'),
       seatConflicts: sum('seatConflicts'), polls: sum('polls'), unexpected: sum('unexpected'), dropped: sum('dropped'),
       waitP95Ms: range(selected.map(r => r.result.waitMs['p(95)'])),
       sessionP95Ms: range(selected.map(r => r.result.sessionMs['p(95)'])),
       holdP95Ms: range(selected.map(r => r.result.holdMs['p(95)'])),
+      ...(polling ? {pollRequestP95Ms:range(selected.map(r=>r.result.pollRequestMs['p(95)'])),
+        sampledPollRpsPeak:Math.max(...selected.map(r=>r.observation.sampledPollRpsPeak))} : {}),
       sampledHikariPendingPeak: Math.max(...selected.map(r => r.observation.hikariPendingPeak)),
       sampledHikariActivePeak: Math.max(...selected.map(r => r.observation.hikariActivePeak)),
       sampledRowLockWaits: selected.reduce((s, r) => s + r.observation.rowLockWaitDelta, 0),
@@ -128,6 +149,27 @@ export function assertHttpAgreement(before, after, result) {
   if (after.success - before.success !== result.holdSuccess
       || after.conflict - before.conflict !== result.seatConflicts || after.other - before.other !== 0) {
     throw new Error('Hold HTTP counters do not match k6 outcomes');
+  }
+}
+
+export function pollHttpCounts(text) {
+  const counts = {success:0, other:0};
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^http_server_requests_seconds_count\{(.+)\}\s+([0-9.eE+-]+)\s*$/.exec(line);
+    if (!match) continue;
+    const labels = Object.fromEntries([...match[1].matchAll(/([a-zA-Z_]+)="([^"]*)"/g)].map(m => [m[1],m[2]]));
+    if (labels.method !== 'GET' || labels.uri !== '/main/detail/{concertId}/times/{concertTimeId}/admission') continue;
+    const value = Number(match[2]);
+    if (!Number.isFinite(value) || value < 0) throw new Error('Invalid polling HTTP count');
+    // k6 setup checks NOT_JOINED with GET 404 before the first join; not a workload poll.
+    if (labels.status !== '404') counts[labels.status === '200' ? 'success' : 'other'] += value;
+  }
+  return counts;
+}
+
+export function assertPollHttpAgreement(before, after, result) {
+  if (!before || !after || after.success - before.success !== result.polls || after.other - before.other !== 0) {
+    throw new Error('Polling HTTP counters do not match k6 reads');
   }
 }
 
