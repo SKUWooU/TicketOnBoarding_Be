@@ -122,6 +122,7 @@ export function teardown() { assertCleanInventory(read(`${BASE}/loadtest/seat-ho
 export function handleSummary(d) {
   const values = name => d.metrics[name] ? d.metrics[name].values : {};
   const result = { schemaVersion: 1, mode: m.mode, phase, sessionsPerSecond: rate, durationSeconds: duration,
+    ...(m.experiment ? { experiment: m.experiment, expectedActive: m.expectedActive, round: m.round, sequence: m.sequence } : {}),
     k6RunDurationMs: d.state.testRunDurationMs, httpRequestsIncludingPreflight: values('http_reqs').count || 0,
     schedulerBoundarySkipped: values('admission_boundary_skipped').count || 0,
     dropped: values('dropped_iterations').count || 0, waitMs: values('admission_wait_ms'),
