@@ -1,3 +1,5 @@
+import { CAP_EXPERIMENT, capComparisonPlan, validCapAssignment } from './admission-cap-plan.mjs';
+
 export const BASE = 'http://127.0.0.1:18080';
 export const MANAGEMENT = 'http://127.0.0.1:18081';
 // Hold conflicts use @ResponseStatus(409), unlike verified-reservation's separate conflict header.
@@ -10,7 +12,10 @@ export function validateManifest(m) {
       || !Number.isSafeInteger(m.concertTimeId) || m.concertTimeId < 1 || m.totalSeats !== 20
       || !/^[a-f0-9]{64}$/.test(m.databaseFingerprint || '') || !['off', 'on'].includes(m.mode)
       || ![1, 2, 5].includes(m.sessionsPerSecond) || m.durationSeconds !== 5 || m.holdDwellMs !== 500
-      || m.pollIntervalMs !== 5000 || m.maxAdmissionWaitMs !== 75000 || m.expectedActive !== 2
+      || m.pollIntervalMs !== 5000 || m.maxAdmissionWaitMs !== 75000
+      || (m.experiment === undefined ? m.expectedActive !== 2 : !validCapAssignment(m))
+      || (m.experiment !== undefined && (!/^[a-f0-9]{64}$/.test(m.policyFingerprint || '')
+        || !/^[a-f0-9]{64}$/.test(m.redisContainerId || '')))
       || !/^[A-Za-z0-9-]{1,32}$/.test(m.generation || '') || m.opensAt !== '2020-01-01T00:00:00Z'
       || !Array.isArray(m.users) || m.users.length !== 2 + 5 * m.sessionsPerSecond) {
     throw new Error('Invalid bounded admission manifest');
@@ -50,7 +55,49 @@ export function validateResult(r, m, phase = 'measure') {
       || (m.mode === 'on' ? r.polls < expected : r.polls !== 0)) {
     throw new Error('Incomplete or inconsistent admission session accounting');
   }
+  if (m.experiment !== undefined && (!validCapAssignment(m) || r.experiment !== CAP_EXPERIMENT
+      || r.expectedActive !== m.expectedActive || r.round !== m.round || r.sequence !== m.sequence)) {
+    throw new Error('Cap result does not match assigned stage');
+  }
   return r;
+}
+
+export function summarizeCapRuns(runs) {
+  const plan = capComparisonPlan();
+  if (!Array.isArray(runs) || runs.length !== plan.length) throw new Error('Incomplete cap comparison');
+  if (new Set(runs.map(r => r.runId)).size !== plan.length) throw new Error('Fresh cap fixtures required');
+  runs.forEach((run, i) => {
+    const stage = plan[i];
+    if (run.experiment !== CAP_EXPERIMENT || run.sequence !== stage.sequence || run.round !== stage.round
+        || run.maxActive !== stage.active || run.mode !== 'on' || run.sessionsPerSecond !== 5
+        || run.status !== 'PASS' || run.escalationAllowed !== true || run.policyFingerprintVerified !== true
+        || run.pollIntervalMs !== 5000 || run.workerDelayMs !== 1000 || run.holdDwellMs !== 500 || run.totalSeats !== 20
+        || !run.observation || ['hikariPendingPeak', 'hikariActivePeak', 'rowLockWaitDelta', 'rowLockTimeMsDelta']
+          .some(k => !Number.isFinite(run.observation[k]) || run.observation[k] < 0)) {
+      throw new Error('Cap stage order, identity or fixed conditions changed');
+    }
+    const m = { ...run, expectedActive: run.maxActive };
+    validateResult(run.result, m); validateResult(run.warmup, m, 'warmup'); assertCleanInventory(run.snapshot);
+    assertHttpAgreement(run.holdHttpCounters.before, run.holdHttpCounters.after, run.result);
+  });
+  function range(values) {
+    if (values.some(v => !Number.isFinite(v))) throw new Error('Missing cap timing evidence');
+    const sorted = [...values].sort((a, b) => a - b);
+    return { minimum: sorted[0], medianOfRunP95: sorted[1], maximum: sorted[2] };
+  }
+  return [2, 4, 8].map(active => {
+    const selected = runs.filter(r => r.maxActive === active);
+    const sum = field => selected.reduce((total, r) => total + r.result[field], 0);
+    return { maxActive: active, repeats: 3, sessions: sum('started'), holdSuccess: sum('holdSuccess'),
+      seatConflicts: sum('seatConflicts'), polls: sum('polls'), unexpected: sum('unexpected'), dropped: sum('dropped'),
+      waitP95Ms: range(selected.map(r => r.result.waitMs['p(95)'])),
+      sessionP95Ms: range(selected.map(r => r.result.sessionMs['p(95)'])),
+      holdP95Ms: range(selected.map(r => r.result.holdMs['p(95)'])),
+      sampledHikariPendingPeak: Math.max(...selected.map(r => r.observation.hikariPendingPeak)),
+      sampledHikariActivePeak: Math.max(...selected.map(r => r.observation.hikariActivePeak)),
+      sampledRowLockWaits: selected.reduce((s, r) => s + r.observation.rowLockWaitDelta, 0),
+      sampledRowLockTimeMs: selected.reduce((s, r) => s + r.observation.rowLockTimeMsDelta, 0) };
+  });
 }
 
 export function parsePool(text) {
@@ -94,5 +141,17 @@ export function assertDedicatedDatabase(info, id) {
       || info.HostConfig.PortBindings['3306/tcp'][0].HostIp !== '127.0.0.1'
       || info.HostConfig.PortBindings['3306/tcp'][0].HostPort !== '13308') {
     throw new Error('Not the dedicated ephemeral admission database');
+  }
+}
+export function assertDedicatedRedis(info, id) {
+  if (!/^[a-f0-9]{64}$/.test(id || '') || info.Id !== id
+      || !/^\/ticket-admission238-redis-[a-f0-9]{8}$/.test(info.Name || '')
+      || info.Config?.Image !== 'redis:7.4.7-alpine' || info.Config?.Labels?.['onticket.scope'] !== 'admission238'
+      || info.State?.Running !== true || !Array.isArray(info.Mounts) || info.Mounts.length > 1
+      || info.Mounts.some(m => m.Type !== 'volume' || !/^[a-f0-9]{64}$/.test(m.Name || '') || m.Destination !== '/data')
+      || info.HostConfig?.PortBindings?.['6379/tcp']?.length !== 1
+      || info.HostConfig.PortBindings['6379/tcp'][0].HostIp !== '127.0.0.1'
+      || info.HostConfig.PortBindings['6379/tcp'][0].HostPort !== '17380') {
+    throw new Error('Not the dedicated ephemeral admission Redis');
   }
 }

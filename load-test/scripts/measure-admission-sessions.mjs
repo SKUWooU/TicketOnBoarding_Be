@@ -2,10 +2,12 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { cpus, freemem } from 'node:os';
+import { createHash } from 'node:crypto';
+import { capPolicyDescription } from '../k6/admission-cap-plan.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { validateManifest, validateResult, assertCleanInventory, parsePool, holdHttpCounts,
-  assertHttpAgreement, assertDedicatedDatabase, BASE, MANAGEMENT } from '../k6/admission-session-contract.mjs';
+  assertHttpAgreement, assertDedicatedDatabase, assertDedicatedRedis, BASE, MANAGEMENT } from '../k6/admission-session-contract.mjs';
 const exec = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -31,6 +33,16 @@ export async function measure(manifestPath) {
   if (!/^[a-f0-9]{64}$/.test(dbId || '')) throw new Error('Explicit database container ID required');
   const inspect = JSON.parse(await command('docker', ['inspect', dbId]));
   assertDedicatedDatabase(inspect[0], dbId);
+  async function verifyCapPolicy() {
+    if (m.experiment === undefined) return;
+    const redis = JSON.parse(await command('docker', ['inspect', m.redisContainerId]));
+    assertDedicatedRedis(redis[0], m.redisContainerId);
+    const expected = createHash('sha256').update(capPolicyDescription(m)).digest('hex');
+    const actual = await command('docker', ['exec', m.redisContainerId, 'redis-cli', '--raw', 'HGET',
+      `admission:{${m.concertTimeId}:${m.generation}}:meta`, 'policy']);
+    if (expected !== m.policyFingerprint || actual !== expected) throw new Error('Active-limit policy fingerprint mismatch');
+  }
+  await verifyCapPolicy();
   if (freemem() < 2 * 1024 ** 3) throw new Error('Host memory below 2GiB; no workload started');
   const sqlIdentity = await command('docker', ['exec', dbId, 'mariadb', '-uonticket', '-ponticket', '-N', '-B',
     'onticket_admission238', '-e', "SELECT SHA2(CONCAT(@@hostname, ':', DATABASE()), 256)"]);
@@ -96,6 +108,7 @@ export async function measure(manifestPath) {
     const before = await get(`${MANAGEMENT}/actuator/prometheus`, true);
     const samples = [];
     const result = await run('measure', samples);
+    await verifyCapPolicy();
     const after = await get(`${MANAGEMENT}/actuator/prometheus`, true);
     const snapshot = await get(`${BASE}/loadtest/seat-holds/snapshot?runId=${m.runId}`);
     assertCleanInventory(snapshot);
@@ -106,7 +119,8 @@ export async function measure(manifestPath) {
     if (last.db.Innodb_deadlocks !== first.db.Innodb_deadlocks) throw new Error('Observed SQL deadlock');
     const record = { schemaVersion: 1, status: 'PASS', scope: 'short local virtual 20-seat admission exploration; not capacity or production performance',
       runId: m.runId, mode: m.mode, sessionsPerSecond: m.sessionsPerSecond, totalSeats: 20, hotSeats: 1,
-      holdDwellMs: 500, maxActive: m.mode === 'on' ? 2 : null, pollIntervalMs: m.mode === 'on' ? 5000 : null,
+      ...(m.experiment ? { experiment: m.experiment, round: m.round, sequence: m.sequence, policyFingerprintVerified: true } : {}),
+      holdDwellMs: 500, maxActive: m.mode === 'on' ? m.expectedActive : null, pollIntervalMs: m.mode === 'on' ? 5000 : null,
       workerDelayMs: m.mode === 'on' ? 1000 : null, warmup, result, snapshot, holdHttpCounters: { before: httpBefore, after: httpAfter },
       observation: { samples: samples.length, hikariPendingPeak: Math.max(...samples.map(s => s.pool.pending)),
         hikariActivePeak: Math.max(...samples.map(s => s.pool.active)), hikariMax: first.pool.max,

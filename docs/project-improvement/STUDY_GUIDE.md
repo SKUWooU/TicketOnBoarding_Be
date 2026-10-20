@@ -405,3 +405,18 @@ node load-test/scripts/run-admission-session-comparison.mjs --confirm-disposable
 2. 구매 Hold p95와 입장 대기 p95·세션 전체 p95를 구분한다. ON의 성공 수 증가는 더 긴 대기/drain으로 기회가 생긴 결과일 수 있으며 처리량 향상과 다르다.
 3. 실제 DB 대기가 관측됐는지 본다. 입장 API도 공연/회차 소속 검증에서 MariaDB를 조회하므로 Redis 도입이 모든 DB 접근을 없애는 것은 아니다.
 4. 조건별 표본 수·실제 수집 간격·runtime 로그·반복 부재를 함께 읽는다. 초기 도구 중단도 보존하되 최종 비교에 섞지 않는다. 실측과 한계는 [실험 10절](EXPERIMENTS.md#10-입장-제어의-구매-세션-탐색-238)에서 확인한다.
+
+### 한 변수만 바꾸는 후속 비교 (#240)
+
+학습 질문은 **입장권 한도 → polling까지 입장권 점유 → 인기 좌석 충돌·대기 비용**의 관계다. 요청 유입률을 높이거나 worker batch까지 함께 바꾸면 원인을 분리할 수 없다. 따라서 한도 2/4/8만 바꾸고 각 조건을 실행 위치별로 배치해 3회씩 비교한다. 실제 Redis 정책 fingerprint도 시작과 종료 시 확인한다.
+
+기존 OFF/ON 실행 명령은 유지하며 새 비교는 다음 명시적 옵션을 추가한다. 현재 Java 21 JAR, Docker 엔진과 동일한 자원 중단 기준이 필요하다. 실행 시 전용 임시 컨테이너를 만들며 실제 PG/KOPIS는 호출하지 않는다.
+
+```powershell
+node --test load-test/k6/test/*.test.mjs
+node load-test/scripts/run-admission-session-comparison.mjs --confirm-disposable-local-resources --compare-active-limits
+```
+
+각 한도의 **입장 대기·세션 전체·Hold 요청** p95를 구분하고 성공/정상 충돌·polling·표본 DB 대기를 함께 읽는다. 각 실행 p95의 중앙값을 전체 요청 p95로 쓰지 않는다. 짧은 3회 비교가 운영 처리 한계·대규모 트래픽 성능을 증명하지는 않는다. 계획과 실측은 [실험 11절](EXPERIMENTS.md#11-입장-한도별-대기경합-비용-비교-240)에 모은다.
+
+실측에서 한도 2→4→8의 실행별 입장 대기 p95 중앙값은 59.24→25.17→10.11초, polling 합계는 480→238→118로 감소했다. 반면 정상 좌석 충돌은 각 75세션 중 39→41→48건이었다. **대기 감소와 예약 성공 증가는 다르다.** 표본 DB/pool 포화가 없는 이 작은 실험은 입장 정책의 교환관계를 보여주며 DB 처리량 개선이나 최적 한도를 증명하지 않는다. 다음 질문은 polling 주기·입장권을 받은 뒤 읽기까지의 지연을 한도와 분리할지이며, 다른 변수를 동시에 변경하지 않는다.
