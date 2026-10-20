@@ -1,0 +1,2253 @@
+{
+  "schemaVersion": 1,
+  "status": "EXPLORATION_COMPLETE",
+  "runtimeCleanup": "COMPLETE",
+  "sourceBaseCommit": "44f97cc58fa964e72570c86c0c638205996c8a53",
+  "experiment": "client-poll-v1",
+  "pollSummaries": [
+    {
+      "pollIntervalMs": 5000,
+      "maxActive": 4,
+      "repeats": 3,
+      "sessions": 75,
+      "holdSuccess": 31,
+      "seatConflicts": 44,
+      "polls": 226,
+      "unexpected": 0,
+      "dropped": 0,
+      "waitP95Ms": {
+        "minimum": 24108.599999999984,
+        "medianOfRunP95": 25144.2,
+        "maximum": 29179.599999999984
+      },
+      "sessionP95Ms": {
+        "minimum": 24256.399999999987,
+        "medianOfRunP95": 25704.2,
+        "maximum": 29311.999999999985
+      },
+      "holdP95Ms": {
+        "minimum": 41.81713999999998,
+        "medianOfRunP95": 44.26076,
+        "maximum": 46.38832
+      },
+      "pollRequestP95Ms": {
+        "minimum": 34.91161999999999,
+        "medianOfRunP95": 35.077075,
+        "maximum": 38.5213
+      },
+      "sampledPollRpsPeak": 5.718954248366013,
+      "sampledHikariPendingPeak": 0,
+      "sampledHikariActivePeak": 1,
+      "sampledRowLockWaits": 0,
+      "sampledRowLockTimeMs": 0
+    },
+    {
+      "pollIntervalMs": 2000,
+      "maxActive": 4,
+      "repeats": 3,
+      "sessions": 75,
+      "holdSuccess": 38,
+      "seatConflicts": 37,
+      "polls": 228,
+      "unexpected": 0,
+      "dropped": 0,
+      "waitP95Ms": {
+        "minimum": 10123,
+        "medianOfRunP95": 10134,
+        "maximum": 10165.8
+      },
+      "sessionP95Ms": {
+        "minimum": 10571.199999999999,
+        "medianOfRunP95": 10688.8,
+        "maximum": 10709.8
+      },
+      "holdP95Ms": {
+        "minimum": 35.61364,
+        "medianOfRunP95": 40.896759999999986,
+        "maximum": 43.098479999999995
+      },
+      "pollRequestP95Ms": {
+        "minimum": 28.182725,
+        "medianOfRunP95": 32.4464,
+        "maximum": 34.460049999999995
+      },
+      "sampledPollRpsPeak": 10.441767068273093,
+      "sampledHikariPendingPeak": 0,
+      "sampledHikariActivePeak": 1,
+      "sampledRowLockWaits": 0,
+      "sampledRowLockTimeMs": 0
+    },
+    {
+      "pollIntervalMs": 1000,
+      "maxActive": 4,
+      "repeats": 3,
+      "sessions": 75,
+      "holdSuccess": 43,
+      "seatConflicts": 32,
+      "polls": 345,
+      "unexpected": 0,
+      "dropped": 0,
+      "waitP95Ms": {
+        "minimum": 8156.8,
+        "medianOfRunP95": 8163.8,
+        "maximum": 8167.4
+      },
+      "sessionP95Ms": {
+        "minimum": 8199,
+        "medianOfRunP95": 8263.4,
+        "maximum": 8634.599999999999
+      },
+      "holdP95Ms": {
+        "minimum": 38.02621999999999,
+        "medianOfRunP95": 38.80667999999999,
+        "maximum": 38.81237999999998
+      },
+      "pollRequestP95Ms": {
+        "minimum": 30.138139999999925,
+        "medianOfRunP95": 32.676865,
+        "maximum": 35.70715499999997
+      },
+      "sampledPollRpsPeak": 16.908212560386474,
+      "sampledHikariPendingPeak": 0,
+      "sampledHikariActivePeak": 0,
+      "sampledRowLockWaits": 0,
+      "sampledRowLockTimeMs": 0
+    }
+  ],
+  "jarSha256": "15bd80463f62d88174ae7b7514f9e257b6112e1529e90e046fa5025de1ffc836",
+  "createdAt": "2026-10-20T14:04:42.191Z",
+  "environment": {
+    "hostMemoryBytes": 16980230144,
+    "logicalProcessors": 8,
+    "cpuModel": "Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz",
+    "javaHeapMiB": 384,
+    "metaspaceMiB": 192,
+    "hikariMaximum": 4,
+    "mariaDbContainerMiB": 512,
+    "redisContainerMiB": 128,
+    "redisMaxmemoryMiB": 64,
+    "k6Version": "k6.exe v2.1.0 (commit/83a87a41e2, go1.26.4, windows/amd64)"
+  },
+  "notes": [
+    "Synthetic client polling 5000/2000/1000ms, three balanced-order repeats each at 5 sessions/s; short local comparison, not capacity.",
+    "Only client polling varies. Active=4, batch=2, worker=1000ms, hold=500ms. Backend/FE remain unchanged and backend recommendation stays 5000ms.",
+    "Per-run p95 ranges/medians are not pooled p95; HTTP GET 200 counters are checked against workload polls, excluding setup NOT_JOINED GET 404.",
+    "Each stage uses a fresh 20-seat fixture; all fixtures prepared in the same disposable DB.",
+    "Hold/release only. No Checkout, real PG, KOPIS or browser traffic.",
+    "Arrival rate is sessions/s, not HTTP RPS. Poll interval is recorded per stage; active tickets are held through release/leave.",
+    "DB counter windows are sampled, include drain/collector traffic and are not query-specific.",
+    "Explicit --debug=false and package logger overrides are requested; inspect private runtime logs for effective logging before interpreting latency."
+  ],
+  "runs": [
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-1-p5",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 1,
+      "sequence": 1,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 83,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 5000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 1,
+        "sequence": 1,
+        "pollIntervalMs": 5000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "p(90)": 33.4066,
+          "p(95)": 33.8257,
+          "avg": 30.0538,
+          "min": 25.8628,
+          "med": 30.0538,
+          "max": 34.2448
+        },
+        "k6RunDurationMs": 7157.4627,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "p(95)": 5065.65,
+          "avg": 5062.5,
+          "min": 5059,
+          "med": 5062.5,
+          "max": 5066,
+          "p(90)": 5065.3
+        },
+        "holdMs": {
+          "med": 72.34870000000001,
+          "max": 114.3126,
+          "p(90)": 105.91982,
+          "p(95)": 110.11621,
+          "avg": 72.34870000000001,
+          "min": 30.3848
+        },
+        "successHoldMs": {
+          "avg": 72.34870000000001,
+          "min": 30.3848,
+          "med": 72.34870000000001,
+          "max": 114.3126,
+          "p(90)": 105.91982,
+          "p(95)": 110.11621
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "med": 5692.5,
+          "max": 5737,
+          "p(90)": 5728.1,
+          "p(95)": 5732.55,
+          "avg": 5692.5,
+          "min": 5648
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 1,
+        "sequence": 1,
+        "pollIntervalMs": 5000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "avg": 21.465656790123457,
+          "min": 9.5213,
+          "med": 19.0147,
+          "max": 64.8684,
+          "p(90)": 33.6822,
+          "p(95)": 38.5213
+        },
+        "k6RunDurationMs": 36031.4405,
+        "httpRequestsIncludingPreflight": 223,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 16296.28,
+          "min": 5029,
+          "med": 15112,
+          "max": 30187,
+          "p(90)": 25168,
+          "p(95)": 29179.599999999984
+        },
+        "holdMs": {
+          "avg": 30.75,
+          "min": 20.8728,
+          "med": 29.594,
+          "max": 78.1503,
+          "p(90)": 36.01198000000001,
+          "p(95)": 41.81713999999998
+        },
+        "successHoldMs": {
+          "avg": 28.513372727272724,
+          "min": 22.4122,
+          "med": 29.2584,
+          "max": 33.1335,
+          "p(90)": 31.5922,
+          "p(95)": 32.362849999999995
+        },
+        "conflictHoldMs": {
+          "avg": 32.507349999999995,
+          "min": 20.8728,
+          "med": 29.802300000000002,
+          "max": 78.1503,
+          "p(90)": 41.29251000000001,
+          "p(95)": 55.21576499999999
+        },
+        "sessionMs": {
+          "avg": 16575.64,
+          "min": 5073,
+          "med": 15678,
+          "max": 30760,
+          "p(90)": 25718.4,
+          "p(95)": 29311.999999999985
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 81,
+        "holdAttempts": 25,
+        "holdSuccess": 11,
+        "seatConflicts": 14,
+        "released": 11,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 13,
+          "conflict": 14,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 28,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 1,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 48.82597992804393,
+        "minimumFreeHostBytes": 4037730304,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 5.686433793663688,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1249,
+          1276,
+          1223,
+          1235,
+          1230,
+          1260,
+          1244,
+          1223,
+          1247,
+          1259,
+          1368,
+          1248,
+          1249,
+          1257,
+          1231,
+          1221,
+          1229,
+          1309,
+          1223,
+          1243,
+          1252,
+          1244,
+          1385,
+          1256,
+          1247,
+          1229,
+          1246
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-2-p2",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 1,
+      "sequence": 2,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 78,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 2000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 1,
+        "sequence": 2,
+        "pollIntervalMs": 2000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "avg": 25.548450000000003,
+          "min": 16.1966,
+          "med": 25.548450000000003,
+          "max": 34.9003,
+          "p(90)": 33.02993,
+          "p(95)": 33.965115
+        },
+        "k6RunDurationMs": 4115.1657,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "max": 2071,
+          "p(90)": 2067.5,
+          "p(95)": 2069.25,
+          "avg": 2053.5,
+          "min": 2036,
+          "med": 2053.5
+        },
+        "holdMs": {
+          "p(90)": 109.84378000000001,
+          "p(95)": 114.05823999999998,
+          "avg": 76.1281,
+          "min": 33.9835,
+          "med": 76.12809999999999,
+          "max": 118.2727
+        },
+        "successHoldMs": {
+          "max": 118.2727,
+          "p(90)": 109.84378000000001,
+          "p(95)": 114.05823999999998,
+          "avg": 76.1281,
+          "min": 33.9835,
+          "med": 76.12809999999999
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "min": 2605,
+          "med": 2684,
+          "max": 2763,
+          "p(90)": 2747.2,
+          "p(95)": 2755.1,
+          "avg": 2684
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 1,
+        "sequence": 2,
+        "pollIntervalMs": 2000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "min": 10.6081,
+          "med": 16.1386,
+          "max": 44.1504,
+          "p(90)": 31.23355,
+          "p(95)": 34.460049999999995,
+          "avg": 19.729247368421056
+        },
+        "k6RunDurationMs": 18162.9772,
+        "httpRequestsIncludingPreflight": 221,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "p(95)": 10165.8,
+          "avg": 6164.12,
+          "min": 2033,
+          "med": 6087,
+          "max": 12118,
+          "p(90)": 10147
+        },
+        "holdMs": {
+          "avg": 28.115280000000002,
+          "min": 22.7288,
+          "med": 27.7847,
+          "max": 39.4134,
+          "p(90)": 34.17508,
+          "p(95)": 35.61364
+        },
+        "successHoldMs": {
+          "max": 39.4134,
+          "p(90)": 34.24206,
+          "p(95)": 36.18264,
+          "avg": 28.794728571428568,
+          "min": 22.7288,
+          "med": 27.78615
+        },
+        "conflictHoldMs": {
+          "avg": 27.25052727272727,
+          "min": 23.1072,
+          "med": 27.7847,
+          "max": 35.9063,
+          "p(90)": 30.3226,
+          "p(95)": 33.114450000000005
+        },
+        "sessionMs": {
+          "avg": 6507.4,
+          "min": 2072,
+          "med": 6678,
+          "max": 12687,
+          "p(90)": 10487.400000000001,
+          "p(95)": 10709.8
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 76,
+        "holdAttempts": 25,
+        "holdSuccess": 14,
+        "seatConflicts": 11,
+        "released": 14,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 16,
+          "conflict": 11,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 14,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 1,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 43.504901960784316,
+        "minimumFreeHostBytes": 4526374912,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 9.646302250803858,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1288,
+          1255,
+          1229,
+          1254,
+          1244,
+          1259,
+          1274,
+          1230,
+          1226,
+          1259,
+          1214,
+          1234,
+          1243
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-3-p1",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 1,
+      "sequence": 3,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 116,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 1000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 1,
+        "sequence": 3,
+        "pollIntervalMs": 1000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "med": 27.73485,
+          "max": 30.3387,
+          "p(90)": 29.81793,
+          "p(95)": 30.078315,
+          "avg": 27.73485,
+          "min": 25.131
+        },
+        "k6RunDurationMs": 3183.6961,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 1066,
+          "min": 1065,
+          "med": 1066,
+          "max": 1067,
+          "p(90)": 1066.8,
+          "p(95)": 1066.9
+        },
+        "holdMs": {
+          "avg": 93.0909,
+          "min": 38.8828,
+          "med": 93.0909,
+          "max": 147.299,
+          "p(90)": 136.45738,
+          "p(95)": 141.87819000000002
+        },
+        "successHoldMs": {
+          "min": 38.8828,
+          "med": 93.0909,
+          "max": 147.299,
+          "p(90)": 136.45738,
+          "p(95)": 141.87819000000002,
+          "avg": 93.0909
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "avg": 1719.5,
+          "min": 1659,
+          "med": 1719.5,
+          "max": 1780,
+          "p(90)": 1767.9,
+          "p(95)": 1773.95
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 1,
+        "sequence": 3,
+        "pollIntervalMs": 1000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "avg": 18.875813157894726,
+          "min": 10.7042,
+          "med": 16.0601,
+          "max": 67.7331,
+          "p(90)": 29.11154,
+          "p(95)": 35.70715499999997
+        },
+        "k6RunDurationMs": 13849.1403,
+        "httpRequestsIncludingPreflight": 259,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "max": 8246,
+          "p(90)": 7768.800000000001,
+          "p(95)": 8156.8,
+          "avg": 4669.16,
+          "min": 1033,
+          "med": 5086
+        },
+        "holdMs": {
+          "min": 22.8282,
+          "med": 27.0896,
+          "max": 48.6246,
+          "p(90)": 36.56400000000001,
+          "p(95)": 38.80667999999999,
+          "avg": 29.05576
+        },
+        "successHoldMs": {
+          "p(95)": 36.179125,
+          "avg": 29.211657142857142,
+          "min": 22.8282,
+          "med": 29.0501,
+          "max": 37.1798,
+          "p(90)": 34.58946000000001
+        },
+        "conflictHoldMs": {
+          "avg": 28.857345454545456,
+          "min": 22.8342,
+          "med": 25.9832,
+          "max": 48.6246,
+          "p(90)": 39.2134,
+          "p(95)": 43.919
+        },
+        "sessionMs": {
+          "avg": 5007.84,
+          "min": 1145,
+          "med": 5125,
+          "max": 8728,
+          "p(90)": 8020.6,
+          "p(95)": 8263.4
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 114,
+        "holdAttempts": 25,
+        "holdSuccess": 14,
+        "seatConflicts": 11,
+        "released": 14,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 16,
+          "conflict": 11,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 11,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 0,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 38.78072523728401,
+        "minimumFreeHostBytes": 4445368320,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 15.347334410339258,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1295,
+          1280,
+          1244,
+          1271,
+          1238,
+          1243,
+          1255,
+          1245,
+          1230,
+          1241
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-4-p2",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 2,
+      "sequence": 4,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 78,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 2000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 2,
+        "sequence": 4,
+        "pollIntervalMs": 2000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "p(90)": 17.63164,
+          "p(95)": 17.70237,
+          "avg": 17.0658,
+          "min": 16.3585,
+          "med": 17.0658,
+          "max": 17.7731
+        },
+        "k6RunDurationMs": 4282.3012,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 2049.5,
+          "min": 2038,
+          "med": 2049.5,
+          "max": 2061,
+          "p(90)": 2058.7,
+          "p(95)": 2059.85
+        },
+        "holdMs": {
+          "avg": 77.60795,
+          "min": 33.5023,
+          "med": 77.60794999999999,
+          "max": 121.7136,
+          "p(90)": 112.89247,
+          "p(95)": 117.303035
+        },
+        "successHoldMs": {
+          "max": 121.7136,
+          "p(90)": 112.89247,
+          "p(95)": 117.303035,
+          "avg": 77.60795,
+          "min": 33.5023,
+          "med": 77.60794999999999
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "max": 2748,
+          "p(90)": 2734.7,
+          "p(95)": 2741.35,
+          "avg": 2681.5,
+          "min": 2615,
+          "med": 2681.5
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 2,
+        "sequence": 4,
+        "pollIntervalMs": 2000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "max": 48.0275,
+          "p(90)": 27.5698,
+          "p(95)": 32.4464,
+          "avg": 18.967,
+          "min": 11.5267,
+          "med": 17.2872
+        },
+        "k6RunDurationMs": 15998.1772,
+        "httpRequestsIncludingPreflight": 217,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 6162.4,
+          "min": 2031,
+          "med": 6073,
+          "max": 10159,
+          "p(90)": 10118.2,
+          "p(95)": 10123
+        },
+        "holdMs": {
+          "p(90)": 35.46808000000001,
+          "p(95)": 40.896759999999986,
+          "avg": 29.800839999999997,
+          "min": 22.4197,
+          "med": 29.6851,
+          "max": 45.0975
+        },
+        "successHoldMs": {
+          "p(95)": 38.47447499999999,
+          "avg": 31.314870000000003,
+          "min": 24.5652,
+          "med": 31.137300000000003,
+          "max": 42.0306,
+          "p(90)": 34.918350000000004
+        },
+        "conflictHoldMs": {
+          "avg": 28.791486666666668,
+          "min": 22.4197,
+          "med": 25.9246,
+          "max": 45.0975,
+          "p(90)": 35.2302,
+          "p(95)": 38.982229999999994
+        },
+        "sessionMs": {
+          "min": 2080,
+          "med": 6144,
+          "max": 10684,
+          "p(90)": 10178.8,
+          "p(95)": 10571.199999999999,
+          "avg": 6416.76
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 76,
+        "holdAttempts": 25,
+        "holdSuccess": 10,
+        "seatConflicts": 15,
+        "released": 10,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 12,
+          "conflict": 15,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 13,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 0,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 37.5012050515762,
+        "minimumFreeHostBytes": 4418473984,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 10.441767068273093,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1288,
+          1247,
+          1241,
+          1256,
+          1245,
+          1245,
+          1273,
+          1257,
+          1308,
+          1239,
+          1230,
+          1226
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-5-p1",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 2,
+      "sequence": 5,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 116,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 1000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 2,
+        "sequence": 5,
+        "pollIntervalMs": 1000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "min": 17.6057,
+          "med": 26.08565,
+          "max": 34.5656,
+          "p(90)": 32.86961,
+          "p(95)": 33.717605000000006,
+          "avg": 26.08565
+        },
+        "k6RunDurationMs": 3221.524,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "p(95)": 1070.4,
+          "avg": 1065,
+          "min": 1059,
+          "med": 1065,
+          "max": 1071,
+          "p(90)": 1069.8
+        },
+        "holdMs": {
+          "avg": 74.39675,
+          "min": 31.7242,
+          "med": 74.39675,
+          "max": 117.0693,
+          "p(90)": 108.53479,
+          "p(95)": 112.80204499999999
+        },
+        "successHoldMs": {
+          "avg": 74.39675,
+          "min": 31.7242,
+          "med": 74.39675,
+          "max": 117.0693,
+          "p(90)": 108.53479,
+          "p(95)": 112.80204499999999
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "min": 1649,
+          "med": 1700.5,
+          "max": 1752,
+          "p(90)": 1741.7,
+          "p(95)": 1746.85,
+          "avg": 1700.5
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 2,
+        "sequence": 5,
+        "pollIntervalMs": 1000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "avg": 17.49207631578948,
+          "min": 10.1141,
+          "med": 14.4306,
+          "max": 42.3622,
+          "p(90)": 29.7322,
+          "p(95)": 32.676865
+        },
+        "k6RunDurationMs": 14064.5755,
+        "httpRequestsIncludingPreflight": 259,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 4665.48,
+          "min": 1028,
+          "med": 5091,
+          "max": 8177,
+          "p(90)": 7763.800000000001,
+          "p(95)": 8163.8
+        },
+        "holdMs": {
+          "avg": 29.498860000000004,
+          "min": 22.2608,
+          "med": 28.9544,
+          "max": 43.5113,
+          "p(90)": 34.988780000000006,
+          "p(95)": 38.02621999999999
+        },
+        "successHoldMs": {
+          "p(95)": 34.76008,
+          "avg": 30.136978571428568,
+          "min": 24.5777,
+          "med": 30.42535,
+          "max": 35.3547,
+          "p(90)": 33.86399
+        },
+        "conflictHoldMs": {
+          "avg": 28.686709090909094,
+          "min": 22.2608,
+          "med": 26.084,
+          "max": 43.5113,
+          "p(90)": 38.6941,
+          "p(95)": 41.1027
+        },
+        "sessionMs": {
+          "med": 5135,
+          "max": 8756,
+          "p(90)": 8012.200000000001,
+          "p(95)": 8199,
+          "avg": 5008.84,
+          "min": 1094
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 114,
+        "holdAttempts": 25,
+        "holdSuccess": 14,
+        "seatConflicts": 11,
+        "released": 14,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 16,
+          "conflict": 11,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 11,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 0,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 58.310893512851905,
+        "minimumFreeHostBytes": 4356993024,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 15.297906602254429,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1229,
+          1240,
+          1321,
+          1242,
+          1245,
+          1260,
+          1225,
+          1267,
+          1230,
+          1257
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-6-p5",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 2,
+      "sequence": 6,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 68,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 5000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 2,
+        "sequence": 6,
+        "pollIntervalMs": 5000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "med": 40.94155,
+          "max": 45.929,
+          "p(90)": 44.93151,
+          "p(95)": 45.430255,
+          "avg": 40.94155,
+          "min": 35.9541
+        },
+        "k6RunDurationMs": 7251.2076,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "min": 5080,
+          "med": 5086,
+          "max": 5092,
+          "p(90)": 5090.8,
+          "p(95)": 5091.4,
+          "avg": 5086
+        },
+        "holdMs": {
+          "min": 35.8664,
+          "med": 86.60145,
+          "max": 137.3365,
+          "p(90)": 127.18949,
+          "p(95)": 132.262995,
+          "avg": 86.60145
+        },
+        "successHoldMs": {
+          "avg": 86.60145,
+          "min": 35.8664,
+          "med": 86.60145,
+          "max": 137.3365,
+          "p(90)": 127.18949,
+          "p(95)": 132.262995
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "max": 5799,
+          "p(90)": 5786.1,
+          "p(95)": 5792.55,
+          "avg": 5734.5,
+          "min": 5670,
+          "med": 5734.5
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 2,
+        "sequence": 6,
+        "pollIntervalMs": 5000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "max": 49.2293,
+          "p(90)": 33.23315,
+          "p(95)": 35.077075,
+          "avg": 21.029500000000002,
+          "min": 10.8957,
+          "med": 18.1251
+        },
+        "k6RunDurationMs": 31095.7235,
+        "httpRequestsIncludingPreflight": 206,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 13281.88,
+          "min": 5039,
+          "med": 15067,
+          "max": 25162,
+          "p(90)": 20127.8,
+          "p(95)": 24108.599999999984
+        },
+        "holdMs": {
+          "avg": 30.996823999999993,
+          "min": 22.1039,
+          "med": 29.8128,
+          "max": 48.1092,
+          "p(90)": 43.19764000000001,
+          "p(95)": 46.38832
+        },
+        "successHoldMs": {
+          "max": 48.1092,
+          "p(90)": 46.92048,
+          "p(95)": 47.51484,
+          "avg": 33.51601111111111,
+          "min": 26.0974,
+          "med": 30.8526
+        },
+        "conflictHoldMs": {
+          "avg": 29.57978125,
+          "min": 22.1039,
+          "med": 28.244149999999998,
+          "max": 45.4484,
+          "p(90)": 36.16105,
+          "p(95)": 41.228225
+        },
+        "sessionMs": {
+          "p(95)": 24256.399999999987,
+          "avg": 13519.8,
+          "min": 5079,
+          "med": 15110,
+          "max": 25737,
+          "p(90)": 20718.8
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 66,
+        "holdAttempts": 25,
+        "holdSuccess": 9,
+        "seatConflicts": 16,
+        "released": 9,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 11,
+          "conflict": 16,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 25,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 0,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 53.08131521953141,
+        "minimumFreeHostBytes": 4303699968,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 5.718954248366013,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1229,
+          1244,
+          1244,
+          1274,
+          1224,
+          1247,
+          1239,
+          1230,
+          1264,
+          1229,
+          1233,
+          1245,
+          1249,
+          1291,
+          1235,
+          1232,
+          1228,
+          1231,
+          1273,
+          1242,
+          1229,
+          1263,
+          1254,
+          1244
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-7-p1",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 3,
+      "sequence": 7,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 119,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 1000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 3,
+        "sequence": 7,
+        "pollIntervalMs": 1000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "med": 27.02695,
+          "max": 34.4396,
+          "p(90)": 32.95707,
+          "p(95)": 33.698335,
+          "avg": 27.02695,
+          "min": 19.6143
+        },
+        "k6RunDurationMs": 3177.0999,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "med": 1065.5,
+          "max": 1070,
+          "p(90)": 1069.1,
+          "p(95)": 1069.55,
+          "avg": 1065.5,
+          "min": 1061
+        },
+        "holdMs": {
+          "p(95)": 131.27014499999999,
+          "avg": 85.88265,
+          "min": 35.4521,
+          "med": 85.88265,
+          "max": 136.3132,
+          "p(90)": 126.22709
+        },
+        "successHoldMs": {
+          "avg": 85.88265,
+          "min": 35.4521,
+          "med": 85.88265,
+          "max": 136.3132,
+          "p(90)": 126.22709,
+          "p(95)": 131.27014499999999
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "min": 1650,
+          "med": 1707.5,
+          "max": 1765,
+          "p(90)": 1753.5,
+          "p(95)": 1759.25,
+          "avg": 1707.5
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 3,
+        "sequence": 7,
+        "pollIntervalMs": 1000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "avg": 17.45190512820513,
+          "min": 10.9046,
+          "med": 15.4182,
+          "max": 42.9511,
+          "p(90)": 23.8502,
+          "p(95)": 30.138139999999925
+        },
+        "k6RunDurationMs": 15322.0054,
+        "httpRequestsIncludingPreflight": 263,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 4791.12,
+          "min": 1038,
+          "med": 5106,
+          "max": 9175,
+          "p(90)": 7766.200000000002,
+          "p(95)": 8167.4
+        },
+        "holdMs": {
+          "p(95)": 38.81237999999998,
+          "avg": 28.088764000000005,
+          "min": 21.8637,
+          "med": 27.0298,
+          "max": 43.6079,
+          "p(90)": 32.294380000000004
+        },
+        "successHoldMs": {
+          "avg": 28.82954,
+          "min": 23.7915,
+          "med": 27.6434,
+          "max": 40.3659,
+          "p(90)": 32.294380000000004,
+          "p(95)": 34.92858
+        },
+        "conflictHoldMs": {
+          "min": 21.8637,
+          "med": 25.4827,
+          "max": 43.6079,
+          "p(90)": 29.926909999999996,
+          "p(95)": 36.76740499999998,
+          "avg": 26.977599999999995
+        },
+        "sessionMs": {
+          "min": 1131,
+          "med": 5156,
+          "max": 9747,
+          "p(90)": 8015.400000000001,
+          "p(95)": 8634.599999999999,
+          "avg": 5152.96
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 117,
+        "holdAttempts": 25,
+        "holdSuccess": 15,
+        "seatConflicts": 10,
+        "released": 15,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 17,
+          "conflict": 10,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 12,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 0,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 41.196136701337295,
+        "minimumFreeHostBytes": 4305170432,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 16.908212560386474,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1275,
+          1242,
+          1254,
+          1254,
+          1242,
+          1240,
+          1224,
+          1257,
+          1268,
+          1263,
+          1225
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-8-p5",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 3,
+      "sequence": 8,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 81,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 5000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 3,
+        "sequence": 8,
+        "pollIntervalMs": 5000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "min": 15.4918,
+          "med": 17.64075,
+          "max": 19.7897,
+          "p(90)": 19.35991,
+          "p(95)": 19.574804999999998,
+          "avg": 17.64075
+        },
+        "k6RunDurationMs": 7154.4061,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 0,
+        "dropped": 0,
+        "waitMs": {
+          "min": 5054,
+          "med": 5057,
+          "max": 5060,
+          "p(90)": 5059.4,
+          "p(95)": 5059.7,
+          "avg": 5057
+        },
+        "holdMs": {
+          "p(90)": 131.40763,
+          "p(95)": 136.915415,
+          "avg": 87.34535,
+          "min": 32.2675,
+          "med": 87.34535,
+          "max": 142.4232
+        },
+        "successHoldMs": {
+          "min": 32.2675,
+          "med": 87.34535,
+          "max": 142.4232,
+          "p(90)": 131.40763,
+          "p(95)": 136.915415,
+          "avg": 87.34535
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "p(95)": 5766.95,
+          "avg": 5703.5,
+          "min": 5633,
+          "med": 5703.5,
+          "max": 5774,
+          "p(90)": 5759.9
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 3,
+        "sequence": 8,
+        "pollIntervalMs": 5000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "min": 10.782,
+          "med": 17.4342,
+          "max": 51.7289,
+          "p(90)": 30.877960000000005,
+          "p(95)": 34.91161999999999,
+          "avg": 20.15394556962025
+        },
+        "k6RunDurationMs": 36339.2581,
+        "httpRequestsIncludingPreflight": 221,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "p(90)": 25127.4,
+          "p(95)": 25144.2,
+          "avg": 15891.08,
+          "min": 5032,
+          "med": 15109,
+          "max": 30139
+        },
+        "holdMs": {
+          "avg": 30.598352000000006,
+          "min": 21.2522,
+          "med": 28.1381,
+          "max": 50.5698,
+          "p(90)": 42.97956,
+          "p(95)": 44.26076
+        },
+        "successHoldMs": {
+          "min": 25.5043,
+          "med": 29.8974,
+          "max": 44.3235,
+          "p(90)": 41.4342,
+          "p(95)": 42.87885,
+          "avg": 31.822418181818183
+        },
+        "conflictHoldMs": {
+          "p(95)": 46.3058,
+          "avg": 29.63658571428571,
+          "min": 21.2522,
+          "med": 25.926650000000002,
+          "max": 50.5698,
+          "p(90)": 42.11368
+        },
+        "sessionMs": {
+          "avg": 16170.52,
+          "min": 5091,
+          "med": 15665,
+          "max": 30719,
+          "p(90)": 25480.2,
+          "p(95)": 25704.2
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 79,
+        "holdAttempts": 25,
+        "holdSuccess": 11,
+        "seatConflicts": 14,
+        "released": 11,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 13,
+          "conflict": 14,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 29,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 1,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 43.39037698412699,
+        "minimumFreeHostBytes": 4308013056,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 5.645161290322581,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1225,
+          1232,
+          1245,
+          1276,
+          1240,
+          1244,
+          1262,
+          1363,
+          1241,
+          1276,
+          1241,
+          1274,
+          1238,
+          1273,
+          1244,
+          1316,
+          1226,
+          1307,
+          1255,
+          1249,
+          1242,
+          1229,
+          1275,
+          1270,
+          1247,
+          1276,
+          1245,
+          1245
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    },
+    {
+      "schemaVersion": 1,
+      "status": "PASS",
+      "scope": "short local virtual 20-seat admission exploration; not capacity or production performance",
+      "runId": "poll-047098b7-9-p2",
+      "mode": "on",
+      "sessionsPerSecond": 5,
+      "totalSeats": 20,
+      "hotSeats": 1,
+      "experiment": "client-poll-v1",
+      "round": 3,
+      "sequence": 9,
+      "policyFingerprintVerified": true,
+      "policyPollIntervalMs": 5000,
+      "pollHttpCounters": {
+        "before": {
+          "success": 2,
+          "other": 0
+        },
+        "after": {
+          "success": 78,
+          "other": 0
+        }
+      },
+      "holdDwellMs": 500,
+      "maxActive": 4,
+      "pollIntervalMs": 2000,
+      "workerDelayMs": 1000,
+      "warmup": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "warmup",
+        "sessionsPerSecond": 1,
+        "durationSeconds": 2,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 3,
+        "sequence": 9,
+        "pollIntervalMs": 2000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "p(90)": 20.890900000000002,
+          "p(95)": 20.90335,
+          "avg": 20.7913,
+          "min": 20.6668,
+          "med": 20.7913,
+          "max": 20.9158
+        },
+        "k6RunDurationMs": 4169.6843,
+        "httpRequestsIncludingPreflight": 20,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "avg": 2048.5,
+          "min": 2043,
+          "med": 2048.5,
+          "max": 2054,
+          "p(90)": 2052.9,
+          "p(95)": 2053.45
+        },
+        "holdMs": {
+          "avg": 92.32894999999999,
+          "min": 36.0963,
+          "med": 92.32894999999999,
+          "max": 148.5616,
+          "p(90)": 137.31507,
+          "p(95)": 142.938335
+        },
+        "successHoldMs": {
+          "min": 36.0963,
+          "med": 92.32894999999999,
+          "max": 148.5616,
+          "p(90)": 137.31507,
+          "p(95)": 142.938335,
+          "avg": 92.32894999999999
+        },
+        "conflictHoldMs": {},
+        "sessionMs": {
+          "avg": 2695.5,
+          "min": 2627,
+          "med": 2695.5,
+          "max": 2764,
+          "p(90)": 2750.3,
+          "p(95)": 2757.15
+        },
+        "started": 2,
+        "finished": 2,
+        "joined": 2,
+        "admitted": 2,
+        "left": 2,
+        "polls": 2,
+        "holdAttempts": 2,
+        "holdSuccess": 2,
+        "seatConflicts": 0,
+        "released": 2,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "result": {
+        "schemaVersion": 1,
+        "mode": "on",
+        "phase": "measure",
+        "sessionsPerSecond": 5,
+        "durationSeconds": 5,
+        "experiment": "client-poll-v1",
+        "expectedActive": 4,
+        "round": 3,
+        "sequence": 9,
+        "pollIntervalMs": 2000,
+        "policyPollIntervalMs": 5000,
+        "pollRequestMs": {
+          "max": 44.4251,
+          "p(90)": 25.42795,
+          "p(95)": 28.182725,
+          "avg": 17.525439473684212,
+          "min": 10.5779,
+          "med": 15.93975
+        },
+        "k6RunDurationMs": 18244.1667,
+        "httpRequestsIncludingPreflight": 221,
+        "schedulerBoundarySkipped": 1,
+        "dropped": 0,
+        "waitMs": {
+          "min": 2035,
+          "med": 6076,
+          "max": 12119,
+          "p(90)": 10120,
+          "p(95)": 10134,
+          "avg": 6155.12
+        },
+        "holdMs": {
+          "p(95)": 43.098479999999995,
+          "avg": 30.250703999999992,
+          "min": 22.3662,
+          "med": 27.9668,
+          "max": 44.6303,
+          "p(90)": 41.69516
+        },
+        "successHoldMs": {
+          "min": 22.8001,
+          "med": 28.085549999999998,
+          "max": 44.6303,
+          "p(90)": 42.45779,
+          "p(95)": 43.741685,
+          "avg": 31.132149999999996
+        },
+        "conflictHoldMs": {
+          "med": 27.4242,
+          "max": 42.4396,
+          "p(90)": 37.9109,
+          "p(95)": 40.17525,
+          "avg": 29.128863636363633,
+          "min": 22.3662
+        },
+        "sessionMs": {
+          "med": 6647,
+          "max": 12707,
+          "p(90)": 10487.2,
+          "p(95)": 10688.8,
+          "avg": 6497.84,
+          "min": 2083
+        },
+        "started": 25,
+        "finished": 25,
+        "joined": 25,
+        "admitted": 25,
+        "left": 25,
+        "polls": 76,
+        "holdAttempts": 25,
+        "holdSuccess": 14,
+        "seatConflicts": 11,
+        "released": 14,
+        "unexpected": 0,
+        "waitTimeouts": 0
+      },
+      "snapshot": {
+        "expectedTotalSeats": 20,
+        "actualSeatCount": 20,
+        "remainingSeats": 20,
+        "reservedSeats": 0,
+        "activeHeldSeats": 0,
+        "holdRows": 0,
+        "partialHoldStates": 0,
+        "reservations": 0,
+        "bookings": 0,
+        "payments": 0,
+        "invariantSatisfied": true
+      },
+      "holdHttpCounters": {
+        "before": {
+          "success": 2,
+          "conflict": 0,
+          "other": 0
+        },
+        "after": {
+          "success": 16,
+          "conflict": 11,
+          "other": 0
+        }
+      },
+      "observation": {
+        "samples": 14,
+        "hikariPendingPeak": 0,
+        "hikariActivePeak": 1,
+        "hikariMax": 4,
+        "hostCpuPeakPercent": 43.96535492374317,
+        "minimumFreeHostBytes": 4229357568,
+        "rowLockWaitDelta": 0,
+        "sampledPollRpsPeak": 9.654062751407885,
+        "rowLockTimeMsDelta": 0,
+        "deadlockDelta": 0,
+        "requestedPauseMs": 1000,
+        "actualSampleGapsMs": [
+          1249,
+          1300,
+          1243,
+          1255,
+          1243,
+          1313,
+          1276,
+          1270,
+          1234,
+          1259,
+          1313,
+          1242,
+          1277
+        ],
+        "counterScope": "first-to-last sampled counter window, includes drain and collector SQL; not query attribution or whole-run delta"
+      },
+      "escalationAllowed": true
+    }
+  ]
+}

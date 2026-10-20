@@ -82,3 +82,17 @@ test('unknown and combined runtime modes fail before resource creation',()=>{
     assert.equal(r.status,1);assert.equal(r.stdout,'');
   }
 });
+
+test('published polling comparison retains HTTP, inventory and timing evidence without secrets',()=>{
+  const text=readFileSync(new URL('../../results/admission-poll-047098b7-comparison.json',import.meta.url),'utf8'),b=JSON.parse(text);
+  assert.equal(b.status,'EXPLORATION_COMPLETE');assert.equal(b.runtimeCleanup,'COMPLETE');assert.equal(b.experiment,POLL_EXPERIMENT);
+  assert.match(b.sourceBaseCommit,/^[a-f0-9]{40}$/);assert.match(b.jarSha256,/^[a-f0-9]{64}$/);
+  assert.deepEqual(summarizePollRuns(b.runs),b.pollSummaries);
+  assert.deepEqual(b.pollSummaries.map(s=>[s.sessions,s.holdSuccess,s.seatConflicts,s.polls]),[[75,31,44,226],[75,38,37,228],[75,43,32,345]]);
+  for(const r of b.runs) {
+    assert.equal(r.observation.hikariPendingPeak,0);assert.equal(r.observation.deadlockDelta,0);
+    assert.ok(r.observation.samples>=2);assert.ok(r.observation.minimumFreeHostBytes>=2*1024**3);
+  }
+  function visit(v) {if(!v||typeof v!=='object')return;for(const [k,c]of Object.entries(v)){assert.doesNotMatch(k,/^(accessToken|token|cookie|password|users|username)$/i);visit(c);}}
+  visit(b);assert.doesNotMatch(text,/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/);
+});
