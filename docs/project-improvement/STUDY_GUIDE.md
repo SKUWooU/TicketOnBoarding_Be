@@ -434,3 +434,13 @@ node load-test/scripts/run-admission-session-comparison.mjs --confirm-disposable
 - k6는 서버 권고 5초를 확인한 뒤 실험 주기로 조회한다. 최초 NOT_JOINED 사전 확인은 부하 polling에 포함하지 않으며, GET 200 서버 증분과 k6 poll 수를 대조한다.
 - 실제 입장 대기 p95 실행별 중앙은 25.14/10.13/8.16초, 총조회는 각 75세션에서 226/228/345건이었다. **총조회 수가 비슷해도 짧은 구간에 집중되면 초당 조회 부하는 커질 수 있다.** 표본 구간 최대는 5.72/10.44/16.91 RPS였으며 순간 최대·서버 처리 한계와 다르다.
 - 2초는 비용과 추가 대기 감소를 보고 고른 다음 검증 후보이지 운영 최적값이 아니다. worker 주기와 다른 사용자 해제 대기도 있어 polling만 줄여 대기를 없앨 수는 없다. [실험 12절](EXPERIMENTS.md#12-고정-한도의-클라이언트-polling-비용-비교-242)에서 환경·범위·한계를 확인한다.
+
+### 실험 후보를 실제 서버 안내·FE에 연결 (#244 / FE #57)
+
+기존 BE는 `pollIntervalMillis:5000`을 상수로 응답했고 FE는 최소 5초로 보정했다. 따라서 k6에서 2초를 시험한 것만으로 실제 UI에 적용된 것은 아니었다. `AdmissionSettings`에 `onticket.admission.poll-interval-millis`(기본 5000, 1000~30000 정수)를 추가하고 Controller가 해당 값을 안내하도록 연결했다. 잘못된 값은 시작 시 거절한다. 활성 입장 정책의 local+loadtest·가상 fixture 제한은 그대로이며 새 HTTP 설정 변경 기능은 없다.
+
+이 값은 **클라이언트 조회 안내**다. `AdmissionPolicy`의 Redis fingerprint·worker·TTL·입장 한도와 별개이며, 주기를 바꿔도 입장권을 새로 만들거나 기한을 갱신하지 않는다. 운영자 bootstrap CLI의 allowlist도 유지한다. bootstrap 파일에는 기존 원자 정책 키만 두고, `onticket.admission.poll-interval-millis=2000`은 **서버 전용 additional properties 파일 또는 실행 인자**에만 넣는다. 기본값·기존 예제·부하 비교 profile은 5초를 보존한다.
+
+FE #57은 서버 안내 범위를 검증하고 2초를 실제 timer에 사용한다. 미설정 시 5초 호환 기본값, 0~999ms jitter·직전 응답 완료 후 한 건씩 조회·명시적 이탈/unmount 정지·재접속 시 본인 등록 조회는 유지한다. UI는 2초 고정 간격이 아니라 jitter와 응답/처리 시간이 더해지는 흐름이며, #242의 k6 수치를 UI 성능 개선율로 재사용하지 않는다.
+
+서버 설정/응답·입장 회귀 64개와 `bootJar`, 기존 Node 계약 43개를 통과했다. 초기 새 테스트의 바인딩 API 호출과 JSON Accept 조건을 수정한 뒤 전체 64개를 다시 통과했다. 실제 Chromium 두 사용자·전용 Redis/MariaDB 검증에서는 2초 서버 안내, 자동 조회 한 구간 2,581ms, ADMITTED/WAITING 새로고침 복원·총 JOIN 2회, 이탈 후 조회 정지, Checkout READY→CANCELED·다음 사용자 좌석 재사용·최종 재고 20/점유·예약·결제 0을 확인했다. 이 시나리오는 **입장 한도 1의 기능 검증**이며 한도 4 부하 측정과 다르다. [FE 실행 조건·원자료](https://github.com/SKUWooU/TicketOnBoarding_Fe/blob/main/docs/project-improvement/local-backend-browser-e2e.md)에서 교차 확인한다. 실 PG/KOPIS·운영 데이터·배포는 실행하지 않았다.

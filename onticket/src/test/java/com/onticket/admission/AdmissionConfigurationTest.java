@@ -17,6 +17,7 @@ class AdmissionConfigurationTest {
             assertThat(context).hasNotFailed().doesNotHaveBean(RedisAdmissionStore.class)
                     .doesNotHaveBean(LettuceConnectionFactory.class);
             assertThat(context.getBean(AdmissionSettings.class).enabled()).isFalse();
+            assertThat(context.getBean(AdmissionSettings.class).pollIntervalMillis()).isEqualTo(5000);
         });
     }
     @Test void enabledOutsideLocalAndLoadtestFailsStartup() {
@@ -37,5 +38,23 @@ class AdmissionConfigurationTest {
     @Test void validOptInRegistersStoreButDoesNotBootstrapNamespace() {
         runner.withPropertyValues(configured).withPropertyValues("spring.profiles.active=local,loadtest")
                 .run(context -> assertThat(context).hasNotFailed().hasSingleBean(RedisAdmissionStore.class));
+    }
+
+    @Test void pollingHintBindsBoundedIntegerWithoutEnablingAdmissionOrRedis() {
+        for (int interval : new int[]{1000, 2000, 30000}) {
+            runner.withPropertyValues("onticket.admission.poll-interval-millis=" + interval).run(context -> {
+                assertThat(context).hasNotFailed().doesNotHaveBean(RedisAdmissionStore.class);
+                var settings = context.getBean(AdmissionSettings.class);
+                assertThat(settings.enabled()).isFalse();
+                assertThat(settings.pollIntervalMillis()).isEqualTo(interval);
+            });
+        }
+    }
+
+    @Test void invalidPollingHintFailsBeforeRuntimeCreation() {
+        for (String interval : new String[]{"0", "999", "30001", "-1", "2.5", "invalid"}) {
+            runner.withPropertyValues("onticket.admission.poll-interval-millis=" + interval)
+                    .run(context -> assertThat(context).hasFailed());
+        }
     }
 }

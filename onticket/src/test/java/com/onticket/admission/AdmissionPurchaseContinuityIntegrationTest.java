@@ -107,7 +107,7 @@ class AdmissionPurchaseContinuityIntegrationTest {
             var seat = new Seat(); seat.setSeatNumber(number); seat.setConcertTime(time); seats.saveAndFlush(seat);
         }
         settings = new AdmissionSettings(true, CONCERT, timeId, "continuity-g1", Instant.EPOCH,
-                1, 4, Duration.ofMinutes(5), Duration.ofMinutes(5), 1, REDIS.getMappedPort(6379));
+                1, 4, Duration.ofMinutes(5), Duration.ofMinutes(5), 1, REDIS.getMappedPort(6379), 5000);
         // Same production loopback factory: one-second connect/command timeouts, no fallback.
         firstConnection = connection(); secondConnection = connection();
         redis = new StringRedisTemplate(firstConnection);
